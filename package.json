@@ -5,7 +5,7 @@
   "description": "Monorepo de M365 Copilot para VS Code: extensión de VS Code + extensión de navegador que capturan y sincronizan el token de Copilot.",
   "packageManager": "pnpm@10.28.2",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.18.0"
   },
   "scripts": {
     "build": "turbo run build",
