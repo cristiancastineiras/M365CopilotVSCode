@@ -2,7 +2,7 @@
   "name": "m365-copilot-vscode",
   "displayName": "M365 Copilot for VS Code",
   "description": "Usa tu suscripción de Microsoft 365 Copilot como proveedor de modelos en el chat de VS Code. Pega el token capturado con el userscript y listo.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "m365-copilot-vscode",
   "license": "MIT",
   "icon": "logo/m365-vscode.png",

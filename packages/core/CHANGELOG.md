@@ -1,5 +1,11 @@
 # @m365copilot/core
 
+## 1.0.2
+
+### Patch Changes
+
+- Corrige el workflow de release (Node 22 en CI, requerido por tsdown 0.22).
+
 ## 1.0.1
 
 ### Patch Changes
