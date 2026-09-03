@@ -2,7 +2,7 @@
   "name": "m365-copilot-vscode",
   "displayName": "M365 Copilot for VS Code",
   "description": "Usa tu suscripción de Microsoft 365 Copilot como proveedor de modelos en el chat de VS Code. Pega el token capturado con el userscript y listo.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "m365-copilot-vscode",
   "license": "MIT",
   "icon": "logo/m365-vscode.png",
@@ -369,7 +369,11 @@
         },
         "m365copilot.tools.duplicates": {
           "type": "string",
-          "enum": ["preferEditor", "preferM365", "both"],
+          "enum": [
+            "preferEditor",
+            "preferM365",
+            "both"
+          ],
           "enumDescriptions": [
             "Cuando una herramienta nativa hace lo mismo que una nuestra, se le indica al modelo que use la nativa.",
             "Al revés: se prefieren las de esta extensión (rutas relativas al workspace y revisión Keep/Undo propia).",
