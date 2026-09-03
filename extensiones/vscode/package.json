@@ -5,6 +5,11 @@
   "version": "1.0.2",
   "publisher": "m365-copilot-vscode",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cristiancastineiras/M365CopilotVSCode.git",
+    "directory": "extensiones/vscode"
+  },
   "icon": "logo/m365-vscode.png",
   "engines": {
     "vscode": "^1.104.0"
