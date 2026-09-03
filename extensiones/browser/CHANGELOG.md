@@ -1,5 +1,13 @@
 # m365-copilot-vscode-extension
 
+## 1.0.3
+
+### Patch Changes
+
+- Corrige el empaquetado de la extensión de VS Code añadiendo el campo `repository`, necesario para que `vsce` resuelva los enlaces relativos del README.
+- Updated dependencies
+  - @m365copilot/core@1.0.3
+
 ## 1.0.2
 
 ### Patch Changes
