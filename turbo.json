@@ -1,0 +1,37 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "stream",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      // dist/** y .output/** cubren los builds que se quedan dentro del
+      // paquete (packages/core, extensiones/vscode). WXT saca el suyo fuera,
+      // a releases/, así que sin ese patrón turbo nunca encontraba nada que
+      // cachear para la extensión de navegador (cache miss siempre).
+      "outputs": ["dist/**", ".output/**", "../../releases/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "lint": {},
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "clean": {
+      "cache": false
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "package": {
+      "dependsOn": ["build"],
+      // vsce empaqueta con `--out ../../releases`, no en la raíz del paquete.
+      "outputs": ["*.vsix", "../../releases/**"]
+    },
+    "zip": {
+      "dependsOn": ["build"],
+      "outputs": [".output/*.zip", "../../releases/**"]
+    }
+  }
+}

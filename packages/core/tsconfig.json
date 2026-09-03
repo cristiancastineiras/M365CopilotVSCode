@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    // tsdown genera el build real (JS + .d.ts + sourcemaps); este tsconfig ya
+    // sólo sirve para `typecheck` y para que tsdown tome la ruta rápida de dts
+    // basada en oxc-transform. `declaration` es obligatorio para poder activar
+    // `isolatedDeclarations`, pero `noEmit` evita que `tsc` llegue a escribir
+    // nada (sólo type-checkea).
+    "declaration": true,
+    "noEmit": true,
+    "isolatedDeclarations": true
+  },
+  "include": ["src"]
+}

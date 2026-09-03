@@ -1,0 +1,57 @@
+name: Release
+
+# Se dispara al hacer `git push` de un tag `vX.Y.Z` (p. ej. `v1.0.0`). Compila
+# y empaqueta las dos extensiones (VS Code + navegador) y el paquete
+# compartido, y publica UNA release de GitHub con los tres artefactos y el
+# changelog de cada uno.
+#
+# Flujo para sacar una versión nueva:
+#   1. pnpm changeset            # describe el cambio (interactivo)
+#   2. pnpm version-packages     # sube versión + CHANGELOG.md de los 3 paquetes
+#   3. git add -A && git commit -m "chore: release vX.Y.Z"
+#   4. git tag vX.Y.Z && git push --follow-tags
+# Los tres paquetes están en un grupo "fixed" de changesets: siempre suben de
+# versión juntos, así que un único tag sirve para los tres a la vez.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Habilitar Corepack (pnpm)
+        run: corepack enable
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Compilar y empaquetar todo (core + VS Code + navegador)
+        run: pnpm package
+
+      - name: Generar notas de la versión
+        run: node scripts/release-notes.mjs "${{ github.ref_name }}" > release-notes.md
+
+      - name: Publicar release en GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: release-notes.md
+          fail_on_unmatched_files: true
+          files: |
+            releases/*.vsix
+            releases/chrome/m365-copilot-vscode-extension-chrome.zip
+            releases/firefox/m365-copilot-vscode-extension-firefox.zip

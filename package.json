@@ -1,0 +1,29 @@
+{
+  "name": "m365-copilot-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Monorepo de M365 Copilot para VS Code: extensión de VS Code + extensión de navegador que capturan y sincronizan el token de Copilot.",
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rimraf node_modules releases",
+    "package": "pnpm build && pnpm package:browser && pnpm package:vscode",
+    "package:browser": "pnpm --filter m365-copilot-vscode-extension zip && pnpm --filter m365-copilot-vscode-extension zip:firefox",
+    "package:vscode": "pnpm --filter m365-copilot-vscode package",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release-notes": "node scripts/release-notes.mjs"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.1",
+    "turbo": "^2.10.0",
+    "typescript": "^5.6.2"
+  }
+}

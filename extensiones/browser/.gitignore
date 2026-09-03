@@ -1,0 +1,23 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# WXT
+.wxt
+.output
+
+# Build outputs
+dist
+*.zip
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
