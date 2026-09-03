@@ -41,7 +41,7 @@ automáticamente. Es la forma más cómoda de usar M365 Copilot en VS Code.
 > **Nota:** En Firefox, la extensión es temporal: la olvida al cerrar el navegador. Para algo
 > permanente hace falta firmarla en addons.mozilla.org, que todavía no está hecho. 
 
-## 1. Instalar Tampermonkey (opcional)
+## 1. Instalar Tampermonkey (omitir si usas la extensión del navegador, saltar a punto 4)
 
 Primero, dependiendo del navegador que uses, hay que instalar Tampermonkey, que
 es un gestor de userscripts. En este caso se ha probado en Chrome y Edge.
