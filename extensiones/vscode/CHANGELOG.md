@@ -1,5 +1,13 @@
 # m365-copilot-vscode
 
+## 1.0.1
+
+### Patch Changes
+
+- Primera release publicada mediante el pipeline de GitHub Actions.
+- Updated dependencies
+  - @m365copilot/core@1.0.1
+
 ## 1.0.0
 
 Primera versión pública.

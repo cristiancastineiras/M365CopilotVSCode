@@ -1,5 +1,11 @@
 # @m365copilot/core
 
+## 1.0.1
+
+### Patch Changes
+
+- Primera release publicada mediante el pipeline de GitHub Actions.
+
 ## 1.0.0
 
 Primera versión.
