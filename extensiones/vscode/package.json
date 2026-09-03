@@ -1,0 +1,522 @@
+{
+  "name": "m365-copilot-vscode",
+  "displayName": "M365 Copilot for VS Code",
+  "description": "Usa tu suscripción de Microsoft 365 Copilot como proveedor de modelos en el chat de VS Code. Pega el token capturado con el userscript y listo.",
+  "version": "1.0.0",
+  "publisher": "m365-copilot-vscode",
+  "license": "MIT",
+  "icon": "logo/m365-vscode.png",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "main": "./dist/extension.cjs",
+  "type": "module",
+  "activationEvents": [
+    "onStartupFinished",
+    "onLanguageModelChatProvider:m365copilot"
+  ],
+  "contributes": {
+    "languageModelChatProviders": [
+      {
+        "vendor": "m365copilot",
+        "displayName": "Microsoft 365 Copilot"
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "m365_list_files",
+        "displayName": "M365: List workspace files",
+        "modelDescription": "List files below a workspace-relative directory without reading their contents. Use it first to discover the project layout before reading or editing files.",
+        "userDescription": "Deja que M365 Copilot liste archivos del workspace.",
+        "toolReferenceName": "m365ListFiles",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(list-tree)",
+        "when": "workspaceFolderCount != 0",
+        "tags": [
+          "m365copilot"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Optional workspace-relative directory."
+            },
+            "maxEntries": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 250
+            },
+            "workspaceFolder": {
+              "type": "string",
+              "description": "Required only for multi-root workspaces."
+            }
+          }
+        }
+      },
+      {
+        "name": "m365_search_text",
+        "displayName": "M365: Search workspace text",
+        "modelDescription": "Search for literal text across a bounded set of workspace files and return concise file:line matches. Use it to locate code before reading or editing it.",
+        "userDescription": "Deja que M365 Copilot busque texto en el workspace.",
+        "toolReferenceName": "m365SearchText",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(search)",
+        "when": "workspaceFolderCount != 0",
+        "tags": [
+          "m365copilot"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "query"
+          ],
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Literal text to search for."
+            },
+            "path": {
+              "type": "string",
+              "description": "Optional workspace-relative directory."
+            },
+            "maxResults": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 80
+            },
+            "caseSensitive": {
+              "type": "boolean",
+              "description": "Match case exactly. Defaults to false."
+            },
+            "workspaceFolder": {
+              "type": "string",
+              "description": "Required only for multi-root workspaces."
+            }
+          }
+        }
+      },
+      {
+        "name": "m365_read_file",
+        "displayName": "M365: Read workspace file",
+        "modelDescription": "Read a small, line-numbered range from a workspace-relative text file. Always read the relevant range with this tool before proposing edits to a file.",
+        "userDescription": "Deja que M365 Copilot lea archivos del workspace.",
+        "toolReferenceName": "m365ReadFile",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(file-code)",
+        "when": "workspaceFolderCount != 0",
+        "tags": [
+          "m365copilot"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Workspace-relative file path."
+            },
+            "startLine": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "endLine": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "workspaceFolder": {
+              "type": "string",
+              "description": "Required only for multi-root workspaces."
+            }
+          }
+        }
+      },
+      {
+        "name": "m365_apply_edits",
+        "displayName": "M365: Propose workspace edits",
+        "modelDescription": "Apply a reversible batch of exact workspace edits. Changes land in the editor immediately (unsaved), highlighted, with Keep/Undo actions on the change for the user to accept or revert — so never assume they are final. Fields per operation: replace needs oldText (exact and unique in the file) plus newText; create needs content (NOT newText); delete needs only path. Prefer several small calls over one huge batch when creating many files.",
+        "userDescription": "Deja que M365 Copilot proponga cambios en el workspace (con revisión y diff).",
+        "toolReferenceName": "m365ApplyEdits",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(edit)",
+        "when": "workspaceFolderCount != 0",
+        "tags": [
+          "m365copilot"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "edits"
+          ],
+          "properties": {
+            "edits": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "required": [
+                  "operation",
+                  "path"
+                ],
+                "properties": {
+                  "operation": {
+                    "type": "string",
+                    "enum": [
+                      "replace",
+                      "create",
+                      "delete"
+                    ]
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "Workspace-relative file path."
+                  },
+                  "oldText": {
+                    "type": "string",
+                    "description": "Required exact, unique text for replace."
+                  },
+                  "newText": {
+                    "type": "string",
+                    "description": "Replacement text for replace."
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "Initial content for create."
+                  },
+                  "workspaceFolder": {
+                    "type": "string",
+                    "description": "Required only for multi-root workspaces."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "m365_get_diagnostics",
+        "displayName": "M365: Get diagnostics",
+        "modelDescription": "Read the errors and warnings VS Code's language server already computed for a file or the whole workspace. Read-only; does not compile or run anything. Use it after proposing edits to check they didn't introduce new errors.",
+        "userDescription": "Deja que M365 Copilot lea los errores/avisos que ya muestra VS Code.",
+        "toolReferenceName": "m365GetDiagnostics",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(warning)",
+        "when": "workspaceFolderCount != 0",
+        "tags": [
+          "m365copilot"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Optional workspace-relative file. Omit for the whole workspace."
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "error",
+                "warning",
+                "all"
+              ],
+              "description": "Minimum severity to include. Defaults to all."
+            },
+            "workspaceFolder": {
+              "type": "string",
+              "description": "Required only for multi-root workspaces."
+            }
+          }
+        }
+      },
+      {
+        "name": "m365_git_info",
+        "displayName": "M365: Git info (read-only)",
+        "modelDescription": "Read-only git status, diff or log for the workspace or a path. Never commits, pushes or otherwise modifies the repository.",
+        "userDescription": "Deja que M365 Copilot consulte git (status/diff/log) sin modificar nada.",
+        "toolReferenceName": "m365GitInfo",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(git-branch)",
+        "when": "workspaceFolderCount != 0",
+        "tags": [
+          "m365copilot"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "action"
+          ],
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "status",
+                "diff",
+                "log"
+              ]
+            },
+            "path": {
+              "type": "string",
+              "description": "Optional workspace-relative path to scope the command to."
+            },
+            "staged": {
+              "type": "boolean",
+              "description": "For action=diff: show staged changes instead of the working tree."
+            },
+            "maxCount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "description": "For action=log: how many commits (default 20)."
+            },
+            "workspaceFolder": {
+              "type": "string",
+              "description": "Required only for multi-root workspaces."
+            }
+          }
+        }
+      },
+      {
+        "name": "m365_run_command",
+        "displayName": "M365: Run terminal command",
+        "modelDescription": "Run a shell command in the workspace and return its output (stdout/stderr, exit code). Requires explicit user confirmation before it executes. Use for builds, tests and other checks — not for destructive or irreversible actions unless the user explicitly asked for them.",
+        "userDescription": "Deja que M365 Copilot ejecute un comando de terminal (con tu confirmación).",
+        "toolReferenceName": "m365RunCommand",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(terminal)",
+        "when": "workspaceFolderCount != 0",
+        "tags": [
+          "m365copilot"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "command"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "description": "The shell command to run."
+            },
+            "cwd": {
+              "type": "string",
+              "description": "Optional workspace-relative working directory."
+            },
+            "timeoutSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 300,
+              "description": "Kill the command after this many seconds (default 60)."
+            },
+            "workspaceFolder": {
+              "type": "string",
+              "description": "Required only for multi-root workspaces."
+            }
+          }
+        }
+      },
+      {
+        "name": "m365_deepwiki_search",
+        "displayName": "M365: DeepWiki search",
+        "modelDescription": "Query DeepWiki (deepwiki.com), an AI-generated documentation and Q&A service for one specific PUBLIC GitHub repository (typically a library the project depends on). Not a general web search — it is the only source of external, current information available here, since this model runs without its native web-search plugin. action=ask (with question) for a specific query; action=structure to list documented topics; action=contents for the full generated docs (can be long).",
+        "userDescription": "Deja que M365 Copilot consulte DeepWiki (documentación IA de repos públicos de GitHub) como sustituto de la búsqueda web.",
+        "toolReferenceName": "m365DeepwikiSearch",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(globe)",
+        "tags": [
+          "m365copilot"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "repo"
+          ],
+          "properties": {
+            "repo": {
+              "type": "string",
+              "description": "Public GitHub repo as \"owner/name\", e.g. \"microsoft/vscode\"."
+            },
+            "action": {
+              "type": "string",
+              "enum": [
+                "ask",
+                "structure",
+                "contents"
+              ],
+              "description": "ask (default, needs question), structure (list documented topics) or contents (full generated docs)."
+            },
+            "question": {
+              "type": "string",
+              "description": "Required when action=ask."
+            }
+          }
+        }
+      }
+    ],
+    "configuration": {
+      "title": "M365 Copilot",
+      "properties": {
+        "m365copilot.tools.includeEditorTools": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Describe al modelo también las herramientas del propio VS Code (modo agente, MCP y otras extensiones), no sólo las de esta extensión. Es lo que permite que el agente lea, edite o ejecute con las herramientas nativas del editor. Desactívalo para volver al comportamiento anterior (sólo herramientas `m365_*`)."
+        },
+        "m365copilot.tools.duplicates": {
+          "type": "string",
+          "enum": ["preferEditor", "preferM365", "both"],
+          "enumDescriptions": [
+            "Cuando una herramienta nativa hace lo mismo que una nuestra, se le indica al modelo que use la nativa.",
+            "Al revés: se prefieren las de esta extensión (rutas relativas al workspace y revisión Keep/Undo propia).",
+            "No se marca ninguna preferencia; el modelo elige."
+          ],
+          "default": "preferEditor",
+          "markdownDescription": "Qué herramienta preferir cuando una nuestra y una nativa de VS Code hacen lo mismo (leer, buscar, editar, terminal…). Ninguna se oculta: la otra queda como alternativa si la preferida falla."
+        },
+        "m365copilot.tools.maxAdvertised": {
+          "type": "number",
+          "default": 48,
+          "minimum": 4,
+          "maximum": 200,
+          "markdownDescription": "Máximo de herramientas descritas en el prompt. BizChat no tiene function-calling nativo: el catálogo viaja como texto, así que con muchas herramientas activas (MCP incluido) conviene acotarlo. Las que no se describen siguen siendo ejecutables si el modelo las nombra."
+        },
+        "m365copilot.inlineCompletions.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Sugerencias de código en línea (texto fantasma) con M365 Copilot. **Ojo:** cada sugerencia es una petición a tu plan de M365, y la latencia es de ~1-3 s (BizChat abre un WebSocket nuevo por petición y no es un modelo de autocompletado). Si te resulta lento o gasta demasiado, usa `triggerMode: manual`."
+        },
+        "m365copilot.inlineCompletions.triggerMode": {
+          "type": "string",
+          "enum": [
+            "automatic",
+            "manual"
+          ],
+          "enumDescriptions": [
+            "Sugiere solo al dejar de teclear (con el retardo de debounceMs).",
+            "Sugiere únicamente cuando lo pides a mano (Alt+\\ por defecto en VS Code)."
+          ],
+          "default": "automatic",
+          "description": "Cuándo pedir sugerencias. «manual» reduce muchísimo el consumo de cuota."
+        },
+        "m365copilot.inlineCompletions.debounceMs": {
+          "type": "number",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 5000,
+          "description": "Milisegundos sin teclear antes de pedir una sugerencia. Subirlo gasta menos cuota; bajarlo responde antes pero dispara más peticiones."
+        },
+        "m365copilot.inlineCompletions.maxLines": {
+          "type": "number",
+          "default": 6,
+          "minimum": 1,
+          "maximum": 30,
+          "description": "Máximo de líneas por sugerencia. Menos líneas = menos latencia."
+        },
+        "m365copilot.inlineCompletions.timeoutMs": {
+          "type": "number",
+          "default": 6000,
+          "minimum": 1000,
+          "maximum": 30000,
+          "description": "Tiempo máximo de espera por sugerencia. Pasado ese punto se descarta: una sugerencia tardía estorba más que ayuda."
+        },
+        "m365copilot.inlineCompletions.model": {
+          "type": "string",
+          "enum": [
+            "m365-copilot-auto",
+            "m365-copilot-gpt",
+            "m365-copilot-claude",
+            "m365-copilot-reasoning"
+          ],
+          "default": "m365-copilot-auto",
+          "description": "Modelo usado para el autocompletado. «reasoning» es notablemente más lento; no se recomienda aquí."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "m365copilot.toggleInlineCompletions",
+        "title": "Activar/desactivar autocompletado en línea",
+        "category": "M365 Copilot"
+      },
+      {
+        "command": "m365copilot.pasteProfile",
+        "title": "Pegar perfil o token",
+        "category": "M365 Copilot"
+      },
+      {
+        "command": "m365copilot.clearProfile",
+        "title": "Borrar credenciales",
+        "category": "M365 Copilot"
+      },
+      {
+        "command": "m365copilot.showStatus",
+        "title": "Estado / información del token",
+        "category": "M365 Copilot"
+      },
+      {
+        "command": "m365copilot.showLog",
+        "title": "Mostrar registro (diagnóstico)",
+        "category": "M365 Copilot"
+      },
+      {
+        "command": "m365copilot.reviewPendingEdits",
+        "title": "Revisar cambios de agente pendientes",
+        "category": "M365 Copilot"
+      },
+      {
+        "command": "m365copilot.keepEdits",
+        "title": "Aceptar (Keep) los cambios del agente",
+        "category": "M365 Copilot"
+      },
+      {
+        "command": "m365copilot.undoEdits",
+        "title": "Revertir (Undo) los cambios del agente",
+        "category": "M365 Copilot"
+      },
+      {
+        "command": "m365copilot.showEditDiff",
+        "title": "Ver diff de los cambios del agente",
+        "category": "M365 Copilot"
+      },
+      {
+        "command": "m365copilot.discardPendingEdits",
+        "title": "Descartar cambios de agente pendientes",
+        "category": "M365 Copilot"
+      },
+      {
+        "command": "m365copilot.undoLastAgentEdit",
+        "title": "Deshacer último lote de cambios del agente",
+        "category": "M365 Copilot"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsdown",
+    "watch": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src",
+    "test": "node --experimental-strip-types --import ./test/register.mjs test/e2e.mts",
+    "icon": "node scripts/render-icon.mjs",
+    "package": "pnpm build && vsce package --no-dependencies --allow-missing-repository --out ../../releases",
+    "vscode:prepublish": "pnpm build"
+  },
+  "dependencies": {
+    "@m365copilot/core": "workspace:*",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/node": "^26.4.1",
+    "@types/vscode": "^1.104.0",
+    "@types/ws": "^8.18.1",
+    "@vscode/vsce": "^3.6.2",
+    "oxlint": "^1.81.0",
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2"
+  }
+}

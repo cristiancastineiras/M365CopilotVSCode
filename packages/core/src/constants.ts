@@ -1,0 +1,26 @@
+/**
+ * Contrato de red entre la extensión de navegador, los userscripts de
+ * Tampermonkey y el servidor local de la extensión de VS Code.
+ *
+ * Es la ÚNICA fuente de verdad: si el puerto o la ruta se desincronizan, el
+ * token deja de sincronizarse silenciosamente (exactamente el bug que había
+ * cuando el navegador apuntaba a 39283/profile y el servidor escuchaba en
+ * 51827/token). Manténlo aquí y consúmelo desde ambos lados.
+ */
+export const TOKEN_SERVER_HOST = 'localhost';
+export const TOKEN_SERVER_PORT = 51827;
+export const TOKEN_SERVER_URL: string = `http://${TOKEN_SERVER_HOST}:${TOKEN_SERVER_PORT}`;
+
+/** Ruta donde el servidor de VS Code recibe el perfil/token (POST). */
+export const TOKEN_ENDPOINT_PATH = '/token';
+/** Ruta de health-check para saber si VS Code está escuchando (GET). */
+export const HEALTH_ENDPOINT_PATH = '/health';
+
+/** Clave de localStorage donde el interceptor del navegador acumula la captura. */
+export const CAPTURE_STORE_KEY = 'm365copilot.capture.v1';
+
+/**
+ * Marcador de los mensajes `window.postMessage` entre el interceptor (mundo
+ * MAIN) y el puente (mundo ISOLATED) de la extensión de navegador.
+ */
+export const BRIDGE_MESSAGE_MARKER = '__m365copilot';
