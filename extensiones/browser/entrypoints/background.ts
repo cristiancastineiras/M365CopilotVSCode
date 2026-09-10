@@ -4,7 +4,7 @@ import {
   HEALTH_ENDPOINT_PATH,
   isTokenUsable,
   type CopilotProfile,
-} from '@m365copilot/core';
+} from '@ms365copilot/core';
 import { registerHandlers } from '@/utils/messaging';
 import { getStorage, patchStorage, setStorage } from '@/utils/storage';
 import { logger } from '@/utils/logger';

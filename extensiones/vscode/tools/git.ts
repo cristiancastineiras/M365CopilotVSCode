@@ -37,8 +37,9 @@ export async function getGitInfo(input: GitInfoInput, token: vscode.Cancellation
 
 /** `execFile` with an argv array — never a shell string, so nothing in
  * `args` (including a workspace-relative path) can be interpreted as shell
- * syntax regardless of its content. */
-function execGit(args: string[], cwd: string, token: vscode.CancellationToken): Promise<string> {
+ * syntax regardless of its content. Exported: `tools/gitCommit.ts` reuses it
+ * for `git add`/`git commit` instead of spawning its own child process. */
+export function execGit(args: string[], cwd: string, token: vscode.CancellationToken): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const child = execFile(
 			'git',

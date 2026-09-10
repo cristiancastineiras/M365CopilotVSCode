@@ -140,7 +140,7 @@ export async function streamCopilotTurn(options: {
 	// Tracking this with a single turn-wide "have we seen a delta yet?" flag
 	// (the old approach) silently drops the first snapshot chunk of every
 	// message AFTER the first one — exactly the bug that truncated
-	// `<m365_tool_call>` down to `65_tool_call>` when Claude split its
+	// `<ms365_tool_call>` down to `365_tool_call>` when Claude split its
 	// answer into two messages, leaking the tool call as visible text
 	// instead of executing it. Track per messageId instead.
 	const knownMessageText = new Map<string, string>();
@@ -526,7 +526,7 @@ function sendInvocation(
  * `BingWebSearch`), its full `optionsSets` and a production `tone` — with
  * those in place BizChat treats the turn as a real Copilot web session with
  * its own native tool/plugin access, and the model has no reason to obey our
- * injected `<m365_tool_call>` instructions (see toolProtocol.ts) since it
+ * injected `<ms365_tool_call>` instructions (see toolProtocol.ts) since it
  * "already" has real tools. The lean default below is what that text-based
  * protocol was actually built and tested against, so we always start from it
  * — a captured profile only ever contributes the access token now.
@@ -564,6 +564,73 @@ function defaultInvocationArgs(): Record<string, unknown> {
 		clientInfo: { clientPlatform: 'mcmcopilot-web', clientAppName: 'Office' },
 		message: { author: 'user', messageType: 'Chat', locale: 'es-ES' },
 	};
+}
+
+/**
+ * `true` for a {@link CopilotClientError} worth retrying automatically: a
+ * transient failure (rate limit, handshake/connection blip, a clean close
+ * with no content) rather than something a retry can't fix. Deliberately NOT
+ * pattern-matched against the exact message text (which drifts as the error
+ * copy is tuned) — every non-auth, non-cancellation client error qualifies,
+ * because the caller only retries when nothing has been shown to the user
+ * yet, so a wasted retry costs latency, never a wrong/duplicate answer.
+ */
+export function isRetryableClientError(error: unknown): boolean {
+	if (error instanceof CopilotAuthError) return false; // same bad token would fail again
+	if (!(error instanceof CopilotClientError)) return false;
+	if (error.message === '__CANCELLED__') return false;
+	return true;
+}
+
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+	return new Promise((resolve) => {
+		if (signal.aborted) {
+			resolve();
+			return;
+		}
+		const timer = setTimeout(() => {
+			signal.removeEventListener('abort', onAbort);
+			resolve();
+		}, ms);
+		const onAbort = () => {
+			clearTimeout(timer);
+			resolve();
+		};
+		signal.addEventListener('abort', onAbort, { once: true });
+	});
+}
+
+/**
+ * Wraps {@link streamCopilotTurn} with a single automatic retry for turns
+ * that fail before emitting any text at all — nothing has reached the user
+ * yet, so a retry is invisible except for latency. Once so much as one
+ * character has streamed, a failure is surfaced as-is: silently restarting a
+ * partially-shown answer would risk a duplicated/contradictory reply.
+ */
+export async function streamCopilotTurnWithRetry(
+	options: Parameters<typeof streamCopilotTurn>[0] & { retryDelayMs?: number },
+): Promise<void> {
+	let emittedAny = false;
+	const log = options.log ?? (() => {});
+	const callbacks: StreamCallbacks = {
+		onText: (delta) => {
+			if (delta) emittedAny = true;
+			options.callbacks.onText(delta);
+		},
+		onDone: options.callbacks.onDone,
+	};
+
+	try {
+		await streamCopilotTurn({ ...options, callbacks });
+	} catch (error) {
+		if (emittedAny || options.signal.aborted || !isRetryableClientError(error)) throw error;
+		log(
+			`turno falló sin emitir texto (${error instanceof Error ? error.message : String(error)}); reintentando una vez...`,
+		);
+		await delay(options.retryDelayMs ?? 1200, options.signal);
+		if (options.signal.aborted) throw error;
+		await streamCopilotTurn({ ...options, callbacks });
+	}
 }
 
 /**

@@ -10,7 +10,7 @@
 import { WebSocketServer } from 'ws';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { streamCopilotTurn, CopilotAuthError } from '../src/client.ts';
+import { streamCopilotTurn, streamCopilotTurnWithRetry, CopilotAuthError } from '../src/client.ts';
 
 import { MarkdownStreamFormatter } from '../src/markdown.ts';
 import { parsePastedProfile } from '../src/profile.ts';
@@ -19,9 +19,12 @@ import {
 	ToolCallDecoder,
 	buildToolCatalog,
 	buildToolProtocolInstructions,
+	type OfferedTool,
 	type ToolCatalog,
 } from '../src/toolProtocol.ts';
+import { ConcurrencyLimiter, clip, runSubagentTask } from '../src/subagentCore.ts';
 import { replaceTextOnce } from '../tools/replaceText.ts';
+import { validateConventionalCommitMessage } from '../tools/commitMessage.ts';
 import type { CopilotProfile } from '../src/profile.ts';
 
 const RS = String.fromCharCode(0x1e);
@@ -156,8 +159,8 @@ function testToolProtocol() {
 		(chunk) => text.push(chunk),
 		(call) => calls.push(call),
 	);
-	decoder.push(`<m365_tool_call>{"name":"${M365_TOOL_NAMES.readFile}",`);
-	decoder.push('"input":{"path":"src/extension.ts","startLine":1}}</m365_tool_call>');
+	decoder.push(`<ms365_tool_call>{"name":"${M365_TOOL_NAMES.readFile}",`);
+	decoder.push('"input":{"path":"src/extension.ts","startLine":1}}</ms365_tool_call>');
 	decoder.finish();
 	assert.deepEqual(calls, [
 		{ name: M365_TOOL_NAMES.readFile, input: { path: 'src/extension.ts', startLine: 1 } },
@@ -183,7 +186,7 @@ function testToolProtocol() {
 		(call) => pre.calls.push(call),
 	);
 	preDecoder.push('Voy a leer el archivo primero.\n');
-	preDecoder.push(`<m365_tool_call>{"name":"${M365_TOOL_NAMES.readFile}","input":{"path":"a.ts"}}</m365_tool_call>`);
+	preDecoder.push(`<ms365_tool_call>{"name":"${M365_TOOL_NAMES.readFile}","input":{"path":"a.ts"}}</ms365_tool_call>`);
 	preDecoder.push('texto que se descarta tras la llamada');
 	preDecoder.finish();
 	assert.deepEqual(pre.calls, [{ name: M365_TOOL_NAMES.readFile, input: { path: 'a.ts' } }]);
@@ -198,13 +201,13 @@ function testToolProtocol() {
 		(call) => fenced.calls.push(call),
 	);
 	fencedDecoder.push('```json\n');
-	fencedDecoder.push(`<m365_tool_call>{"name":"${M365_TOOL_NAMES.listFiles}","input":{}}</m365_tool_call>\n`);
+	fencedDecoder.push(`<ms365_tool_call>{"name":"${M365_TOOL_NAMES.listFiles}","input":{}}</ms365_tool_call>\n`);
 	fencedDecoder.push('```');
 	fencedDecoder.finish();
 	assert.deepEqual(fenced.calls, [{ name: M365_TOOL_NAMES.listFiles, input: {} }]);
 	assert.equal(fenced.text.join('').trim(), '');
 
-	// The reasoning/Claude rings often omit the closing </m365_tool_call>. The
+	// The reasoning/Claude rings often omit the closing </ms365_tool_call>. The
 	// end of the call must still be found by balancing the JSON braces, and the
 	// raw marker must NOT leak into the chat.
 	const noClose = { text: [] as string[], calls: [] as unknown[] };
@@ -215,7 +218,7 @@ function testToolProtocol() {
 	);
 	// Braces inside a string value (oldText/newText) must not end the object early.
 	noCloseDecoder.push(
-		`<m365_tool_call>{"name":"${M365_TOOL_NAMES.applyWorkspaceEdits}","input":{"edits":[` +
+		`<ms365_tool_call>{"name":"${M365_TOOL_NAMES.applyWorkspaceEdits}","input":{"edits":[` +
 			`{"operation":"replace","path":"a.ts","oldText":"function f() {}","newText":"const f = () => {}"}]}}`,
 	);
 	noCloseDecoder.finish();
@@ -231,7 +234,7 @@ function testToolProtocol() {
 	]);
 	assert.equal(noClose.text.join(''), '');
 
-	// A stray extra `<` (<<m365_tool_call>) with no closing marker, split across
+	// A stray extra `<` (<<ms365_tool_call>) with no closing marker, split across
 	// chunks, still decodes into a single clean call.
 	const doubled = { text: [] as string[], calls: [] as unknown[] };
 	const doubledDecoder = new ToolCallDecoder(
@@ -239,7 +242,7 @@ function testToolProtocol() {
 		(chunk) => doubled.text.push(chunk),
 		(call) => doubled.calls.push(call),
 	);
-	doubledDecoder.push(`<<m365_tool_call>{"name":"${M365_TOOL_NAMES.readFile}",`);
+	doubledDecoder.push(`<<ms365_tool_call>{"name":"${M365_TOOL_NAMES.readFile}",`);
 	doubledDecoder.push('"input":{"path":"test.js","startLine":1,"endLine":30}}');
 	doubledDecoder.finish();
 	assert.deepEqual(doubled.calls, [
@@ -255,10 +258,10 @@ function testToolProtocol() {
 		(chunk) => mention.text.push(chunk),
 		(call) => mention.calls.push(call),
 	);
-	mentionDecoder.push('Para llamar una herramienta escribe <m365_tool_call> seguido del JSON.');
+	mentionDecoder.push('Para llamar una herramienta escribe <ms365_tool_call> seguido del JSON.');
 	mentionDecoder.finish();
 	assert.deepEqual(mention.calls, []);
-	assert.equal(mention.text.join(''), 'Para llamar una herramienta escribe <m365_tool_call> seguido del JSON.');
+	assert.equal(mention.text.join(''), 'Para llamar una herramienta escribe <ms365_tool_call> seguido del JSON.');
 
 	// With tools enabled, a plain answer that contains a fenced code block must
 	// stream through byte-for-byte (holding fences must never corrupt output).
@@ -331,7 +334,7 @@ const EDITOR_TOOLS = [
 	},
 ];
 
-const M365_TOOLS = Object.values(M365_TOOL_NAMES).map((name) => ({
+const MS365_TOOLS = Object.values(M365_TOOL_NAMES).map((name) => ({
 	name,
 	description: `Descripción de package.json para ${name}.`,
 	inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
@@ -344,7 +347,7 @@ function entry(catalog: ToolCatalog, name: string) {
 }
 
 function testToolCatalog() {
-	const offered = [...M365_TOOLS, ...EDITOR_TOOLS];
+	const offered = [...MS365_TOOLS, ...EDITOR_TOOLS];
 	const catalog = buildToolCatalog(offered);
 
 	// Lo esencial: las herramientas del editor y las de MCP se describen igual
@@ -356,7 +359,7 @@ function testToolCatalog() {
 			`${tool.name} debe describirse en el prompt`,
 		);
 	}
-	assert.equal(catalog.m365Count, M365_TOOLS.length);
+	assert.equal(catalog.ms365Count, MS365_TOOLS.length);
 	assert.equal(catalog.editorCount, EDITOR_TOOLS.length);
 
 	// Clasificación por capacidad (ordena y agrupa; nunca decide si se ejecuta).
@@ -389,7 +392,7 @@ function testToolCatalog() {
 
 	// El interruptor de escape: volver a describir sólo las nuestras.
 	const onlyOurs = buildToolCatalog(offered, { includeEditorTools: false });
-	assert.equal(onlyOurs.entries.length, M365_TOOLS.length);
+	assert.equal(onlyOurs.entries.length, MS365_TOOLS.length);
 	assert.equal(onlyOurs.callable.has('read_file'), true, 'sigue siendo ejecutable aunque no se describa');
 
 	// Presupuesto: lo que no cabe se omite del prompt, pero sigue siendo llamable.
@@ -406,8 +409,40 @@ function testToolCatalog() {
 	console.log('  ✓ el catálogo describe las herramientas nativas/MCP, las clasifica y marca duplicados');
 }
 
+/**
+ * Regresión: `ms365_spawn_agents` es de capacidad 'agent', la ÚLTIMA de
+ * `CAPABILITY_ORDER`, así que sin la excepción en `selectionRank` era la
+ * primera candidata a quedar fuera del catálogo en cuanto el presupuesto de
+ * caracteres se ajustaba (fácil con bastantes herramientas nativas/MCP
+ * activas en modo agente) — el modelo principal nunca se enteraba de que
+ * existía, así que nunca podía delegar en sub-agentes.
+ */
+function testSpawnAgentsNeverTrimmed() {
+	const filler = Array.from({ length: 6 }, (_, i) => ({
+		name: `read_file_variant_${i}`,
+		description: 'x'.repeat(280),
+	}));
+	const offered = [...filler, ...MS365_TOOLS];
+
+	// Sólo los 6 "filler" ya superan este presupuesto, así que en el orden
+	// antiguo (agrupado por capacidad) se comían todo el presupuesto antes de
+	// llegar siquiera a la única herramienta de capacidad 'agent'.
+	const tight = buildToolCatalog(offered, { maxChars: 1200 });
+	assert.ok(tight.omitted.length > 0, '(sanity) el presupuesto ajustado sí debería recortar algo');
+	assert.ok(
+		tight.entries.some((e) => e.name === M365_TOOL_NAMES.spawnAgents),
+		'ms365_spawn_agents no debería quedar fuera del catálogo aunque el presupuesto sea ajustado',
+	);
+	assert.ok(
+		!tight.omitted.includes(M365_TOOL_NAMES.spawnAgents),
+		'ms365_spawn_agents no debería aparecer en la lista de herramientas omitidas',
+	);
+
+	console.log('  ✓ ms365_spawn_agents nunca se recorta del catálogo por presupuesto/nº de herramientas');
+}
+
 function testToolPromptRendering() {
-	const catalog = buildToolCatalog([...M365_TOOLS, ...EDITOR_TOOLS]);
+	const catalog = buildToolCatalog([...MS365_TOOLS, ...EDITOR_TOOLS]);
 	const prompt = buildToolProtocolInstructions(catalog);
 
 	assert.match(prompt, /read_file \(nativa de VS Code\)/);
@@ -417,11 +452,11 @@ function testToolPromptRendering() {
 	assert.match(prompt, /filePath\*: string — The absolute path of the file to read\./);
 	assert.match(prompt, /run_in_terminal/);
 	assert.match(prompt, /duplicada: usa read_file/);
-	assert.match(prompt, /<m365_tool_call>/);
+	assert.match(prompt, /<ms365_tool_call>/);
 
 	// El ejemplo del formato de bloques tiene que usar los campos DE la
 	// herramienta que nombra: sin las nuestras se sintetiza con los parámetros
-	// de la nativa de edición, no con la forma de `m365_apply_edits`.
+	// de la nativa de edición, no con la forma de `ms365_apply_edits`.
 	const nativeOnly = buildToolProtocolInstructions(buildToolCatalog(EDITOR_TOOLS));
 	assert.match(
 		nativeOnly,
@@ -433,6 +468,34 @@ function testToolPromptRendering() {
 	assert.equal(buildToolProtocolInstructions(buildToolCatalog([])), '');
 
 	console.log('  ✓ el prompt describe cada herramienta con su origen, firma y preferencia');
+}
+
+// ---- commitMessage.ts -------------------------------------------------------
+
+function testCommitMessageValidation() {
+	assert.equal(
+		validateConventionalCommitMessage('fix(auth): evitar token nulo en refresh'),
+		'fix(auth): evitar token nulo en refresh',
+	);
+	// Cuerpo opcional tras la primera línea: sólo la primera se valida.
+	assert.equal(
+		validateConventionalCommitMessage('feat!: soporte multi-repo\n\nBREAKING CHANGE: cambia la firma pública.'),
+		'feat!: soporte multi-repo\n\nBREAKING CHANGE: cambia la firma pública.',
+	);
+	// Espacio sobrante en los bordes y CRLF se normalizan.
+	assert.equal(validateConventionalCommitMessage('  chore: limpiar deps\r\n'), 'chore: limpiar deps');
+
+	assert.throws(() => validateConventionalCommitMessage(''), /no puede estar vacío/);
+	assert.throws(() => validateConventionalCommitMessage('   '), /no puede estar vacío/);
+	assert.throws(() => validateConventionalCommitMessage(undefined), /no puede estar vacío/);
+	// Sin tipo válido de Conventional Commits.
+	assert.throws(() => validateConventionalCommitMessage('arreglado el bug del login'), /Conventional Commits/);
+	// Tipo inventado.
+	assert.throws(() => validateConventionalCommitMessage('feature: algo nuevo'), /Conventional Commits/);
+	// Punto final en la primera línea.
+	assert.throws(() => validateConventionalCommitMessage('fix: arregla el bug.'), /no debe terminar en punto/);
+
+	console.log('  ✓ valida (sin reescribir) que la primera línea siga Conventional Commits');
 }
 
 /** Decodifica un turno completo y devuelve el texto y las llamadas emitidas. */
@@ -459,7 +522,7 @@ function testHostToolDecoding() {
 	// el nombre viaja tal cual y es VS Code quien la ejecuta.
 	assert.deepEqual(
 		decodeTurn(allowed, [
-			'<m365_tool_call>{"name":"replace_string_in_file","input":{"filePath":"/a.ts","oldString":"a","newString":"b"}}</m365_tool_call>',
+			'<ms365_tool_call>{"name":"replace_string_in_file","input":{"filePath":"/a.ts","oldString":"a","newString":"b"}}</ms365_tool_call>',
 		]).calls,
 		[
 			{
@@ -474,30 +537,30 @@ function testHostToolDecoding() {
 	// toolReferenceName en camelCase, o los argumentos al mismo nivel.
 	assert.deepEqual(
 		decodeTurn(allowed, [
-			'<m365_tool_call>{"name":"functions.replace_string_in_file","arguments":"{\\"filePath\\":\\"/a.ts\\"}"}',
+			'<ms365_tool_call>{"name":"functions.replace_string_in_file","arguments":"{\\"filePath\\":\\"/a.ts\\"}"}',
 		]).calls,
 		[{ name: 'replace_string_in_file', input: { filePath: '/a.ts' } }],
 	);
 	assert.deepEqual(
 		decodeTurn(allowed, [
-			'<m365_tool_call>{"tool":"m365ReadFile","input":{"path":"a.ts"}}</m365_tool_call>',
+			'<ms365_tool_call>{"tool":"ms365ReadFile","input":{"path":"a.ts"}}</ms365_tool_call>',
 		]).calls,
 		[{ name: M365_TOOL_NAMES.readFile, input: { path: 'a.ts' } }],
 	);
 	assert.deepEqual(
-		decodeTurn(allowed, ['<m365_tool_call>{"name":"get_changed_files"}</m365_tool_call>']).calls,
+		decodeTurn(allowed, ['<ms365_tool_call>{"name":"get_changed_files"}</ms365_tool_call>']).calls,
 		[{ name: 'get_changed_files', input: {} }],
 	);
 	assert.deepEqual(
 		decodeTurn(allowed, [
-			'<m365_tool_call>{"name":"m365_read_file","path":"a.ts"}</m365_tool_call>',
+			'<ms365_tool_call>{"name":"ms365_read_file","path":"a.ts"}</ms365_tool_call>',
 		]).calls,
 		[{ name: M365_TOOL_NAMES.readFile, input: { path: 'a.ts' } }],
 	);
 
 	// Una herramienta que el host NO ofreció nunca se ejecuta.
 	const unknown = decodeTurn(allowed, [
-		'<m365_tool_call>{"name":"borrar_el_disco","input":{}}</m365_tool_call>',
+		'<ms365_tool_call>{"name":"borrar_el_disco","input":{}}</ms365_tool_call>',
 	]);
 	assert.deepEqual(unknown.calls, []);
 	assert.match(unknown.text.join(''), /borrar_el_disco/);
@@ -506,9 +569,9 @@ function testHostToolDecoding() {
 	// las de edición nativas tienen el mismo problema con el código sin escapar.
 	assert.deepEqual(
 		decodeTurn(allowed, [
-			'<m365_tool_call>{"name":"replace_string_in_file","input":{"filePath":"/a.ts","oldString":"@@block:1@@","newString":"@@block:2@@"}}</m365_tool_call>\n',
-			'<m365_block id="1">\nconsole.log("hola");\n</m365_block>\n',
-			'<m365_block id="2">\nconsole.log("hola {mundo}");\n</m365_block>',
+			'<ms365_tool_call>{"name":"replace_string_in_file","input":{"filePath":"/a.ts","oldString":"@@block:1@@","newString":"@@block:2@@"}}</ms365_tool_call>\n',
+			'<ms365_block id="1">\nconsole.log("hola");\n</ms365_block>\n',
+			'<ms365_block id="2">\nconsole.log("hola {mundo}");\n</ms365_block>',
 		]).calls,
 		[
 			{
@@ -525,7 +588,7 @@ function testHostToolDecoding() {
 	// Bloques que se cortan a medias: no se ejecuta nada y el turno no queda en
 	// blanco, que era lo que dejaba al usuario sin saber qué había pasado.
 	const truncated = decodeTurn(allowed, [
-		'<m365_tool_call>{"name":"replace_string_in_file","input":{"filePath":"/a.ts","oldString":"@@block:1@@"}}</m365_tool_call>\n<m365_block id="1">\nconsole',
+		'<ms365_tool_call>{"name":"replace_string_in_file","input":{"filePath":"/a.ts","oldString":"@@block:1@@"}}</ms365_tool_call>\n<ms365_block id="1">\nconsole',
 	]);
 	assert.deepEqual(truncated.calls, []);
 	assert.match(truncated.text.join(''), /incompleta/);
@@ -649,22 +712,285 @@ async function testCancellation() {
 }
 
 /** HTTP server that rejects any WS upgrade with a 401, like a stale token. */
-function start401Server(): Promise<{ port: number; close: () => void }> {
+function start401Server(): Promise<{ port: number; close: () => void; attempts: () => number }> {
 	return new Promise((resolve) => {
+		let attempts = 0;
 		const server = http.createServer((_req, res) => {
 			res.writeHead(401);
 			res.end();
 		});
 		server.on('upgrade', (_req, socket) => {
+			attempts += 1;
 			socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
 			socket.destroy();
 		});
 		server.listen(0, () => {
 			const addr = server.address();
 			const port = typeof addr === 'object' && addr ? addr.port : 0;
-			resolve({ port, close: () => server.close() });
+			resolve({ port, close: () => server.close(), attempts: () => attempts });
 		});
 	});
+}
+
+/** HTTP server that rejects only the FIRST WS upgrade with a 429, then serves
+ * every later attempt normally through the mock BizChat protocol — proves
+ * {@link streamCopilotTurnWithRetry} recovers from one transient failure. */
+function start429ThenOkServer(ring: Ring): Promise<{ port: number; close: () => void; attempts: () => number }> {
+	return new Promise((resolve) => {
+		let attempts = 0;
+		const wss = new WebSocketServer({ noServer: true });
+		wss.on('connection', (socket) => {
+			let handshaken = false;
+			socket.on('message', (data) => {
+				for (const chunk of data.toString().split(RS)) {
+					if (!chunk) continue;
+					const frame = JSON.parse(chunk);
+					if (!handshaken) {
+						handshaken = true;
+						socket.send('{}' + RS);
+						continue;
+					}
+					if (frame.target === 'chat') setTimeout(() => streamReply(socket, ring), 5);
+				}
+			});
+		});
+
+		const server = http.createServer((_req, res) => {
+			res.writeHead(429);
+			res.end();
+		});
+		server.on('upgrade', (req, socket, head) => {
+			attempts += 1;
+			if (attempts === 1) {
+				socket.write('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+				socket.destroy();
+				return;
+			}
+			wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws));
+		});
+		server.listen(0, () => {
+			const addr = server.address();
+			const port = typeof addr === 'object' && addr ? addr.port : 0;
+			resolve({ port, close: () => { wss.close(); server.close(); }, attempts: () => attempts });
+		});
+	});
+}
+
+async function test429Retry() {
+	const server = await start429ThenOkServer('snapshot');
+	let text = '';
+	await streamCopilotTurnWithRetry({
+		profile: makeProfile(server.port),
+		endpointBase: mockBase(server.port),
+		prompt: 'PROMPT',
+		tone: null,
+		signal: new AbortController().signal,
+		callbacks: { onText: (d) => (text += d) },
+	});
+	assert.equal(text, 'Hola, mundo');
+	assert.equal(server.attempts(), 2, 'esperaba un primer intento rechazado (429) y un reintento que sí conecta');
+	server.close();
+	console.log('  ✓ streamCopilotTurnWithRetry reintenta una vez tras un 429 y recupera el turno');
+}
+
+async function testAuthErrorNotRetried() {
+	// Un 401/403 no se reintenta: el mismo token caducado fallaría igual, y el
+	// usuario necesita el aviso de "vuelve a capturar el token" cuanto antes.
+	const server = await start401Server();
+	await assert.rejects(
+		streamCopilotTurnWithRetry({
+			profile: makeProfile(server.port),
+			endpointBase: mockBase(server.port),
+			prompt: 'PROMPT',
+			tone: null,
+			signal: new AbortController().signal,
+			callbacks: { onText: () => {} },
+		}),
+		(err: unknown) => err instanceof CopilotAuthError,
+	);
+	assert.equal(server.attempts(), 1, 'un CopilotAuthError no debe disparar un reintento');
+	server.close();
+	console.log('  ✓ streamCopilotTurnWithRetry NO reintenta un error de autenticación');
+}
+
+// ---- subagents.ts -----------------------------------------------------
+
+async function testConcurrencyLimiter() {
+	const limiter = new ConcurrencyLimiter(2);
+	let active = 0;
+	let maxActive = 0;
+
+	const task = (ms: number) =>
+		limiter.run(async () => {
+			active += 1;
+			maxActive = Math.max(maxActive, active);
+			await new Promise((resolve) => setTimeout(resolve, ms));
+			active -= 1;
+		});
+
+	await Promise.all([task(30), task(10), task(20), task(15), task(5)]);
+	assert.equal(active, 0);
+	assert.ok(maxActive <= 2, `esperaba como mucho 2 ejecuciones simultáneas, se vieron ${maxActive}`);
+	console.log('  ✓ ConcurrencyLimiter respeta el máximo de ejecuciones simultáneas');
+}
+
+/** Servidor mock cuya respuesta depende de qué conexión (= qué paso del
+ * sub-agente) es: cada turno de `runSubagentTask` abre un WebSocket nuevo. */
+function startScriptedServer(getReply: (connectionIndex: number) => string): Promise<{ port: number; close: () => void }> {
+	return new Promise((resolve) => {
+		let connectionIndex = 0;
+		const wss = new WebSocketServer({ port: 0 }, () => {
+			const addr = wss.address();
+			const port = typeof addr === 'object' && addr ? addr.port : 0;
+			resolve({ port, close: () => wss.close() });
+		});
+		wss.on('connection', (socket) => {
+			const index = connectionIndex++;
+			let handshaken = false;
+			socket.on('message', (data) => {
+				for (const chunk of data.toString().split(RS)) {
+					if (!chunk) continue;
+					const frame = JSON.parse(chunk);
+					if (!handshaken) {
+						handshaken = true;
+						socket.send('{}' + RS);
+						continue;
+					}
+					if (frame.target !== 'chat') continue;
+					setTimeout(() => {
+						socket.send(botUpdate([{ author: 'bot', text: getReply(index) }]));
+						socket.send(botUpdate([{ author: 'bot', messageType: 'EndOfRequest' }]));
+					}, 5);
+				}
+			});
+		});
+	});
+}
+
+async function testSubagentLoop() {
+	const server = await startScriptedServer((index) =>
+		index === 0
+			? `<ms365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</ms365_tool_call>`
+			: 'Resumen: encontré 2 coincidencias de foo.',
+	);
+	const calls: { name: string; input: Record<string, unknown> }[] = [];
+	const offeredTools: OfferedTool[] = [{ name: M365_TOOL_NAMES.searchText }];
+
+	const result = await runSubagentTask({
+		label: 'buscar foo',
+		task: 'Busca foo en el repo y resume dónde aparece.',
+		profile: makeProfile(server.port),
+		tone: null,
+		maxSteps: 4,
+		signal: new AbortController().signal,
+		offeredTools,
+		endpointBase: mockBase(server.port),
+		executeTool: async (name, input) => {
+			calls.push({ name, input });
+			return 'Coincidencias: a.ts:1, b.ts:4';
+		},
+	});
+	server.close();
+
+	assert.equal(result.ok, true);
+	assert.equal(result.steps, 2);
+	assert.match(result.summary, /Resumen: encontré 2 coincidencias/);
+	assert.deepEqual(calls, [{ name: M365_TOOL_NAMES.searchText, input: { query: 'foo' } }]);
+	console.log('  ✓ runSubagentTask ejecuta un paso de herramienta, reinyecta el resultado y devuelve el resumen final');
+}
+
+async function testSubagentLoopStepLimit() {
+	const server = await startScriptedServer(
+		() => `<ms365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</ms365_tool_call>`,
+	);
+	const offeredTools: OfferedTool[] = [{ name: M365_TOOL_NAMES.searchText }];
+
+	const result = await runSubagentTask({
+		label: 'bucle sin fin',
+		task: 'Una tarea que el modelo simulado nunca da por terminada.',
+		profile: makeProfile(server.port),
+		tone: null,
+		maxSteps: 1,
+		signal: new AbortController().signal,
+		offeredTools,
+		endpointBase: mockBase(server.port),
+		executeTool: async () => 'resultado parcial',
+	});
+	server.close();
+
+	assert.equal(result.ok, false);
+	assert.equal(result.steps, 1);
+	assert.match(result.summary, /límite de 1 paso/);
+	console.log('  ✓ runSubagentTask corta en maxSteps y devuelve un aviso de límite alcanzado');
+}
+
+/**
+ * Regresión: cada paso tiene su propio techo de 5 min (`MAX_TURN_MS` en
+ * client.ts), pero antes nada acotaba el tiempo TOTAL de un sub-agente — con
+ * `maxSteps` alto eso permitía que una sola tarea tardara casi una hora en
+ * darse por vencida, y desde el chat eso se ve igual que un cuelgue. Aquí
+ * `maxSteps` se deja deliberadamente alto: lo que debe cortar el bucle es el
+ * reloj, no el contador de pasos.
+ */
+async function testSubagentLoopWallClock() {
+	const server = await startScriptedServer(
+		() => `<ms365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</ms365_tool_call>`,
+	);
+	const offeredTools: OfferedTool[] = [{ name: M365_TOOL_NAMES.searchText }];
+
+	const result = await runSubagentTask({
+		label: 'nunca termina',
+		task: 'Una tarea que iría bien de pasos pero se le acaba el tiempo total antes.',
+		profile: makeProfile(server.port),
+		tone: null,
+		maxSteps: 50,
+		signal: new AbortController().signal,
+		offeredTools,
+		endpointBase: mockBase(server.port),
+		maxWallClockMs: 15,
+		// La propia herramienta tarda más que el presupuesto: garantiza que el
+		// reloj se agota entre el paso 1 y el 2, sin depender de la latencia real
+		// del servidor simulado.
+		executeTool: async () => new Promise((resolve) => setTimeout(() => resolve('resultado parcial'), 40)),
+	});
+	server.close();
+
+	assert.equal(result.ok, false);
+	assert.ok(result.steps >= 1, 'debería haber completado al menos un paso antes de cortar por tiempo');
+	assert.match(result.summary, /tiempo máximo/);
+	console.log('  ✓ runSubagentTask corta por tiempo máximo total aunque queden pasos disponibles');
+}
+
+/**
+ * Regresión: `clip()` recortaba a ciegas — si el corte caía a media valla de
+ * código ```, el resto del texto (la nota de "caracteres omitidos" y, tras
+ * ella, lo que el llamador concatene tras el recorte) quedaba renderizado
+ * como si fuera parte del bloque de código. Con el informe combinado de
+ * varios sub-agentes es fácil que el recorte caiga dentro de un bloque de
+ * código que un sub-agente incluyó en su resumen.
+ */
+function testClipClosesDanglingFence() {
+	const text =
+		'Intro breve.\n```ts\nconst greeting = "hola";\nconsole.log(greeting);\n```\n' +
+		'Texto después de la valla, que el agente principal también necesita leer sin que se lo trague el bloque.';
+
+	const cutInsideFence = text.indexOf('console.log') + 5;
+	const clippedInsideFence = clip(text, cutInsideFence);
+	assert.equal(
+		(clippedInsideFence.match(/```/g) ?? []).length % 2,
+		0,
+		'un recorte a media valla de código debe cerrarla, si no el resto del informe queda dentro del bloque',
+	);
+
+	const cutAfterFence = text.indexOf('Texto después') + 5;
+	const clippedAfterFence = clip(text, cutAfterFence);
+	assert.equal(
+		(clippedAfterFence.match(/```/g) ?? []).length % 2,
+		0,
+		'un recorte que cae tras una valla ya cerrada no debe añadir una de cierre de más',
+	);
+
+	console.log('  ✓ clip() cierra una valla ``` que el recorte deja abierta, sin tocar las que ya cerraban');
 }
 
 async function test401FastFail() {
@@ -724,7 +1050,7 @@ async function testEndpointRotation() {
  * deltas that carry no messageId of their own. The first chunk of the SECOND
  * message arrives as a snapshot right after the first message already used
  * deltas; the old turn-wide "have we seen a delta yet?" tracking silently
- * dropped that first chunk (the opening `<m3` of `<m365_tool_call>`), so the
+ * dropped that first chunk (the opening `<ms` of `<ms365_tool_call>`), so the
  * marker never matched and the whole JSON + closing tag leaked into the chat
  * as visible text instead of firing the tool call.
  */
@@ -761,14 +1087,14 @@ async function testMultiMessageToolCall() {
 						snapshot([{ author: 'bot', text: 'Voy a buscar el archivo.', messageId: 'm1' }]);
 						// Message 2: the tool call — its first chunk is a SNAPSHOT (not a
 						// delta) for a brand-new messageId, right after message 1 used
-						// deltas. This exact shape used to lose the opening `<m3`.
-						snapshot([{ author: 'bot', text: '<m3', messageId: 'm2' }]);
-						delta('65_tool_call>{"name":"m365_read_file","');
-						delta('input":{"path":"a.ts"}}</m365_tool_call>');
+						// deltas. This exact shape used to lose the opening `<ms`.
+						snapshot([{ author: 'bot', text: '<ms', messageId: 'm2' }]);
+						delta('365_tool_call>{"name":"ms365_read_file","');
+						delta('input":{"path":"a.ts"}}</ms365_tool_call>');
 						snapshot([
 							{
 								author: 'bot',
-								text: '<m365_tool_call>{"name":"m365_read_file","input":{"path":"a.ts"}}</m365_tool_call>',
+								text: '<ms365_tool_call>{"name":"ms365_read_file","input":{"path":"a.ts"}}</ms365_tool_call>',
 								messageId: 'm2',
 							},
 						]);
@@ -813,7 +1139,10 @@ async function main() {
 	testHostToolDecoding();
 	console.log('toolCatalog.ts');
 	testToolCatalog();
+	testSpawnAgentsNeverTrimmed();
 	testToolPromptRendering();
+	console.log('commitMessage.ts');
+	testCommitMessageValidation();
 	console.log('client.ts');
 	await runRing('snapshot');
 	await runRing('delta');
@@ -821,6 +1150,14 @@ async function main() {
 	await test401FastFail();
 	await testEndpointRotation();
 	await testMultiMessageToolCall();
+	await test429Retry();
+	await testAuthErrorNotRetried();
+	console.log('subagents.ts');
+	await testConcurrencyLimiter();
+	await testSubagentLoop();
+	await testSubagentLoopStepLimit();
+	await testSubagentLoopWallClock();
+	testClipClosesDanglingFence();
 	console.log('\nAll tests passed.');
 }
 

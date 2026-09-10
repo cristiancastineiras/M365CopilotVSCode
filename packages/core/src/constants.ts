@@ -9,7 +9,7 @@
  */
 export const TOKEN_SERVER_HOST = 'localhost';
 export const TOKEN_SERVER_PORT = 51827;
-export const TOKEN_SERVER_URL: string = `http://${TOKEN_SERVER_HOST}:${TOKEN_SERVER_PORT}`;
+export const TOKEN_SERVER_URL = `http://${TOKEN_SERVER_HOST}:${TOKEN_SERVER_PORT}`;
 
 /** Ruta donde el servidor de VS Code recibe el perfil/token (POST). */
 export const TOKEN_ENDPOINT_PATH = '/token';
@@ -17,10 +17,10 @@ export const TOKEN_ENDPOINT_PATH = '/token';
 export const HEALTH_ENDPOINT_PATH = '/health';
 
 /** Clave de localStorage donde el interceptor del navegador acumula la captura. */
-export const CAPTURE_STORE_KEY = 'm365copilot.capture.v1';
+export const CAPTURE_STORE_KEY = 'ms365copilot.capture.v1';
 
 /**
  * Marcador de los mensajes `window.postMessage` entre el interceptor (mundo
  * MAIN) y el puente (mundo ISOLATED) de la extensión de navegador.
  */
-export const BRIDGE_MESSAGE_MARKER = '__m365copilot';
+export const BRIDGE_MESSAGE_MARKER = '__ms365copilot';

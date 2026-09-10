@@ -1,5 +1,16 @@
 # m365-copilot-vscode-extension
 
+## 1.3.0
+
+### Minor Changes
+
+- Añade delegación en sub-agentes (`ms365_spawn_agents`) para tareas independientes en paralelo, y dos herramientas de git: `ms365_generate_commit_message` (dispara la función nativa de VS Code de generar mensaje de commit) y `ms365_git_commit` (crea el commit, validando Conventional Commits, con confirmación explícita del usuario).
+
+### Patch Changes
+
+- Updated dependencies
+  - @ms365copilot/core@1.3.0
+
 ## 1.0.3
 
 ### Patch Changes

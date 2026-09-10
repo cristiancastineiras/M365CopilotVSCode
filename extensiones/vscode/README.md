@@ -2,24 +2,15 @@
 
 Usa tu suscripción de **Microsoft 365 Copilot** como proveedor de modelos dentro
 del chat de VS Code (junto a GitHub Copilot, Claude, etc.). No hay dashboard ni
-configuración compleja: algo captura tu token de M365 Copilot en el navegador
-y esta extensión lo usa para abrir sus propias conversaciones con Substrate.
+configuración compleja: capturas el token en el navegador con un userscript y lo
+pegas en VS Code.
 
-https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode
+Son dos piezas:
 
-Esta carpeta es sólo la mitad: la extensión de VS Code. Necesita que algo le
-mande el token. Hay dos formas de hacerlo, y **puedes usar cualquiera de las
-dos** (o las dos a la vez):
-
-| Forma | Dónde vive | Cómo funciona |
-|-------|------------|----------------|
-| **Extensión de navegador** (recomendada) | [`extensiones/browser`](../browser/README.md) | Captura el token sola mientras navegas por M365/Office/Outlook/Teams y lo mantiene sincronizado y renovado, sin que hagas nada. |
-| **Userscript de Tampermonkey** | `m365copilot-token.user.js` (esta carpeta) | Añade un panel en `m365.cloud.microsoft` con un botón para copiar el token a mano. Sirve para probar rápido sin instalar la extensión de navegador, pero el token caduca (~60–75 min) y hay que volver a copiarlo y pegarlo cada vez. |
-
-En ambos casos, esta extensión recibe el token en un servidor HTTP local
-(`http://localhost:51827`, sólo accesible desde tu propia máquina) y lo guarda
-cifrado en el `SecretStorage` de VS Code — o lo pegas tú a mano con el comando
-**«M365 Copilot: Pegar perfil o token»** si usas el userscript.
+| Pieza | Carpeta | Qué hace |
+|-------|---------|----------|
+| **Userscript (Tampermonkey)** | `ms365copilot-token.user.js` (esta carpeta) | Añade un panel en `m365.cloud.microsoft` que copia tu **token**. |
+| **Extensión de VS Code** | esta carpeta | Registra los modelos «M365 Copilot» en el chat y abre su propio WebSocket a Substrate usando sólo tu token. |
 
 ## Cómo funciona
 
@@ -45,55 +36,47 @@ el protocolo de herramientas (ver más abajo) funciona de forma fiable. Por
 eso da exactamente igual pegar el token pelado o el «perfil completo» JSON:
 sólo se usa el `accessToken` (y los claims que lleva dentro).
 
-Efecto secundario de lo anterior: el modelo responde a veces con un aviso de
-**«Web search is off»**. No es un ajuste que se pueda reactivar desde la
-extensión — es el propio backend señalando que este turno no lleva el plugin
-`BingWebSearch`, precisamente lo que se evita a propósito arriba. Como
-paliativo, la extensión ofrece `m365_deepwiki_search`: consulta en vivo
-[DeepWiki](https://deepwiki.com) (documentación generada por IA y preguntas y
-respuestas) sobre un repositorio público de GitHub concreto — no es una
-búsqueda web general, pero le da al modelo una fuente externa y actual dentro
-del mismo protocolo de herramientas de texto.
-
 ## Uso
 
-### 1. Instala la extensión
-```bash
-cd extensiones/vscode
-pnpm install
-pnpm build            # bundle con tsdown (rolldown + oxc) → dist/extension.cjs
-pnpm package          # genera el .vsix
-code --install-extension m365-copilot-vscode-1.0.0.vsix
-```
-O pulsa `F5` en VS Code para lanzar una ventana de desarrollo (*Extension
-Development Host*), o instala el `.vsix` ya compilado desde la
-[última release en GitHub](https://github.com/cristiancastineiras/M365CopilotVSCode/releases/latest).
-
-### 2. Consigue el token — elige una opción
-
-**Opción A — extensión de navegador (recomendada).** Instala
-[extensiones/browser](../browser/README.md) en Chrome/Edge o Firefox, abre
-<https://m365.cloud.microsoft/chat/> y escribe algo. En unos segundos el
-popup de la extensión pasa a «Todo listo», con las filas **Token** y
-**VS Code** en verde — no hace falta pegar nada, y el token se renueva solo
-mientras esa extensión esté instalada.
-
-**Opción B — userscript de Tampermonkey (manual).**
+### 1. Instala el userscript
 1. Instala [Tampermonkey](https://www.tampermonkey.net/).
-2. Abre el archivo `m365copilot-token.user.js` (esta misma carpeta) y dale a
+2. Abre el archivo `ms365copilot-token.user.js` (esta misma carpeta) y dale a
    *Instalar*.
 3. Entra en <https://m365.cloud.microsoft/chat/>. En cuanto la página cargue
    la sesión verás el panel abajo a la derecha con «Token: ok».
 4. Pulsa **«Copiar sólo el token»** (o «Copiar perfil completo»: con esta
    versión de la extensión da igual cuál uses).
-5. En VS Code, `Ctrl+Shift+P` → **«M365 Copilot: Pegar perfil o token»** y
-   pega lo copiado. El token caduca a los ~60–75 min: cuando la extensión
-   avise, repite este paso.
 
-### 3. Elige el modelo y chatea
-1. Abre el chat de VS Code, despliega el selector de modelos y elige uno de los
+### (Opcional) Auto-renovación sin copiar/pegar
+
+`ms365copilot-token-autorefresh.user.js` (misma carpeta) es una segunda
+instalación de Tampermonkey que hace el paso 3–4 por ti de forma continua:
+captura el mismo perfil (token Sydney validado por `aud` + endpoint +
+plantilla) y lo envía por HTTP local a la extensión en cuanto detecta un
+token nuevo o renovado, con reintentos de conexión y sin spamear
+notificaciones. Instálalo igual que el anterior y **pega el perfil una sola
+vez** (paso 3 de abajo); a partir de ahí, mientras dejes esa pestaña (o
+cualquier otra de Office/Teams/Outlook que haga match) abierta en algún sitio
+del navegador, cada renovación silenciosa de MSAL se retransmite sola a VS
+Code. Cerrar todas esas pestañas corta la renovación: MSAL necesita seguir
+vivo en alguna para poder renovar.
+
+### 2. Compila e instala la extensión
+```bash
+cd ms365-vscode
+pnpm install
+pnpm build            # bundle con tsdown (rolldown + oxc) → dist/extension.cjs
+pnpm package          # genera el .vsix
+code --install-extension ms365-copilot-vscode-1.0.0.vsix
+```
+O pulsa `F5` en VS Code para lanzar una ventana de desarrollo (*Extension
+Development Host*).
+
+### 3. Pega el token y chatea
+1. `Ctrl+Shift+P` → **«M365 Copilot: Pegar perfil o token»** y pega lo copiado.
+2. Abre el chat de VS Code, despliega el selector de modelos y elige uno de los
    **M365 Copilot** (`Auto`, `GPT`, `Claude Sonnet`, `Reasoning`).
-2. Chatea normal.
+3. Chatea normal.
 
 Las respuestas se piden en Markdown. Los bloques de código salen con su botón
 nativo de **Copiar** en el chat de VS Code, incluso cuando el backend haya
@@ -120,7 +103,7 @@ que no dependen de la extensión:
   la de un modelo dedicado.
 
 Cada sugerencia consume una petición de tu plan de M365. Si te parece mucho,
-pon `m365copilot.inlineCompletions.triggerMode` en `manual` y pídelas a mano
+pon `ms365copilot.inlineCompletions.triggerMode` en `manual` y pídelas a mano
 con `Alt+\`.
 
 | Ajuste | Por defecto | Para qué |
@@ -150,9 +133,9 @@ Tres ajustes controlan ese catálogo:
 
 | Ajuste | Por defecto | Para qué |
 | ------ | ----------- | -------- |
-| `m365copilot.tools.includeEditorTools` | `true` | Describir también las herramientas nativas/MCP. En `false` vuelve al comportamiento anterior: sólo las `m365_*`. |
-| `m365copilot.tools.duplicates` | `preferEditor` | Cuando una nativa y una nuestra hacen lo mismo (leer, buscar, editar, terminal…), a cuál se le dice al modelo que vaya primero. La otra no se oculta: queda como alternativa si la preferida falla. |
-| `m365copilot.tools.maxAdvertised` | `48` | Tope de herramientas descritas en el prompt. Con varios servidores MCP el catálogo crece, y aquí viaja como texto, no como *schema*. Las que no se describen siguen siendo ejecutables si el modelo las nombra. |
+| `ms365copilot.tools.includeEditorTools` | `true` | Describir también las herramientas nativas/MCP. En `false` vuelve al comportamiento anterior: sólo las `ms365_*`. |
+| `ms365copilot.tools.duplicates` | `preferEditor` | Cuando una nativa y una nuestra hacen lo mismo (leer, buscar, editar, terminal…), a cuál se le dice al modelo que vaya primero. La otra no se oculta: queda como alternativa si la preferida falla. |
+| `ms365copilot.tools.maxAdvertised` | `48` | Tope de herramientas descritas en el prompt. Con varios servidores MCP el catálogo crece, y aquí viaja como texto, no como *schema*. Las que no se describen siguen siendo ejecutables si el modelo las nombra. |
 
 Las herramientas propias de la extensión, dentro del workspace abierto, son:
 
@@ -162,7 +145,10 @@ Las herramientas propias de la extensión, dentro del workspace abierto, son:
 - preparar un lote de ediciones exactas, archivos nuevos o borrados;
 - leer los errores/avisos que ya muestra VS Code (solo lectura, no compila nada);
 - consultar git en modo solo lectura (`status`/`diff`/`log`; nunca hace commit ni push);
-- ejecutar un comando de terminal (build, tests...) — **siempre** con tu confirmación explícita, mostrando el comando exacto antes de correrlo.
+- generar el mensaje de commit disparando la función **nativa** de VS Code (✨ *Generate Commit Message* del panel Source Control), con el diff en stage como respaldo si esa función no está disponible;
+- crear un commit real con ese mensaje, validado como [Conventional Commits](https://www.conventionalcommits.org/) — **siempre** con tu confirmación explícita, mostrando el mensaje exacto y qué se va a stagear antes de ejecutarlo;
+- ejecutar un comando de terminal (build, tests...) — **siempre** con tu confirmación explícita, mostrando el comando exacto antes de correrlo;
+- delegar en sub-agentes (ver [«Sub-agentes (delegar tareas)»](#sub-agentes-delegar-tareas) más abajo).
 
 Los comandos se ejecutan en un **terminal real de VS Code** («M365 Copilot»),
 usando la *shell integration*: ves el comando correr en directo, con tu perfil
@@ -208,6 +194,38 @@ patrón típicamente destructivo — `rm -rf`, `git push --force`, `git reset
 --hard`...) para que decidas tú. Su salida se envía al modelo en la nube, así
 que evita usarla sobre datos sensibles que no quieras que salgan de tu máquina.
 
+### Sub-agentes (delegar tareas)
+
+El modelo también tiene una herramienta `ms365_spawn_agents` para delegar una o
+varias tareas acotadas en **sub-agentes** que corren de forma autónoma — en
+paralelo si son varias — con su propio ciclo de las mismas 9 herramientas de
+arriba (incluidas ediciones, comandos y commits, con la misma revisión
+Keep/Undo y confirmación de terminal/commit de siempre). Cada sub-agente sólo ve la tarea que se
+le asigna, no el resto de la conversación, y devuelve un resumen conciso — así
+explorar mucho (o investigar varias preguntas independientes a la vez) no llena
+el contexto de la conversación principal con el detalle.
+
+Al modelo principal le sigue tocando a ti confirmar cualquier edición, comando
+o commit que pida un sub-agente: los diálogos son exactamente los mismos que
+ya conoces (Keep/Undo, confirmación de terminal con el comando literal,
+confirmación de commit con el mensaje exacto), sólo que pueden aparecer
+mientras varios sub-agentes exploran en paralelo. Las llamadas que editan
+archivos, ejecutan comandos o tocan git (generar mensaje, commitear) se
+serializan entre sí (una a la vez, aunque haya varios sub-agentes corriendo)
+para que no se pisen; las de solo lectura sí corren en paralelo.
+**Limitación conocida:** el diálogo de confirmación no indica qué sub-agente
+ni qué tarea originó el comando, la edición o el commit — muestra el
+comando/diff/mensaje exacto (lo importante para decidir), pero no ese
+contexto; el registro de salida («M365 Copilot») y la notificación de
+progreso sí muestran qué sub-agente está en qué paso.
+
+| Ajuste | Por defecto | Para qué |
+| ------ | ----------- | -------- |
+| `ms365copilot.subagents.enabled` | `true` | Permite delegar tareas. En `false` la herramienta no hace nada: explica por qué en vez de ejecutar. |
+| `ms365copilot.subagents.maxConcurrent` | `3` | Cuántos sub-agentes corren a la vez cuando se delegan varias tareas; el resto espera turno. |
+| `ms365copilot.subagents.maxSteps` | `6` | Máximo de llamadas a herramientas por sub-agente antes de devolver un resumen parcial con aviso de límite alcanzado. |
+| `ms365copilot.subagents.model` | `auto` | Modelo (tone) que usan los sub-agentes, independiente del que tengas elegido en el chat principal. |
+
 ## Comandos
 
 | Comando | Acción |
@@ -225,10 +243,10 @@ que evita usarla sobre datos sensibles que no quieras que salgan de tu máquina.
 
 ## Notas y límites
 
-- **El token caduca** (~60–75 min). Con el userscript manual, vuelve a copiar
-  el perfil en la web y pégalo de nuevo cuando la extensión avise con el error
-  de caducidad. Con la [extensión de navegador](../browser/README.md)
-  instalada y alguna pestaña de Office abierta, la renovación es automática.
+- **El token caduca** (~60–75 min). Sin el userscript de auto-renovación,
+  vuelve a copiar el perfil en la web y pégalo de nuevo cuando la extensión
+  avise con el error de caducidad. Con `ms365copilot-token-autorefresh.user.js`
+  instalado y alguna pestaña de Office abierta, la renovación es automática.
 - **Herramientas controladas.** BizChat no expone tool-calling nativo; la
   extensión traduce una llamada estructurada del modelo a las herramientas de
   VS Code autorizadas para el turno, y **sólo** a ésas: un nombre que el host no
@@ -242,6 +260,12 @@ que evita usarla sobre datos sensibles que no quieras que salgan de tu máquina.
   lecturas de archivos sean por rango.
 - El token se guarda **sólo** en `SecretStorage` de VS Code (local, cifrado) y
   únicamente se envía a los endpoints de Microsoft.
+- **Generar mensaje de commit** depende de la extensión Git integrada de VS
+  Code (`vscode.git`) y de que en ese momento haya algún modelo de chat
+  disponible para `git.generateCommitMessage` (puede ser el propio M365
+  Copilot si lo tienes seleccionado, o cualquier otro proveedor activo). Si
+  no hay ninguno, la herramienta no falla: te devuelve el diff igualmente
+  para que redactes el mensaje tú mismo.
 
 ## Desarrollo
 

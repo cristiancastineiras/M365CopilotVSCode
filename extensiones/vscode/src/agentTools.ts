@@ -4,13 +4,14 @@ import { readWorkspaceFile, type ReadFileInput } from '../tools/readFile';
 import { WorkspaceEditManager, type ApplyWorkspaceEditsInput } from '../tools/writeFile';
 import { getWorkspaceDiagnostics, type GetDiagnosticsInput } from '../tools/diagnostics';
 import { getGitInfo, type GitInfoInput } from '../tools/git';
+import { generateCommitMessage, type GenerateCommitMessageInput } from '../tools/gitCommitMessage';
+import { commitWorkspace, type GitCommitInput } from '../tools/gitCommit';
 import {
 	registerTerminalCleanup,
 	runWorkspaceCommand,
 	looksRisky,
 	type RunCommandInput,
 } from '../tools/terminal';
-import { searchDeepWiki, type DeepWikiSearchInput } from '../tools/deepwiki';
 import { errorMessage } from '../tools/common';
 import { M365_TOOL_NAMES } from './toolProtocol';
 
@@ -59,6 +60,35 @@ export function registerM365WorkspaceTools(manager: WorkspaceEditManager): vscod
 			}),
 			invoke: (options, token) => toolResult(() => getGitInfo(options.input, token)),
 		}),
+		vscode.lm.registerTool<GenerateCommitMessageInput>(M365_TOOL_NAMES.generateCommitMessage, {
+			prepareInvocation: () => ({
+				invocationMessage: 'Generando mensaje de commit con la función nativa de VS Code...',
+			}),
+			invoke: (options, token) => toolResult(() => generateCommitMessage(options.input, token)),
+		}),
+		vscode.lm.registerTool<GitCommitInput>(M365_TOOL_NAMES.gitCommit, {
+			prepareInvocation: (options) => {
+				const message = typeof options.input.message === 'string' ? options.input.message : '';
+				const subject = message.split('\n', 1)[0] || '(sin mensaje)';
+				const staging = options.input.stageAll
+					? '**Se hará `git add -A`** (todos los cambios) antes de commitear.'
+					: Array.isArray(options.input.paths) && options.input.paths.length > 0
+						? `**Se hará \`git add\`** de: ${options.input.paths.join(', ')}.`
+						: 'Se commiteará lo que ya esté en stage (no se añade nada nuevo).';
+				return {
+					invocationMessage: `Creando commit: ${subject}`,
+					confirmationMessages: {
+						title: 'Crear commit de M365 Copilot',
+						message: new vscode.MarkdownString(
+							'M365 Copilot quiere crear un commit con este mensaje:\n\n' +
+								`\`\`\`\n${message}\n\`\`\`\n\n${staging}\n\n` +
+								'Esto crea un commit real en el historial del repositorio.',
+						),
+					},
+				};
+			},
+			invoke: (options, token) => toolResult(() => commitWorkspace(options.input, token)),
+		}),
 		vscode.lm.registerTool<RunCommandInput>(M365_TOOL_NAMES.runCommand, {
 			prepareInvocation: (options) => {
 				const command = typeof options.input.command === 'string' ? options.input.command : '';
@@ -79,12 +109,6 @@ export function registerM365WorkspaceTools(manager: WorkspaceEditManager): vscod
 				};
 			},
 			invoke: (options, token) => toolResult(() => runWorkspaceCommand(options.input, token)),
-		}),
-		vscode.lm.registerTool<DeepWikiSearchInput>(M365_TOOL_NAMES.deepwikiSearch, {
-			prepareInvocation: (options) => ({
-				invocationMessage: `Consultando DeepWiki (${options.input.repo ?? '?'})...`,
-			}),
-			invoke: (options, token) => toolResult(() => searchDeepWiki(options.input, token)),
 		}),
 	];
 }

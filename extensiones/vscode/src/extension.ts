@@ -3,18 +3,19 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { registerM365WorkspaceTools } from './agentTools';
-import { CompletionStatus, M365InlineCompletionProvider } from './completions';
-import { M365CopilotProvider } from './provider';
+import { registerM365SubagentTools } from './subagents';
+import { CompletionStatus, Ms365InlineCompletionProvider } from './completions';
+import { Ms365CopilotProvider } from './provider';
 import { ProfileStore } from './secrets';
 import { TokenAutoRefreshServer } from './tokenServer';
 import { WorkspaceEditManager } from '../tools/writeFile';
 import { ProfileParseError, minutesUntilExpiry, isTokenUsable } from './profile';
 import { initLogger, log, showLog, type LogSink } from './logger';
 
-const VENDOR = 'm365copilot';
+const VENDOR = 'ms365copilot';
 
 /** Diagnostics also stream to this file so raw frames can be inspected. */
-const DEBUG_FILE = path.join(os.tmpdir(), 'm365copilot-debug.log');
+const DEBUG_FILE = path.join(os.tmpdir(), 'ms365copilot-debug.log');
 
 export function activate(context: vscode.ExtensionContext): void {
 	const channel = vscode.window.createOutputChannel('M365 Copilot');
@@ -42,10 +43,10 @@ export function activate(context: vscode.ExtensionContext): void {
 	const store = new ProfileStore(context.secrets);
 	const tokenServer = new TokenAutoRefreshServer(store);
 	tokenServer.start();
-	const provider = new M365CopilotProvider(store);
+	const provider = new Ms365CopilotProvider(store);
 	const workspaceEdits = new WorkspaceEditManager();
 	const completionStatus = new CompletionStatus();
-	const completions = new M365InlineCompletionProvider(store, completionStatus);
+	const completions = new Ms365InlineCompletionProvider(store, completionStatus);
 
 	context.subscriptions.push(
 		channel,
@@ -57,25 +58,26 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.lm.registerLanguageModelChatProvider(VENDOR, provider),
 		vscode.languages.registerInlineCompletionItemProvider({ pattern: '**' }, completions),
 		vscode.workspace.onDidChangeConfiguration((event) => {
-			if (event.affectsConfiguration('m365copilot.inlineCompletions')) {
+			if (event.affectsConfiguration('ms365copilot.inlineCompletions')) {
 				completions.clearCache();
 				completionStatus.refresh();
 			}
 		}),
-		vscode.commands.registerCommand('m365copilot.toggleInlineCompletions', () =>
+		vscode.commands.registerCommand('ms365copilot.toggleInlineCompletions', () =>
 			toggleInlineCompletions(completionStatus),
 		),
 		...registerM365WorkspaceTools(workspaceEdits),
-		vscode.commands.registerCommand('m365copilot.pasteProfile', () => pasteProfile(store, provider)),
-		vscode.commands.registerCommand('m365copilot.clearProfile', () => clearProfile(store)),
-		vscode.commands.registerCommand('m365copilot.showStatus', () => showStatus(store)),
-		vscode.commands.registerCommand('m365copilot.showLog', () => showLog()),
-		vscode.commands.registerCommand('m365copilot.reviewPendingEdits', () => workspaceEdits.reviewPendingEdits()),
-		vscode.commands.registerCommand('m365copilot.keepEdits', (uri?: vscode.Uri) => workspaceEdits.keep(uri)),
-		vscode.commands.registerCommand('m365copilot.undoEdits', (uri?: vscode.Uri) => workspaceEdits.undo(uri)),
-		vscode.commands.registerCommand('m365copilot.showEditDiff', (uri?: vscode.Uri) => workspaceEdits.showDiff(uri)),
-		vscode.commands.registerCommand('m365copilot.discardPendingEdits', () => workspaceEdits.undo()),
-		vscode.commands.registerCommand('m365copilot.undoLastAgentEdit', () => workspaceEdits.undoLastBatch()),
+		...registerM365SubagentTools(store, log),
+		vscode.commands.registerCommand('ms365copilot.pasteProfile', () => pasteProfile(store, provider)),
+		vscode.commands.registerCommand('ms365copilot.clearProfile', () => clearProfile(store)),
+		vscode.commands.registerCommand('ms365copilot.showStatus', () => showStatus(store)),
+		vscode.commands.registerCommand('ms365copilot.showLog', () => showLog()),
+		vscode.commands.registerCommand('ms365copilot.reviewPendingEdits', () => workspaceEdits.reviewPendingEdits()),
+		vscode.commands.registerCommand('ms365copilot.keepEdits', (uri?: vscode.Uri) => workspaceEdits.keep(uri)),
+		vscode.commands.registerCommand('ms365copilot.undoEdits', (uri?: vscode.Uri) => workspaceEdits.undo(uri)),
+		vscode.commands.registerCommand('ms365copilot.showEditDiff', (uri?: vscode.Uri) => workspaceEdits.showDiff(uri)),
+		vscode.commands.registerCommand('ms365copilot.discardPendingEdits', () => workspaceEdits.undo()),
+		vscode.commands.registerCommand('ms365copilot.undoLastAgentEdit', () => workspaceEdits.undoLastBatch()),
 	);
 
 	// Nudge Copilot Chat to pick up our models on activation.
@@ -86,7 +88,7 @@ export function deactivate(): void {
 	/* disposables handle cleanup */
 }
 
-async function pasteProfile(store: ProfileStore, provider: M365CopilotProvider): Promise<void> {
+async function pasteProfile(store: ProfileStore, provider: Ms365CopilotProvider): Promise<void> {
 	const pasted = await vscode.window.showInputBox({
 		title: 'M365 Copilot — pegar perfil o token',
 		prompt: 'Pega el token del userscript de Tampermonkey (el «perfil completo» JSON también vale: sólo se usa su accessToken).',
@@ -112,7 +114,7 @@ async function pasteProfile(store: ProfileStore, provider: M365CopilotProvider):
 }
 
 async function toggleInlineCompletions(status: CompletionStatus): Promise<void> {
-	const config = vscode.workspace.getConfiguration('m365copilot.inlineCompletions');
+	const config = vscode.workspace.getConfiguration('ms365copilot.inlineCompletions');
 	const enabled = config.get<boolean>('enabled', true);
 	// Global target: the toggle is about how you want the editor to behave, not
 	// a property of whichever folder happens to be open.

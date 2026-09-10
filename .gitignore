@@ -42,6 +42,16 @@ temp/
 *.key
 *.p12
 *.pfx
+# Tokens de M365 Copilot pegados a mano para probar la extensión (ver
+# extensiones/vscode/Guia.md) — son credenciales reales de una cuenta real,
+# nunca deben acabar en un commit.
+token.txt
+*.token
+*.token.txt
+*.jwt
+cookie.txt
+*.cookie
+*.cookie.txt
 
 # Logs y procesos
 *.log
