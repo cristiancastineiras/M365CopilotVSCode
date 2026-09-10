@@ -18,28 +18,28 @@ export interface CopilotModel {
 
 export const MODELS: readonly CopilotModel[] = [
 	{
-		id: 'm365-copilot-auto',
+		id: 'ms365-copilot-auto',
 		name: 'M365 Copilot (Auto)',
 		family: 'm365-copilot',
 		tone: null,
 		detail: 'Enrutado automático de Microsoft 365 Copilot (recomendado).',
 	},
 	{
-		id: 'm365-copilot-gpt',
+		id: 'ms365-copilot-gpt',
 		name: 'M365 Copilot · GPT',
 		family: 'm365-copilot',
 		tone: 'Gpt_5_5_Chat',
 		detail: 'Fuerza el modelo GPT del backend de Copilot.',
 	},
 	{
-		id: 'm365-copilot-claude',
+		id: 'ms365-copilot-claude',
 		name: 'M365 Copilot · Claude Sonnet',
 		family: 'm365-copilot',
 		tone: 'Claude_Sonnet',
 		detail: 'Fuerza Claude Sonnet en el backend de Copilot.',
 	},
 	{
-		id: 'm365-copilot-reasoning',
+		id: 'ms365-copilot-reasoning',
 		name: 'M365 Copilot · Reasoning',
 		family: 'm365-copilot',
 		tone: 'Gpt_5_5_Reasoning',

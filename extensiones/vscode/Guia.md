@@ -1,47 +1,6 @@
 # Guía de instalación y uso de la extensión de VS Code para M365 Copilot
 
-> **¿Primera vez?** La forma más cómoda hoy es instalar la
-> [extensión de navegador](../browser/README.md): captura el token sola y lo
-> mantiene renovado, sin copiar ni pegar nada. Esta guía explica la vía
-> manual con Tampermonkey — útil para probar rápido o si prefieres no
-> instalar una extensión de navegador que corre en segundo plano.
-
-## 0. Instalar la extensión de navegador (Recomendado)
-
-![Ui extension](imgs/ui-extension-navegador.png)
-
-**¿Por qué primero?** Esta extensión captura el token de M365 Copilot sola mientras navegas
-y lo mantiene renovado — sin copiar ni pegar nada. Una vez instalada y emparejada, funciona
-automáticamente. Es la forma más cómoda de usar M365 Copilot en VS Code.
-
-### Descargar
-
-1. Ve a [la última release en GitHub](https://github.com/cristiancastineiras/M365CopilotVSCode/releases/latest).
-2. Descarga uno de estos archivos (según tu navegador):
-   - `m365-copilot-vscode-extension-chrome.zip` — para Chrome, Edge o Brave
-   - `m365-copilot-vscode-extension-firefox.zip` — para Firefox
-
-### Instalar en Chrome, Edge o Brave
-
-1. Descomprime el `.zip` en una carpeta cualquiera de tu ordenador.
-2. Abre `chrome://extensions` en la barra de direcciones.
-3. Arriba a la derecha, activa el **Modo de desarrollador** (esquina superior derecha).
-4. Haz clic en **Cargar extensión sin empaquetar**.
-5. Selecciona la carpeta que descomprimiste en el paso 1.
-6. Listo — verás el icono de la extensión en la barra de herramientas.
-
-### Instalar en Firefox
-
-1. Descomprime el `.zip` en una carpeta cualquiera de tu ordenador.
-2. Abre `about:debugging#/runtime/this-firefox` en la barra de direcciones.
-3. Pulsa **Cargar complemento temporal…**
-4. Selecciona el archivo `manifest.json` dentro de la carpeta descomprimida.
-5. Listo — verás el icono de la extensión en la barra de herramientas.
-
-> **Nota:** En Firefox, la extensión es temporal: la olvida al cerrar el navegador. Para algo
-> permanente hace falta firmarla en addons.mozilla.org, que todavía no está hecho. 
-
-## 1. Instalar Tampermonkey (omitir si usas la extensión del navegador, saltar a punto 4)
+## 1. Instalar Tampermonkey
 
 Primero, dependiendo del navegador que uses, hay que instalar Tampermonkey, que
 es un gestor de userscripts. En este caso se ha probado en Chrome y Edge.
@@ -61,7 +20,7 @@ Para ello puedes instalarlo manualmente:
 
 ![Opción para crear un nuevo script en Tampermonkey](imgs/tampermonkey-crear-nuevo-script.png)
 
-2. Pulsa **Crear un nuevo script** y pega el contenido del archivo [`m365copilot-token.user.js`](m365copilot-token.user.js).
+2. Pulsa **Crear un nuevo script** y pega el contenido del archivo [`ms365copilot-token.user.js`](ms365copilot-token.user.js).
 
 3. Pulsa **Archivo > Guardar**. También puedes arrastrar el archivo sobre el editor.
 

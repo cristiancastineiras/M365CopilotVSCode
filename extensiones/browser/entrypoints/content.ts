@@ -1,4 +1,4 @@
-import { BRIDGE_MESSAGE_MARKER } from '@m365copilot/core';
+import { BRIDGE_MESSAGE_MARKER } from '@ms365copilot/core';
 import { registerHandlers, sendMessage } from '@/utils/messaging';
 import { logger } from '@/utils/logger';
 

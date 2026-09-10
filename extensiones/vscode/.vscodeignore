@@ -10,3 +10,15 @@ pnpm-lock.yaml
 **/*.map
 **/*.ts
 !dist/**
+.turbo/**
+
+# Credenciales reales pegadas a mano para probar (ver Guia.md) — un
+# .vscodeignore presente hace que vsce IGNORE .gitignore por completo para
+# decidir qué empaqueta, así que estos patrones tienen que repetirse aquí o
+# el .vsix distribuido se lleva el token dentro.
+token.txt
+*.token
+*.token.txt
+cookie.txt
+*.cookie
+*.cookie.txt

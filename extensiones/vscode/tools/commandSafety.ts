@@ -1,6 +1,6 @@
 /**
  * Cheap heuristics for a confirmation-dialog warning banner — NOT a security
- * boundary. The real safeguard for `m365_run_command` is that a human always
+ * boundary. The real safeguard for `ms365_run_command` is that a human always
  * sees the literal command and approves it before it runs; this just makes
  * the handful of classically destructive patterns scream louder in that
  * dialog instead of blending in with an ordinary build/test command.

@@ -6,7 +6,7 @@ import { findModel } from './models';
 import { isTokenUsable } from './profile';
 import type { ProfileStore } from './secrets';
 
-const CONFIG_SECTION = 'm365copilot.inlineCompletions';
+const CONFIG_SECTION = 'ms365copilot.inlineCompletions';
 
 /** Context bounds. Ghost text needs to be fast far more than it needs to be
  * well-informed, and every extra character is latency on a backend that opens
@@ -42,7 +42,7 @@ function readSettings(): Settings {
 		debounceMs: clamp(config.get<number>('debounceMs', 500), 0, 5000),
 		maxLines: clamp(config.get<number>('maxLines', 6), 1, 30),
 		timeoutMs: clamp(config.get<number>('timeoutMs', 6000), 1000, 30_000),
-		modelId: config.get<string>('model', 'm365-copilot-auto'),
+		modelId: config.get<string>('model', 'ms365-copilot-auto'),
 	};
 }
 
@@ -64,7 +64,7 @@ function clamp(value: number, min: number, max: number): number {
  *  - aborting the stream as soon as enough lines have arrived, instead of
  *    waiting out the model's closing pleasantries.
  */
-export class M365InlineCompletionProvider implements vscode.InlineCompletionItemProvider {
+export class Ms365InlineCompletionProvider implements vscode.InlineCompletionItemProvider {
 	private readonly cache = new Map<string, CacheEntry>();
 	private inFlight: AbortController | undefined;
 
@@ -283,7 +283,7 @@ export class CompletionStatus implements vscode.Disposable {
 
 	constructor() {
 		this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
-		this.item.command = 'm365copilot.toggleInlineCompletions';
+		this.item.command = 'ms365copilot.toggleInlineCompletions';
 		this.render();
 		this.item.show();
 	}

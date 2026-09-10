@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'node:crypto';
-import { streamCopilotTurn, CopilotClientError, CopilotAuthError } from './client';
+import { streamCopilotTurnWithRetry, CopilotClientError, CopilotAuthError } from './client';
 import { log } from './logger';
 
 import { MarkdownStreamFormatter } from './markdown';
@@ -19,7 +19,7 @@ function readToolSettings(): {
 	duplicates: DuplicatePolicy;
 	maxTools: number;
 } {
-	const config = vscode.workspace.getConfiguration('m365copilot.tools');
+	const config = vscode.workspace.getConfiguration('ms365copilot.tools');
 	return {
 		includeEditorTools: config.get<boolean>('includeEditorTools', true),
 		duplicates: config.get<DuplicatePolicy>('duplicates', 'preferEditor'),
@@ -27,7 +27,7 @@ function readToolSettings(): {
 	};
 }
 
-export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vscode.Disposable {
+export class Ms365CopilotProvider implements vscode.LanguageModelChatProvider, vscode.Disposable {
 	private readonly changeEmitter = new vscode.EventEmitter<void>();
 	readonly onDidChangeLanguageModelChatInformation = this.changeEmitter.event;
 	private readonly storeListener: vscode.Disposable;
@@ -84,7 +84,7 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 		log(
 			`petición del chat: modelo=${model.id}, ${messages.length} mensajes, prompt=${prompt.length} chars, ` +
 				`herramientas=${catalog.entries.length}/${catalog.callable.size} ` +
-				`(${catalog.m365Count} propias, ${catalog.editorCount} del editor)` +
+				`(${catalog.ms365Count} propias, ${catalog.editorCount} del editor)` +
 				(catalog.omitted.length > 0 ? `, sin describir: ${catalog.omitted.join(', ')}` : ''),
 		);
 		if (!prompt.trim()) {
@@ -111,7 +111,7 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 		const cancelListener = token.onCancellationRequested(() => controller.abort());
 
 		try {
-			await streamCopilotTurn({
+			await streamCopilotTurnWithRetry({
 				profile,
 				prompt,
 				tone: selected?.tone ?? null,

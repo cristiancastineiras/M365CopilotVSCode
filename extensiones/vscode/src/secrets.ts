@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { parsePastedProfile, type CopilotProfile } from './profile';
 
-const SECRET_KEY = 'm365copilot.profile.v1';
+const SECRET_KEY = 'ms365copilot.profile.v1';
 
 /**
  * Stores the captured Copilot profile in VS Code SecretStorage (encrypted,

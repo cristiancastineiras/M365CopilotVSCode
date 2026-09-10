@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         M365 Copilot — Copiar perfil / token
-// @namespace    https://github.com/local/m365-vscode
+// @namespace    https://github.com/local/ms365-vscode
 // @version      1.2.0
 // @description  Captura el token de acceso (aud: substrate.office.com/sydney), el endpoint WebSocket real y la plantilla de invocación de Microsoft 365 Copilot, y los copia al portapapeles para pegarlos en la extensión de VS Code.
 // @author       Cristian Castineiras
@@ -39,7 +39,7 @@
 (function () {
   'use strict';
 
-  const STORE_KEY = 'm365copilot.capture.v1';
+  const STORE_KEY = 'ms365copilot.capture.v1';
   const PAGE = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
   const IS_TOP = (() => {
     try {
@@ -363,10 +363,10 @@
   }
 
   function mountUi() {
-    if (!IS_TOP || document.getElementById('m365copilot-grabber')) return;
+    if (!IS_TOP || document.getElementById('ms365copilot-grabber')) return;
 
     const host = document.createElement('div');
-    host.id = 'm365copilot-grabber';
+    host.id = 'ms365copilot-grabber';
     const root = host.attachShadow ? host.attachShadow({ mode: 'open' }) : host;
 
     const style = document.createElement('style');

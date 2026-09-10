@@ -3,7 +3,7 @@ import {
   BRIDGE_MESSAGE_MARKER,
   extractClaims,
   isSydneyToken,
-} from '@m365copilot/core';
+} from '@ms365copilot/core';
 import { logger } from '@/utils/logger';
 
 /**
@@ -93,22 +93,78 @@ export default defineContentScript({
       return true;
     }
 
+    /** Validación robusta de tokens JWT antes de guardarlos. */
+    function isValidJWT(token: string): boolean {
+      if (!token || typeof token !== 'string') return false;
+      const parts = token.split('.');
+      if (parts.length !== 3) return false;
+      // Validar que cada parte sea base64url válida
+      for (const part of parts) {
+        if (!/^[A-Za-z0-9_-]+$/.test(part)) return false;
+      }
+      // Límite de tamaño razonable para un JWT (evita payloads maliciosos)
+      if (token.length > 8192) {
+        logger.warn('Token JWT rechazado: excede 8KB');
+        return false;
+      }
+      return true;
+    }
+
+    /** Validación de claims del token con tipos seguros. */
+    function validateClaims(claims: any): boolean {
+      if (!claims || typeof claims !== 'object') return false;
+      // exp debe ser un timestamp futuro válido
+      if (typeof claims.exp !== 'number' || claims.exp <= 0) return false;
+      if (claims.exp * 1000 <= Date.now()) {
+        logger.debug('Token rechazado: ya caducó');
+        return false;
+      }
+      // iat (issued at) debe ser coherente
+      if (claims.iat && (typeof claims.iat !== 'number' || claims.iat > claims.exp)) {
+        logger.warn('Token rechazado: iat inválido');
+        return false;
+      }
+      return true;
+    }
+
     /** Guarda un token sólo si es de Sydney y no es más viejo que el que ya teníamos. */
     function offerToken(token: string, where: string): void {
-      if (!token || typeof token !== 'string' || token.split('.').length !== 3) return;
-      if (!isSydneyToken(token)) return;
-      const claims = extractClaims(token);
-      const current = readStore();
-      if (current.accessToken === token) return;
-      const currentExp = current.claims && current.claims.exp ? current.claims.exp : 0;
-      if (claims?.exp && currentExp && claims.exp < currentExp) return;
-      writeStore({ accessToken: token, tokenSource: where, claims });
+      try {
+        if (!isValidJWT(token)) return;
+        if (!isSydneyToken(token)) return;
+        
+        const claims = extractClaims(token);
+        if (!validateClaims(claims)) return;
+        
+        const current = readStore();
+        if (current.accessToken === token) return;
+        
+        const currentExp = current.claims?.exp ?? 0;
+        if (claims?.exp && currentExp && claims.exp < currentExp) {
+          logger.debug(`Token de ${where} rechazado: más viejo que el actual`);
+          return;
+        }
+        
+        logger.info(`Token capturado desde ${where}, caduca en ${Math.round(((claims?.exp ?? 0) * 1000 - Date.now()) / 60000)} min`);
+        writeStore({ accessToken: token, tokenSource: where, claims });
+      } catch (error) {
+        logger.error(`Error al procesar token desde ${where}:`, error);
+      }
     }
 
     // -------------------------------------------------------- hook de WebSocket
 
+    /** Límite de tamaño para frames de SignalR (evita payloads maliciosos). */
+    const MAX_FRAME_SIZE = 1024 * 1024; // 1 MB
+    const MAX_TEMPLATE_SIZE = 64 * 1024; // 64 KB para el template
+
     function inspectOutgoingFrame(data: any): boolean {
       if (typeof data !== 'string') return false;
+      if (data.length > MAX_FRAME_SIZE) {
+        logger.warn('Frame de SignalR rechazado: excede 1MB');
+        return false;
+      }
+      
       let sawChat = false;
       for (const chunk of data.split(RS)) {
         if (!chunk) continue;
@@ -123,7 +179,12 @@ export default defineContentScript({
           sawChat = true;
           const args = Array.isArray(frame.arguments) ? frame.arguments[0] : null;
           if (args && typeof args === 'object') {
-            writeStore({ invocationTemplate: args, invocationType: frame.type });
+            const templateJson = JSON.stringify(args);
+            if (templateJson.length <= MAX_TEMPLATE_SIZE) {
+              writeStore({ invocationTemplate: args, invocationType: frame.type });
+            } else {
+              logger.warn('Template de invocación rechazado: excede 64KB');
+            }
           }
         }
       }
@@ -133,7 +194,20 @@ export default defineContentScript({
     /** Quita los parámetros volátiles (token, ids de sesión) para no guardar basura ni un token caducado en el endpoint. */
     function normalizeEndpoint(raw: string): string {
       try {
-        const u = new URL(String(raw).replace(/^ws/i, 'http'));
+        // Validar longitud antes de procesar
+        if (typeof raw !== 'string' || raw.length > 2048) {
+          logger.warn('Endpoint rechazado: longitud inválida');
+          return '';
+        }
+        
+        const sanitized = String(raw).replace(/^ws/i, 'http');
+        const u = new URL(sanitized);
+        
+        // Validar que sea un endpoint de Microsoft
+        if (!u.hostname.endsWith('.microsoft.com') && !u.hostname.endsWith('.microsoft')) {
+          logger.warn(`Endpoint rechazado: hostname sospechoso (${u.hostname})`);
+          return '';
+        }
         for (const p of ['access_token', 'ConversationId', 'chatsessionid', 'clientrequestid', 'X-SessionId']) {
           u.searchParams.delete(p);
         }

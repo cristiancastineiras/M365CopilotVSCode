@@ -2,7 +2,7 @@
  * Catálogo de las herramientas disponibles en un turno de chat.
  *
  * VS Code entrega en `ProvideLanguageModelChatResponseOptions.tools` TODAS las
- * herramientas activas para la petición: las nuestras (`m365_*`, registradas
+ * herramientas activas para la petición: las nuestras (`ms365_*`, registradas
  * con `vscode.lm.registerTool`), las nativas del editor y del chat en modo
  * agente, las de servidores MCP y las de otras extensiones. Antes sólo
  * mirábamos las nuestras y descartábamos el resto, así que con un modelo de
@@ -22,15 +22,35 @@
  */
 
 export const M365_TOOL_NAMES = {
-	listFiles: 'm365_list_files',
-	readFile: 'm365_read_file',
-	searchText: 'm365_search_text',
-	applyWorkspaceEdits: 'm365_apply_edits',
-	getDiagnostics: 'm365_get_diagnostics',
-	gitInfo: 'm365_git_info',
-	runCommand: 'm365_run_command',
-	deepwikiSearch: 'm365_deepwiki_search',
+	listFiles: 'ms365_list_files',
+	readFile: 'ms365_read_file',
+	searchText: 'ms365_search_text',
+	applyWorkspaceEdits: 'ms365_apply_edits',
+	getDiagnostics: 'ms365_get_diagnostics',
+	gitInfo: 'ms365_git_info',
+	generateCommitMessage: 'ms365_generate_commit_message',
+	gitCommit: 'ms365_git_commit',
+	runCommand: 'ms365_run_command',
+	spawnAgents: 'ms365_spawn_agents',
 } as const;
+
+/**
+ * Las 9 herramientas de workspace, sin {@link M365_TOOL_NAMES.spawnAgents} —
+ * es el catálogo que se le ofrece a un SUB-agente (ver `subagents.ts`): un
+ * sub-agente nunca puede delegar a su vez, así que la propia herramienta de
+ * delegación queda fuera de su propio catálogo.
+ */
+export const M365_WORKSPACE_TOOL_NAMES: readonly M365ToolName[] = [
+	M365_TOOL_NAMES.listFiles,
+	M365_TOOL_NAMES.readFile,
+	M365_TOOL_NAMES.searchText,
+	M365_TOOL_NAMES.applyWorkspaceEdits,
+	M365_TOOL_NAMES.getDiagnostics,
+	M365_TOOL_NAMES.gitInfo,
+	M365_TOOL_NAMES.generateCommitMessage,
+	M365_TOOL_NAMES.gitCommit,
+	M365_TOOL_NAMES.runCommand,
+];
 
 export type M365ToolName = (typeof M365_TOOL_NAMES)[keyof typeof M365_TOOL_NAMES];
 
@@ -69,7 +89,7 @@ const M365_HINTS: Readonly<Record<M365ToolName, M365Hint>> = {
 			'Propone un lote atómico de reemplazos, archivos nuevos o borrados. Campos por operación: ' +
 			'replace → oldText (exacto y único) + newText; create → content; delete → sólo path. ' +
 			'oldText/newText/content NUNCA van como texto literal: van como "@@block:ID@@" y el texto real va después, ' +
-			'en un <m365_block id="ID"> (ver el formato de bloques más abajo).',
+			'en un <ms365_block id="ID"> (ver el formato de bloques más abajo).',
 		example: {
 			edits: [
 				{
@@ -93,20 +113,43 @@ const M365_HINTS: Readonly<Record<M365ToolName, M365Hint>> = {
 			'Consulta git en modo solo lectura: status, diff o log. Nunca hace commit, push ni modifica el repositorio.',
 		example: { action: 'status' },
 	},
+	[M365_TOOL_NAMES.generateCommitMessage]: {
+		description:
+			'Dispara la función NATIVA de VS Code «Generate Commit Message» (✨ del panel Source Control) sobre el ' +
+			'repositorio del workspace y devuelve lo que generó, junto con el diff en stage (o del árbol de trabajo si ' +
+			'no hay nada en stage). No modifica el repositorio. Revisa/corrige el resultado para que la primera línea ' +
+			'siga Conventional Commits antes de pasarlo a ' +
+			`${M365_TOOL_NAMES.gitCommit}.`,
+		example: {},
+	},
+	[M365_TOOL_NAMES.gitCommit]: {
+		description:
+			'Crea un commit real con el mensaje dado (validado como Conventional Commits: "tipo(ámbito): resumen"). ' +
+			'Sólo commitea lo que ya está en stage salvo que pases stageAll (git add -A) o paths (git add de esas rutas). ' +
+			'El usuario confirma el mensaje exacto antes de que se ejecute nada.',
+		example: { message: 'fix(auth): evitar token nulo en refresh', stageAll: true },
+	},
 	[M365_TOOL_NAMES.runCommand]: {
 		description:
 			'Ejecuta un comando de terminal en el workspace (build, tests, etc.) y devuelve su salida. ' +
 			'El usuario ve el comando exacto y debe confirmarlo antes de que se ejecute.',
 		example: { command: 'npm test' },
 	},
-	[M365_TOOL_NAMES.deepwikiSearch]: {
+	[M365_TOOL_NAMES.spawnAgents]: {
 		description:
-			'Consulta DeepWiki (deepwiki.com): documentación generada por IA y preguntas y respuestas sobre UN repositorio ' +
-			'PÚBLICO de GitHub concreto (típicamente una librería de la que depende el proyecto). No es un buscador web ' +
-			'general: es la ÚNICA fuente de información externa y actual disponible aquí, porque este modelo corre sin su ' +
-			'plugin nativo de búsqueda web. action=ask (con question) para una pregunta puntual; action=structure para ver ' +
-			'los temas documentados; action=contents para la documentación completa (puede ser larga).',
-		example: { action: 'ask', repo: 'microsoft/vscode', question: '¿Cómo funciona vscode.lm.registerTool?' },
+			'Delega 1-6 tareas independientes a sub-agentes autónomos (en paralelo si son varias), cada uno con su ' +
+			'propio ciclo de herramientas de workspace (listar/buscar/leer/diagnósticos/git de solo lectura, y también ' +
+			'editar o ejecutar comandos si la tarea lo requiere, con la misma revisión Keep/Undo y confirmación de ' +
+			'terminal de siempre). Cada sub-agente NO ve el resto de esta conversación: describe cada tarea de forma ' +
+			'autocontenida (qué debe hacer y qué debe devolver). Devuelve un resumen por tarea, no el detalle completo ' +
+			'de la exploración — úsala para investigar varias cosas independientes a la vez, o para explorar mucho sin ' +
+			'gastar tu propio contexto en el proceso.',
+		example: {
+			tasks: [
+				{ task: 'Busca todos los usos de WorkspaceEditManager y resume para qué se usa cada uno.', label: 'usos de WorkspaceEditManager' },
+				{ task: 'Lee src/client.ts y explica cómo se reconecta tras un fallo.', label: 'reconexión de client.ts' },
+			],
+		},
 	},
 };
 
@@ -117,7 +160,7 @@ export interface OfferedTool {
 	readonly inputSchema?: object;
 }
 
-export type ToolOrigin = 'm365' | 'editor';
+export type ToolOrigin = 'ms365' | 'editor';
 
 export type ToolCapability =
 	| 'read'
@@ -130,6 +173,7 @@ export type ToolCapability =
 	| 'git'
 	| 'tests'
 	| 'web'
+	| 'agent'
 	| 'other';
 
 /** Qué hacer cuando una herramienta nuestra y una del editor hacen lo mismo. */
@@ -166,7 +210,7 @@ export interface ToolCatalog {
 	readonly callable: ReadonlySet<string>;
 	/** Nombres que no cupieron en el presupuesto del prompt. */
 	readonly omitted: readonly string[];
-	readonly m365Count: number;
+	readonly ms365Count: number;
 	readonly editorCount: number;
 	/** Hay alguna herramienta que escribe archivos (nuestra o del editor). */
 	readonly hasEditTools: boolean;
@@ -194,16 +238,14 @@ const MAX_ENUM_VALUES = 8;
  * — nunca decide si una herramienta se puede llamar.
  */
 const CAPABILITY_RULES: readonly (readonly [ToolCapability, RegExp])[] = [
+	['agent', /spawnagent|subagent|delegat/],
 	['terminal', /terminal|runcommand|runinshell|runtask|runscript|shellexec|executeshell/],
 	['tests', /test/],
 	['diagnostics', /error|problem|diagnostic|lint|compilecheck/],
 	// `git(?!hub|lab)`: sin eso, cualquier herramienta MCP de GitHub/GitLab
 	// entraría como «git» y competiría con la nuestra, que hace otra cosa.
 	['git', /git(?!hub|lab)|scm|sourcecontrol|changedfiles|commit|branch|pullrequest/],
-	// `deepwiki` va aquí (y no en «search»): es una consulta a un servicio
-	// externo, no una búsqueda en el workspace — no debe competir por prioridad
-	// con `m365_search_text` ni con el `search`/`grep` nativo.
-	['web', /fetch|webpage|website|browser|http|openurl|websearch|deepwiki/],
+	['web', /fetch|webpage|website|browser|http|openurl|websearch/],
 	['edit', /edit|replace|patch|insert|applydiff|writefile|modifyfile/],
 	['create', /create|newfile|newworkspace|mkdir|scaffold/],
 	['read', /readfile|filecontent|readnotebook|opendocument|getdocument|readtext/],
@@ -222,6 +264,7 @@ const CAPABILITY_ORDER: readonly ToolCapability[] = [
 	'git',
 	'tests',
 	'web',
+	'agent',
 	'other',
 ];
 
@@ -276,10 +319,10 @@ export function buildToolCatalog(
 		if (callable.has(tool.name)) continue; // el host puede repetir una herramienta
 		callable.add(tool.name);
 
-		const origin: ToolOrigin = isM365Tool(tool.name) ? 'm365' : 'editor';
+		const origin: ToolOrigin = isM365Tool(tool.name) ? 'ms365' : 'editor';
 		if (origin === 'editor' && !includeEditorTools) continue;
 
-		const hint = origin === 'm365' ? M365_HINTS[tool.name as M365ToolName] : undefined;
+		const hint = origin === 'ms365' ? M365_HINTS[tool.name as M365ToolName] : undefined;
 		const description = hint?.description ?? shortText(tool.description ?? '', MAX_TOOL_DESC_CHARS);
 		order.set(tool.name, order.size);
 		candidates.push({
@@ -321,7 +364,7 @@ export function buildToolCatalog(
 		entries,
 		callable,
 		omitted,
-		m365Count: marked.filter((entry) => entry.origin === 'm365').length,
+		ms365Count: marked.filter((entry) => entry.origin === 'ms365').length,
 		editorCount: marked.filter((entry) => entry.origin === 'editor').length,
 		hasEditTools: entries.some((entry) => entry.capability === 'edit' || entry.capability === 'create'),
 	};
@@ -334,7 +377,7 @@ export function buildToolCatalog(
  */
 function markDuplicates(entries: readonly CatalogEntry[], policy: DuplicatePolicy): CatalogEntry[] {
 	if (policy === 'both') return [...entries];
-	const winnerOrigin: ToolOrigin = policy === 'preferEditor' ? 'editor' : 'm365';
+	const winnerOrigin: ToolOrigin = policy === 'preferEditor' ? 'editor' : 'ms365';
 
 	const preferredByCapability = new Map<ToolCapability, string>();
 	for (const entry of entries) {
@@ -356,8 +399,19 @@ function capabilityRank(entry: CatalogEntry): number {
 	return Math.max(0, CAPABILITY_ORDER.indexOf(entry.capability)) * 1000;
 }
 
-/** Orden de recorte: las duplicadas se van antes que cualquier herramienta única. */
+/**
+ * Orden de recorte: las duplicadas se van antes que cualquier herramienta
+ * única. `ms365_spawn_agents` es la excepción: va SIEMPRE la primera, pase lo
+ * que pase con su capacidad ('agent', la última de {@link CAPABILITY_ORDER}).
+ * Sin esto, una sesión de modo agente con muchas herramientas nativas/MCP
+ * (fácil pasar de las 48 por defecto, o del presupuesto de caracteres) la
+ * dejaba fuera del catálogo descrito con bastante frecuencia — el modelo
+ * nunca llegaba a enterarse de que existe, así que nunca podía delegar. Es
+ * una única entrada, minúscula frente al presupuesto (~1 KB), así que
+ * dejarla pasar siempre no le quita sitio a nada que de verdad lo necesite.
+ */
 function selectionRank(entry: CatalogEntry, order: ReadonlyMap<string, number>): number {
+	if (entry.name === M365_TOOL_NAMES.spawnAgents) return -1;
 	const duplicatePenalty = entry.preferInstead ? 100_000 : 0;
 	return duplicatePenalty + capabilityRank(entry) + (order.get(entry.name) ?? 0);
 }

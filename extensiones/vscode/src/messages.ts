@@ -1,6 +1,25 @@
 import * as vscode from 'vscode';
 import { buildToolProtocolInstructions, buildToolProtocolReminder, type ToolCatalog } from './toolProtocol';
 
+/**
+ * Tono/estilo de comunicación, deliberadamente estricto: por defecto, un modelo
+ * de chat tiende a rellenar con cháchara (celebrar la pregunta, anunciar el plan
+ * con un párrafo entero, resumir al final lo que ya se acaba de decir) porque
+ * ESO es lo que un asistente conversacional genérico premia — aquí se pide
+ * justo lo contrario: un compañero de equipo serio y funcional que va al grano.
+ */
+const TONE_INSTRUCTIONS = [
+	'Sé serio, directo y funcional: ve al grano, sin cháchara ni relleno.',
+	'Nada de coletillas de relleno ("¡Claro!", "¡Buena pregunta!", "Voy a ayudarte con eso", disculpas innecesarias) ' +
+		'ni emojis decorativos que no aportan información. Empieza directamente por la respuesta o la acción.',
+	'Antes de una llamada a herramienta, como mucho UNA frase corta de qué vas a hacer — nunca un párrafo explicando ' +
+		'el plan paso a paso antes de ejecutarlo.',
+	'No repitas la pregunta del usuario ni resumas al final lo que ya has dicho o hecho arriba. Si hiciste cambios, ' +
+		'di escuetamente QUÉ cambió, no el relato de cómo llegaste ahí.',
+	'Sé breve por defecto: respuestas largas sólo cuando el contenido de verdad lo requiere (código, una explicación ' +
+		'técnica que el usuario pidió en detalle), nunca por rellenar espacio.',
+].join('\n');
+
 const MARKDOWN_RESPONSE_INSTRUCTIONS = [
 	'Responde SIEMPRE en Markdown bien formado.',
 	'OBLIGATORIO: todo bloque de código de 2 o más líneas debe ir entre vallas ``` con el lenguaje adecuado (por ejemplo, ```ts). Nunca lo pegues como texto plano: fuera de una valla, Markdown convierte cada salto de línea en un espacio y el código sale ilegible, todo en una línea.',
@@ -9,7 +28,8 @@ const MARKDOWN_RESPONSE_INSTRUCTIONS = [
 
 /** Placed at the very END of the prompt — see the reminder note on {@link buildToolProtocolReminder}. */
 const MARKDOWN_RESPONSE_REMINDER =
-	'Recuerda: si tu respuesta incluye código de 2 o más líneas, ponlo entre vallas ``` con el lenguaje. Nunca como texto plano.';
+	'Recuerda: si tu respuesta incluye código de 2 o más líneas, ponlo entre vallas ``` con el lenguaje. Nunca como ' +
+	'texto plano. Y sé breve y directo: sin cháchara, sin repetir lo obvio, sin párrafos de más.';
 
 const MAX_CONTEXT_CHARS = 48_000;
 const MAX_MESSAGE_CHARS = 12_000;
@@ -77,6 +97,7 @@ export function flattenMessages(
 		.join('\n');
 
 	return [
+		TONE_INSTRUCTIONS,
 		MARKDOWN_RESPONSE_INSTRUCTIONS,
 		catalog ? buildToolProtocolInstructions(catalog) : '',
 		transcript,

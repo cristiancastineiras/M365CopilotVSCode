@@ -7,13 +7,13 @@
  * `endpoint` e `invocationTemplate` se conservan por compatibilidad y como
  * diagnóstico, pero client.ts ya NO los usa para construir peticiones: sólo
  * `accessToken` (y sus claims) importan. Los tipos y utilidades compartidas
- * viven en `@m365copilot/core`; aquí sólo queda el parseo de lo pegado, que
+ * viven en `@ms365copilot/core`; aquí sólo queda el parseo de lo pegado, que
  * es específico de VS Code.
  */
-import { extractClaims, type CopilotProfile, type TokenClaims } from '@m365copilot/core';
+import { extractClaims, type CopilotProfile, type TokenClaims } from '@ms365copilot/core';
 
-export type { CopilotProfile, TokenClaims } from '@m365copilot/core';
-export { decodeJwtPayload, isTokenUsable, minutesUntilExpiry } from '@m365copilot/core';
+export type { CopilotProfile, TokenClaims } from '@ms365copilot/core';
+export { decodeJwtPayload, isTokenUsable, minutesUntilExpiry } from '@ms365copilot/core';
 
 const DEFAULT_ORIGIN = 'https://m365.cloud.microsoft';
 const DEFAULT_UA =

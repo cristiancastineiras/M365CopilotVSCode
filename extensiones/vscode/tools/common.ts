@@ -51,7 +51,7 @@ export async function readWorkspaceText(
 
 	const bytes = await vscode.workspace.fs.readFile(uri);
 	if (bytes.includes(0)) {
-		throw new Error('El archivo parece binario y no se puede enviar al modelo.');
+		throw new Error(binaryFileMessage(uri));
 	}
 	return new TextDecoder('utf-8').decode(bytes);
 }
@@ -144,4 +144,42 @@ function normalizeRelativePath(value: unknown, allowEmpty: boolean): string {
 
 function isFileNotFound(error: unknown): boolean {
 	return error instanceof vscode.FileSystemError && error.code === 'FileNotFound';
+}
+
+/** Extensiones de formatos binarios habituales para los que merece la pena nombrar la causa
+ * probable, en vez de un genérico "parece binario" que no orienta al modelo ni al usuario. */
+const KNOWN_BINARY_KINDS: Readonly<Record<string, string>> = {
+	'.pdf': 'un PDF',
+	'.doc': 'un documento de Word antiguo (.doc)',
+	'.docx': 'un documento de Word',
+	'.xls': 'una hoja de Excel antigua (.xls)',
+	'.xlsx': 'una hoja de Excel',
+	'.ppt': 'una presentación de PowerPoint antigua (.ppt)',
+	'.pptx': 'una presentación de PowerPoint',
+	'.png': 'una imagen',
+	'.jpg': 'una imagen',
+	'.jpeg': 'una imagen',
+	'.gif': 'una imagen',
+	'.zip': 'un archivo comprimido',
+};
+
+/**
+ * Mensaje de error para un archivo binario, pensado para que lo LEA EL MODELO (no el
+ * usuario directamente): sin nombrar la causa probable y sin decirle explícitamente que
+ * NO intente reconstruir el contenido a partir de bytes crudos, la tentación observada es
+ * enviar igualmente esos bytes al modelo (o insistir en leer el archivo de otra forma) y
+ * que éste intente «leerlo» de todos modos, produciendo una respuesta basada en ruido — grave
+ * si el archivo es algo como un contrato y el usuario confía en la respuesta.
+ */
+function binaryFileMessage(uri: vscode.Uri): string {
+	const extension = path.posix.extname(uri.path).toLowerCase();
+	const kind = KNOWN_BINARY_KINDS[extension];
+	const described = kind ? `${kind} (${extension})` : `un archivo binario (${extension || 'sin extensión'})`;
+	return (
+		`Este archivo parece ser ${described} y no se puede leer como texto: esta herramienta sólo lee texto plano, ` +
+		'no extrae el contenido de formatos binarios/ofimáticos. NO intentes leerlo de otra forma ni inventes su ' +
+		'contenido a partir de bytes crudos — dile al usuario que esta herramienta no puede abrir este tipo de ' +
+		'archivo todavía, y pídele que pegue el texto relevante en el chat o lo exporte/guarde como .txt/.md si lo ' +
+		'necesita.'
+	);
 }

@@ -10,7 +10,7 @@ import { replaceTextOnce, requireText } from './replaceText';
 import { createContentOf, replaceNewTextOf } from './editFields';
 import { changedRegion, describeChange } from './lineDiff';
 
-const PREVIEW_SCHEME = 'm365copilot-edit-preview';
+const PREVIEW_SCHEME = 'ms365copilot-edit-preview';
 const MAX_EDIT_COUNT = 20;
 const MAX_EDIT_TEXT_CHARS = 500_000;
 
@@ -81,7 +81,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 
 	constructor() {
 		this.status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-		this.status.command = 'm365copilot.reviewPendingEdits';
+		this.status.command = 'ms365copilot.reviewPendingEdits';
 		this.disposables.push(
 			vscode.workspace.registerTextDocumentContentProvider(PREVIEW_SCHEME, this.previews),
 			vscode.languages.registerCodeLensProvider({ pattern: '**' }, this),
@@ -427,19 +427,19 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 			new vscode.CodeLens(range, {
 				title: `$(check) Keep (${describeChange(file.before, file.after)})`,
 				tooltip: 'Aceptar este cambio de M365 Copilot',
-				command: 'm365copilot.keepEdits',
+				command: 'ms365copilot.keepEdits',
 				arguments: args,
 			}),
 			new vscode.CodeLens(range, {
 				title: '$(discard) Undo',
 				tooltip: 'Revertir este cambio y restaurar el contenido anterior',
-				command: 'm365copilot.undoEdits',
+				command: 'ms365copilot.undoEdits',
 				arguments: args,
 			}),
 			new vscode.CodeLens(range, {
 				title: '$(diff) Ver diff',
 				tooltip: 'Comparar con el contenido anterior',
-				command: 'm365copilot.showEditDiff',
+				command: 'ms365copilot.showEditDiff',
 				arguments: args,
 			}),
 		];

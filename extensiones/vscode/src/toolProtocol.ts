@@ -20,6 +20,7 @@ import {
 
 export {
 	M365_TOOL_NAMES,
+	M365_WORKSPACE_TOOL_NAMES,
 	buildToolCatalog,
 	isM365Tool,
 	type M365ToolName,
@@ -28,18 +29,18 @@ export {
 	type DuplicatePolicy,
 } from './toolCatalog';
 
-const TOOL_CALL_OPEN = '<m365_tool_call>';
-const TOOL_CALL_CLOSE = '</m365_tool_call>';
+const TOOL_CALL_OPEN = '<ms365_tool_call>';
+const TOOL_CALL_CLOSE = '</ms365_tool_call>';
 const MAX_TOOL_CALL_CHARS = 60_000;
 
 /**
  * Opening marker, tolerant of the ways non-GPT rings mangle it: a stray extra
- * `<` (`<<m365_tool_call>`) and incidental spaces around the tag name. The
+ * `<` (`<<ms365_tool_call>`) and incidental spaces around the tag name. The
  * closing marker is treated as OPTIONAL — Claude and the reasoning ring often
  * emit the JSON and stop without it, so we detect the end of the call by
- * balancing the JSON braces instead of requiring `</m365_tool_call>`.
+ * balancing the JSON braces instead of requiring `</ms365_tool_call>`.
  */
-const TOOL_CALL_OPEN_RE = /<{1,3}[ \t]*m365_tool_call[ \t]*>/i;
+const TOOL_CALL_OPEN_RE = /<{1,3}[ \t]*ms365_tool_call[ \t]*>/i;
 
 /** Whitespace and an optional opening code fence between the marker and the JSON. */
 const JSON_LEADING_RE = /^\s*(?:(?:`{3,}|~{3,})[A-Za-z0-9_-]*[ \t]*\r?\n\s*)?/;
@@ -47,7 +48,7 @@ const JSON_LEADING_RE = /^\s*(?:(?:`{3,}|~{3,})[A-Za-z0-9_-]*[ \t]*\r?\n\s*)?/;
 /**
  * Cualquier campo de texto de cualquier herramienta puede llegar como este
  * marcador en vez de como literal JSON, con el texto real en un
- * `<m365_block>` posterior. Existe porque pedirle a un modelo de chat (BizChat
+ * `<ms365_block>` posterior. Existe porque pedirle a un modelo de chat (BizChat
  * no es un tool-caller nativo) que escape código arbitrario dentro de una
  * cadena JSON es frágil: una sola `"` sin escapar dentro del código desincroniza
  * el balanceador de llaves de abajo y corrompe la llamada entera — observado en
@@ -56,13 +57,13 @@ const JSON_LEADING_RE = /^\s*(?:(?:`{3,}|~{3,})[A-Za-z0-9_-]*[ \t]*\r?\n\s*)?/;
  * etiqueta de cierre, así que comillas, backslashes y llaves dentro del código
  * no pueden romper nada.
  *
- * Es OBLIGATORIO en `m365_apply_edits` y recomendado para las herramientas de
+ * Es OBLIGATORIO en `ms365_apply_edits` y recomendado para las herramientas de
  * edición nativas de VS Code, que tienen exactamente el mismo problema.
  */
 const BLOCK_REF_RE = /@@block:([A-Za-z0-9_-]{1,64})@@/g;
-const BLOCK_OPEN_RE = /<m365_block[ \t]+id=["']?([A-Za-z0-9_-]+)["']?[ \t]*>/i;
-const BLOCK_CLOSE_RE = /<\/m365_block[ \t]*>/i;
-const BLOCK_CLOSE_LITERAL = '</m365_block>';
+const BLOCK_OPEN_RE = /<ms365_block[ \t]+id=["']?([A-Za-z0-9_-]+)["']?[ \t]*>/i;
+const BLOCK_CLOSE_RE = /<\/ms365_block[ \t]*>/i;
+const BLOCK_CLOSE_LITERAL = '</ms365_block>';
 /** Generous cap on a single block's raw text while still streaming in. */
 const MAX_BLOCK_CHARS = 600_000;
 
@@ -82,12 +83,14 @@ export function buildToolProtocolInstructions(catalog: ToolCatalog): string {
 	if (catalog.entries.length === 0) return '';
 
 	const descriptions = catalog.entries.map(renderCatalogEntry).join('\n');
-	const hasM365Edits = catalog.entries.some(
+	const hasMs365Edits = catalog.entries.some(
 		(entry) => entry.name === M365_TOOL_NAMES.applyWorkspaceEdits,
 	);
 	const hasDiagnostics = catalog.entries.some((entry) => entry.capability === 'diagnostics');
 	const hasEditors = catalog.entries.filter((entry) => entry.capability === 'edit');
 	const hasEditorTools = catalog.entries.some((entry) => entry.origin === 'editor');
+	const hasSpawnAgents = catalog.entries.some((entry) => entry.name === M365_TOOL_NAMES.spawnAgents);
+	const hasGitCommit = catalog.entries.some((entry) => entry.name === M365_TOOL_NAMES.gitCommit);
 
 	const rules = [
 		'- Llama a UNA sola herramienta por turno y detente; espera su resultado antes de decidir el siguiente paso.',
@@ -95,13 +98,28 @@ export function buildToolProtocolInstructions(catalog: ToolCatalog): string {
 		'- Cada herramienta define sus propios parámetros: respeta los nombres y el formato de ruta que indica su descripción ' +
 			'(las de esta extensión usan rutas relativas al workspace; las nativas de VS Code suelen pedir rutas absolutas).',
 		'- Antes de modificar un archivo, lee el rango que vas a tocar; cada reemplazo necesita un texto original exacto y único.',
+		...(hasSpawnAgents
+			? [
+					`- Si necesitas investigar varias cosas independientes entre sí, o explorar mucho antes de decidir un cambio, ` +
+						`considera delegarlo con ${M365_TOOL_NAMES.spawnAgents} en vez de hacerlo todo tú mismo paso a paso: cada ` +
+						'tarea corre en un sub-agente aparte (en paralelo si son varias) y sólo te devuelve un resumen, así no gastas ' +
+						'tu propio contexto en el detalle. No lo uses para un solo paso trivial ni para pasos que dependan unos de otros.',
+				]
+			: []),
+		...(hasGitCommit
+			? [
+					`- Antes de llamar a ${M365_TOOL_NAMES.gitCommit}, genera o redacta el mensaje (con ${M365_TOOL_NAMES.generateCommitMessage} ` +
+						'o a partir del diff en stage) y comprueba que la primera línea sigue Conventional Commits — ' +
+						'"tipo(ámbito opcional): resumen en imperativo". El usuario ve el mensaje exacto y debe confirmarlo antes de que se cree el commit.',
+				]
+			: []),
 		...(hasEditors.length > 1
 			? [
 					`- Para editar usa SIEMPRE la misma herramienta durante toda la tarea (empieza por ${hasEditors[0].name}); ` +
 						'mezclarlas parte los cambios en dos flujos de revisión distintos para el usuario.',
 				]
 			: []),
-		...(hasM365Edits
+		...(hasMs365Edits
 			? [
 					`- En ${M365_TOOL_NAMES.applyWorkspaceEdits} cada operación usa SUS campos: replace → oldText + newText; create → content (NO newText); delete → sólo path.`,
 					'- Si tienes que crear muchos archivos (más de ~5), hazlo en varias llamadas sucesivas de pocos archivos cada una, no en un único lote gigante: los turnos cortos fallan mucho menos.',
@@ -119,6 +137,14 @@ export function buildToolProtocolInstructions(catalog: ToolCatalog): string {
 		'- Si una herramienta devuelve un error, léelo y corrige la llamada; no repitas la misma entrada dos veces seguidas.',
 		'- Cuando ya tengas la información suficiente, responde al usuario en Markdown normal, sin ningún marcador.',
 		'- Describir en prosa lo que vas a hacer NO ejecuta nada: si necesitas datos del workspace, el marcador es obligatorio, no opcional.',
+		'- NUNCA digas en pasado ("he creado", "ya está configurado", "he cambiado X") algo que no hayas ejecutado de ' +
+			'verdad con el marcador — en este turno o en uno anterior de esta misma conversación — y cuyo resultado no ' +
+			'confirme que funcionó. Si sólo lo tienes planeado, o el resultado de la herramienta dice que quedó pendiente ' +
+			'de revisión (Keep/Undo) o incompleto, dilo así, sin dar la acción por terminada.',
+		'- Si lo que pide el usuario implica cambiar un comportamiento por defecto (p. ej. "que SIEMPRE haga X"), no lo ' +
+			'sustituyas en silencio por una versión opcional que haya que activar a mano (un flag, una variable de ' +
+			'entorno, un ajuste que no tocaste) salvo que el propio usuario haya pedido que sea opcional. Si crees que ' +
+			'opcional es mejor, dilo explícitamente y explica por qué, no lo des por hecho como si fuera lo pedido.',
 	].join('\n');
 
 	// A concrete worked example outperforms an abstract rule for models that
@@ -146,9 +172,9 @@ export function buildToolProtocolInstructions(catalog: ToolCatalog): string {
 				'Formato de bloques para texto largo o con código (evita el fallo más común: comillas o backslashes sin escapar dentro del JSON):',
 				'En CUALQUIER herramienta, un campo de texto puede ir como el marcador "@@block:ID@@" ' +
 					'(ID = un número, único dentro de la llamada) en vez de como literal JSON. Justo después de ' +
-					`${TOOL_CALL_CLOSE}, añade un <m365_block id="ID">...</m365_block> por cada marcador que hayas usado, ` +
+					`${TOOL_CALL_CLOSE}, añade un <ms365_block id="ID">...</ms365_block> por cada marcador que hayas usado, ` +
 					'con el texto EXACTO tal cual, en su propia línea — sin escapar comillas, backslashes ni nada.',
-				...(hasM365Edits
+				...(hasMs365Edits
 					? [
 							`En ${M365_TOOL_NAMES.applyWorkspaceEdits} es OBLIGATORIO: oldText/newText/content van SIEMPRE como "@@block:ID@@".`,
 						]
@@ -190,8 +216,8 @@ function renderBlockExample(entries: readonly CatalogEntry[]): string | null {
 	if (ours) {
 		return (
 			`${TOOL_CALL_OPEN}{"name":"${M365_TOOL_NAMES.applyWorkspaceEdits}","input":{"edits":[{"operation":"replace","path":"src/saludo.ts","oldText":"@@block:1@@","newText":"@@block:2@@"}]}}${TOOL_CALL_CLOSE}\n` +
-			'<m365_block id="1">\nconsole.log("hola");\n</m365_block>\n' +
-			'<m365_block id="2">\nconsole.log("hola mundo");\n</m365_block>'
+			'<ms365_block id="1">\nconsole.log("hola");\n</ms365_block>\n' +
+			'<ms365_block id="2">\nconsole.log("hola mundo");\n</ms365_block>'
 		);
 	}
 
@@ -211,7 +237,7 @@ function renderBlockExample(entries: readonly CatalogEntry[]): string | null {
 		}
 		const id = blocks.length + 1;
 		input[parameter.name] = `@@block:${id}@@`;
-		blocks.push(`<m365_block id="${id}">\nconsole.log("hola${id > 1 ? ' mundo' : ''}");\n</m365_block>`);
+		blocks.push(`<ms365_block id="${id}">\nconsole.log("hola${id > 1 ? ' mundo' : ''}");\n</ms365_block>`);
 	}
 	if (blocks.length === 0) return null;
 
@@ -220,7 +246,7 @@ function renderBlockExample(entries: readonly CatalogEntry[]): string | null {
 
 /** Una entrada del catálogo, en el formato compacto que ve el modelo. */
 function renderCatalogEntry(entry: CatalogEntry): string {
-	const origin = entry.origin === 'm365' ? 'de esta extensión' : 'nativa de VS Code';
+	const origin = entry.origin === 'ms365' ? 'de esta extensión' : 'nativa de VS Code';
 	const lines = [`- ${entry.name} (${origin}): ${entry.description || 'Sin descripción.'}`];
 
 	if (entry.parameters.length > 0) {
@@ -293,31 +319,33 @@ function placeholderFor(parameter: ToolParameter): unknown {
  */
 export function buildToolProtocolReminder(catalog: ToolCatalog, toolsRequired = false): string {
 	if (catalog.entries.length === 0) return '';
-	const hasM365Edits = catalog.entries.some(
+	const hasMs365Edits = catalog.entries.some(
 		(entry) => entry.name === M365_TOOL_NAMES.applyWorkspaceEdits,
 	);
 	const shape = catalog.hasEditTools
-		? `${TOOL_CALL_OPEN}{"name":"...","input":{...}}${TOOL_CALL_CLOSE} (seguido de los <m365_block> si usas el formato de bloques)`
+		? `${TOOL_CALL_OPEN}{"name":"...","input":{...}}${TOOL_CALL_CLOSE} (seguido de los <ms365_block> si usas el formato de bloques)`
 		: `${TOOL_CALL_OPEN}{"name":"...","input":{...}}${TOOL_CALL_CLOSE}`;
 	return (
 		`Recuerda: para leer o modificar el workspace, tu respuesta debe ser ÚNICAMENTE ${shape}, ` +
 		'sin vallas de código y sin explicarlo antes en vez de emitirlo. ' +
 		'Usa exactamente uno de los nombres de la lista de herramientas. ' +
-		(hasM365Edits
+		(hasMs365Edits
 			? `En ${M365_TOOL_NAMES.applyWorkspaceEdits}, oldText/newText/content son SIEMPRE "@@block:ID@@", nunca texto literal. `
 			: '') +
 		(toolsRequired
 			? 'En este turno DEBES llamar a una herramienta: responde sólo con el marcador.'
-			: 'Si ya tienes lo necesario, responde directamente en Markdown, sin ningún marcador.')
+			: 'Si ya tienes lo necesario, responde directamente en Markdown, sin ningún marcador.') +
+		' No des por hecha ni por guardada ninguna acción que no hayas ejecutado de verdad con el marcador y ' +
+		'confirmado por su resultado.'
 	);
 }
 
 /**
  * Streaming decoder that splits a plain-text model reply into user-visible text
  * and tool calls. BizChat is a chat model, not a native tool-caller, so the
- * "tool call" is just the marker `<m365_tool_call>{json}</m365_tool_call>`
- * that we asked it to emit, optionally followed by `<m365_block>` sections
- * for `m365_apply_edits` (see the module docs above `BLOCK_REF_RE`). The
+ * "tool call" is just the marker `<ms365_tool_call>{json}</ms365_tool_call>`
+ * that we asked it to emit, optionally followed by `<ms365_block>` sections
+ * for `ms365_apply_edits` (see the module docs above `BLOCK_REF_RE`). The
  * decoder is deliberately forgiving because each ring formats it differently:
  *
  *  - the marker can appear anywhere, not only at the very start (models like to
@@ -325,9 +353,9 @@ export function buildToolProtocolReminder(catalog: ToolCatalog, toolsRequired = 
  *  - a code fence the model may wrap the marker in is stripped;
  *  - the opening marker tolerates a stray extra `<` and spaces;
  *  - the CLOSING marker is optional — the end of the call is found by balancing
- *    the JSON braces, so Claude/reasoning replies that omit `</m365_tool_call>`
+ *    the JSON braces, so Claude/reasoning replies that omit `</ms365_tool_call>`
  *    still execute instead of leaking the raw marker into the chat;
- *  - if a fresh `<m365_tool_call>` appears again before the previous one
+ *  - if a fresh `<ms365_tool_call>` appears again before the previous one
  *    finished, the earlier (abandoned) attempt is dropped silently and only
  *    the later one is parsed — observed in practice: BizChat occasionally
  *    restarts a message mid-call, and blindly concatenating the restart onto
@@ -343,8 +371,8 @@ export class ToolCallDecoder {
 	private readonly onText: (text: string) => void;
 	private readonly onToolCall: (call: DecodedToolCall) => void;
 
-	// State while collecting <m365_block> sections for a call whose text
-	// fields were "@@block:ID@@" placeholders (m365_apply_edits).
+	// State while collecting <ms365_block> sections for a call whose text
+	// fields were "@@block:ID@@" placeholders (ms365_apply_edits).
 	private pendingCall: DecodedToolCall | null = null;
 	private neededBlockIds = new Set<string>();
 	private collectedBlocks = new Map<string, string>();
@@ -386,7 +414,7 @@ export class ToolCallDecoder {
 				this.onText(stripTrailingPartialOpen(this.buffer));
 			}
 		}
-		// A call whose <m365_block> sections never fully arrived. The marker,
+		// A call whose <ms365_block> sections never fully arrived. The marker,
 		// JSON and half-written blocks must not leak into the chat, but dropping
 		// everything silently leaves the turn blank and the user with no idea
 		// why nothing happened — so say it in one line instead.
@@ -510,7 +538,7 @@ export class ToolCallDecoder {
 			if (!open) {
 				// Boilerplate/whitespace between blocks — never shown to the user.
 				// Hold back from the last unmatched `<` onward: it could be the
-				// start of the next `<m365_block …>` still streaming in.
+				// start of the next `<ms365_block …>` still streaming in.
 				const lastLt = this.buffer.lastIndexOf('<');
 				const safe = lastLt === -1 ? this.buffer.length : lastLt;
 				if (safe > 0) this.buffer = this.buffer.slice(safe);
@@ -686,7 +714,7 @@ function substituteBlockRefs(call: DecodedToolCall, blocks: ReadonlyMap<string, 
  * `visit` devuelve algo. Acotado en profundidad y en número de nodos: el
  * `input` lo escribe un modelo, así que no se da por hecho que sea pequeño ni
  * sensato. Es genérico a propósito — el formato de bloques vale para cualquier
- * herramienta, no sólo para `m365_apply_edits`, y las de edición nativas de
+ * herramienta, no sólo para `ms365_apply_edits`, y las de edición nativas de
  * VS Code lo necesitan igual.
  */
 function walkStrings(root: unknown, visit: (text: string) => string | undefined): void {
@@ -732,7 +760,7 @@ function findOpenMarker(buffer: string): { index: number; length: number } | nul
 	return match ? { index: match.index, length: match[0].length } : null;
 }
 
-/** Locate a `<m365_block id="...">` opening tag. */
+/** Locate a `<ms365_block id="...">` opening tag. */
 function findBlockOpen(buffer: string): { index: number; length: number; id: string } | null {
 	const match = BLOCK_OPEN_RE.exec(buffer);
 	return match ? { index: match.index, length: match[0].length, id: match[1] } : null;

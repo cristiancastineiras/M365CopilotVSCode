@@ -16,7 +16,7 @@ function findMatch(haystack: string, needle: string): MatchResult {
 /**
  * Splice `newText` in place of the one occurrence of `oldText` in `content`.
  *
- * The model always works with LF line endings — that's what `m365_read_file`
+ * The model always works with LF line endings — that's what `ms365_read_file`
  * shows it (it re-joins lines with `\n` regardless of the file's real line
  * endings) and what a JSON `"\n"` represents — but the file on disk may use
  * CRLF (common on Windows checkouts). A byte-exact match then never succeeds

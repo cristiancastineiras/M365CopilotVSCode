@@ -37,7 +37,7 @@ import {
   type TokenSnapshot,
 } from './refreshPolicy';
 
-const ALARM_NAME = 'm365copilot-token-refresh';
+const ALARM_NAME = 'ms365copilot-token-refresh';
 /** 1 minuto es el periodo mínimo que Chrome respeta en extensiones empaquetadas. */
 const ALARM_PERIOD_MINUTES = 1;
 
