@@ -486,6 +486,8 @@
           "enum": [
             "ms365-copilot-auto",
             "ms365-copilot-gpt",
+            "ms365-copilot-gpt56",
+            "ms365-copilot-gpt56-reasoning",
             "ms365-copilot-claude",
             "ms365-copilot-reasoning"
           ],
@@ -536,6 +538,8 @@
           "enum": [
             "ms365-copilot-auto",
             "ms365-copilot-gpt",
+            "ms365-copilot-gpt56",
+            "ms365-copilot-gpt56-reasoning",
             "ms365-copilot-claude",
             "ms365-copilot-reasoning"
           ],
