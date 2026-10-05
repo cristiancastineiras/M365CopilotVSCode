@@ -32,6 +32,20 @@ export const MODELS: readonly CopilotModel[] = [
 		detail: 'Fuerza el modelo GPT del backend de Copilot.',
 	},
 	{
+		id: 'ms365-copilot-gpt56',
+		name: 'M365 Copilot · GPT 5.6',
+		family: 'm365-copilot',
+		tone: 'Gpt_5_6_Chat',
+		detail: 'GPT 5.6 (respuestas rápidas) — el modelo preferido de M365 Copilot desde julio de 2026.',
+	},
+	{
+		id: 'ms365-copilot-gpt56-reasoning',
+		name: 'M365 Copilot · GPT 5.6 Reasoning',
+		family: 'm365-copilot',
+		tone: 'Gpt_5_6_Reasoning',
+		detail: 'GPT 5.6 en modo razonamiento («Think deeper»): respuestas más elaboradas para trabajo difícil.',
+	},
+	{
 		id: 'ms365-copilot-claude',
 		name: 'M365 Copilot · Claude Sonnet',
 		family: 'm365-copilot',
