@@ -22,9 +22,22 @@ import {
 	type OfferedTool,
 	type ToolCatalog,
 } from '../src/toolProtocol.ts';
-import { ConcurrencyLimiter, clip, runSubagentTask } from '../src/subagentCore.ts';
+import { ConcurrencyLimiter, clip, runSubagentTask, runToolLoop } from '../src/subagentCore.ts';
 import { replaceTextOnce } from '../tools/replaceText.ts';
-import { validateConventionalCommitMessage } from '../tools/commitMessage.ts';
+import {
+	buildCommitMessagePrompt,
+	cleanGeneratedCommitMessage,
+	validateConventionalCommitMessage,
+} from '../tools/commitMessage.ts';
+import { LOCALES, messageKeys, placeholdersOf, resolveLocale, setLocale, t, tIn } from '../src/i18n.ts';
+import {
+	asParticipantCommand,
+	buildParticipantFraming,
+	fenceFor,
+	maxStepsForCommand,
+	toolsForCommand,
+} from '../src/participantPrompts.ts';
+import { readFileSync } from 'node:fs';
 import type { CopilotProfile } from '../src/profile.ts';
 
 const RS = String.fromCharCode(0x1e);
@@ -836,7 +849,10 @@ async function testConcurrencyLimiter() {
 
 /** Servidor mock cuya respuesta depende de qué conexión (= qué paso del
  * sub-agente) es: cada turno de `runSubagentTask` abre un WebSocket nuevo. */
-function startScriptedServer(getReply: (connectionIndex: number) => string): Promise<{ port: number; close: () => void }> {
+function startScriptedServer(
+	getReply: (connectionIndex: number) => string,
+	onChatFrame?: (frame: { arguments: [{ message: Record<string, unknown> }] }) => void,
+): Promise<{ port: number; close: () => void }> {
 	return new Promise((resolve) => {
 		let connectionIndex = 0;
 		const wss = new WebSocketServer({ port: 0 }, () => {
@@ -857,6 +873,7 @@ function startScriptedServer(getReply: (connectionIndex: number) => string): Pro
 						continue;
 					}
 					if (frame.target !== 'chat') continue;
+					onChatFrame?.(frame);
 					setTimeout(() => {
 						socket.send(botUpdate([{ author: 'bot', text: getReply(index) }]));
 						socket.send(botUpdate([{ author: 'bot', messageType: 'EndOfRequest' }]));
@@ -1129,7 +1146,231 @@ async function testMultiMessageToolCall() {
 	console.log('  ✓ streamCopilotTurn reconciles a tool call split across two bot messages (no leaked marker)');
 }
 
+
+// ---- i18n -------------------------------------------------------------------
+
+function testI18nCatalogs() {
+	// Every key has a non-empty text in every locale, with the same placeholders
+	// as the English reference — a Spanish message that drops `{1}` would
+	// silently print less information than its English twin.
+	for (const key of messageKeys()) {
+		const reference = placeholdersOf('en', key);
+		for (const locale of LOCALES) {
+			assert.ok(tIn(locale, key).trim(), `${locale}:${key} está vacío`);
+			assert.deepEqual(placeholdersOf(locale, key), reference, `${locale}:${key} no usa los mismos marcadores {n}`);
+		}
+	}
+
+	assert.equal(resolveLocale('auto', 'es'), 'es');
+	assert.equal(resolveLocale('auto', 'es-419'), 'es');
+	assert.equal(resolveLocale('auto', 'en-US'), 'en');
+	assert.equal(resolveLocale('auto', 'de'), 'en');
+	assert.equal(resolveLocale('es', 'en-US'), 'es', 'el ajuste explícito gana al idioma de VS Code');
+	assert.equal(resolveLocale('en', 'es-ES'), 'en');
+	assert.equal(resolveLocale(undefined, undefined), 'en');
+
+	// Placeholders are filled positionally; a missing argument stays visible.
+	assert.equal(tIn('en', 'edit.itemError', 3, 'boom'), 'Edit #3: boom');
+	assert.equal(tIn('es', 'edit.itemError', 3, 'boom'), 'Edición #3: boom');
+	assert.equal(tIn('en', 'edit.itemError', 3), 'Edit #3: {1}');
+	console.log('  ✓ catálogos en/es completos, con los mismos marcadores, y resolución del idioma');
+}
+
+/** Every `%key%` of package.json exists in both package.nls files, and they have the same keys. */
+function testManifestLocalization() {
+	const manifest = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
+	const en = JSON.parse(readFileSync(new URL('../package.nls.json', import.meta.url), 'utf8')) as Record<string, string>;
+	const es = JSON.parse(readFileSync(new URL('../package.nls.es.json', import.meta.url), 'utf8')) as Record<string, string>;
+	const used = [...manifest.matchAll(/"%([^%"]+)%"/g)].map((match) => match[1]);
+	assert.ok(used.length > 50, '(sanity) el manifiesto debería estar localizado');
+	for (const key of used) {
+		assert.ok(en[key], `package.nls.json no tiene ${key}`);
+		assert.ok(es[key], `package.nls.es.json no tiene ${key}`);
+	}
+	assert.deepEqual(Object.keys(es).sort(), Object.keys(en).sort(), 'package.nls.json y package.nls.es.json difieren');
+	for (const key of Object.keys(en)) assert.ok(used.includes(key), `${key} no se usa en package.json`);
+	console.log(`  ✓ package.json: ${used.length} cadenas %nls% presentes en inglés y español`);
+}
+
+function testPromptsFollowLocale() {
+	// The catalog carries our tools' descriptions, so it is built per locale
+	// too — exactly as the provider does on every request.
+	const render = (locale: 'en' | 'es') => {
+		setLocale(locale);
+		return buildToolProtocolInstructions(buildToolCatalog([...MS365_TOOLS, ...EDITOR_TOOLS]));
+	};
+	const english = render('en');
+	const spanish = render('es');
+
+	assert.match(english, /IMPORTANT: you DO have real access/);
+	assert.match(english, /read_file \(native to VS Code\)/);
+	assert.match(english, new RegExp(`${M365_TOOL_NAMES.readFile} \\(from this extension\\)`));
+	assert.doesNotMatch(english, /herramienta|IMPORTANTE|de esta extensión/, 'no debe quedar español en el prompt inglés');
+	assert.match(spanish, /IMPORTANTE: SÍ tienes acceso real/);
+	assert.match(spanish, /read_file \(nativa de VS Code\)/);
+	// The protocol markers themselves never change with the language.
+	for (const prompt of [english, spanish]) {
+		assert.match(prompt, /<ms365_tool_call>/);
+		assert.match(prompt, /@@block:1@@/);
+	}
+	console.log('  ✓ el prompt de herramientas sale entero en el idioma activo; los marcadores no cambian');
+}
+
+// ---- participantPrompts.ts -------------------------------------------------
+
+function testParticipantPrompts() {
+	assert.equal(asParticipantCommand('fix'), 'fix');
+	assert.equal(asParticipantCommand('commit'), undefined);
+	assert.equal(asParticipantCommand(undefined), undefined);
+
+	// /explain only reads; the rest may edit (with Keep/Undo), never delegate.
+	assert.ok(!toolsForCommand('explain').includes(M365_TOOL_NAMES.applyWorkspaceEdits));
+	assert.ok(toolsForCommand('fix').includes(M365_TOOL_NAMES.applyWorkspaceEdits));
+	assert.ok(!toolsForCommand(undefined).includes(M365_TOOL_NAMES.spawnAgents));
+	assert.ok(maxStepsForCommand('explain') < maxStepsForCommand('fix'));
+
+	// A fence always outlasts any backtick run inside the code.
+	assert.equal(fenceFor('const a = 1;'), '```');
+	assert.equal(fenceFor('const md = "```ts";'), '````');
+
+	const code = {
+		relativePath: 'src/a.ts',
+		languageId: 'typescript',
+		startLine: 10,
+		endLine: 12,
+		text: 'function f() {\n  return "```";\n}',
+		truncatedChars: 0,
+		diagnostics: ['11:3 [error] (ts) Type mismatch'],
+	};
+	setLocale('en');
+	const framing = buildParticipantFraming({
+		command: 'fix',
+		request: 'it crashes on empty input',
+		code,
+		history: [
+			{ role: 'user', text: '/explain' },
+			{ role: 'assistant', text: 'It returns a fence.' },
+		],
+		attachedPaths: ['src/b.ts'],
+	});
+	assert.match(framing, /invoked from the chat as @m365/);
+	assert.match(framing, /Find and fix the problems/);
+	assert.match(framing, /Code context — src\/a\.ts, lines 10-12 \(typescript\):/);
+	assert.match(framing, /````typescript\nfunction f\(\) \{/);
+	assert.match(framing, /- 11:3 \[error\] \(ts\) Type mismatch/);
+	assert.match(framing, /Assistant: It returns a fence\./);
+	assert.match(framing, /Other files the user attached: src\/b\.ts/);
+	assert.match(framing, /User request:\nit crashes on empty input$/);
+
+	setLocale('es');
+	const spanish = buildParticipantFraming({ command: undefined, request: '' });
+	assert.match(spanish, /Responde a la petición del usuario/);
+	assert.match(spanish, /Petición del usuario:\n\(sin instrucciones adicionales\)$/);
+	console.log('  ✓ prompts de @m365: herramientas por comando, contexto de código, historial y adjuntos');
+}
+
+// ---- commit message generated with M365 (SCM) ------------------------------
+
+function testCommitMessageGeneration() {
+	setLocale('en');
+	const prompt = buildCommitMessagePrompt({
+		files: ['M\tsrc/a.ts', 'A\tsrc/b.ts'],
+		diff: 'diff --git a/src/a.ts b/src/a.ts\n+const x = 1;',
+		staged: true,
+	});
+	assert.match(prompt, /Conventional Commits/);
+	assert.match(prompt, /feat, fix, docs/);
+	assert.match(prompt, /Write the message in English\./);
+	assert.match(prompt, /Changed files \(2\):\nM\tsrc\/a\.ts\nA\tsrc\/b\.ts/);
+	assert.match(prompt, /\+const x = 1;/);
+	assert.doesNotMatch(prompt, /Nothing is staged/);
+
+	const unstaged = buildCommitMessagePrompt({ files: [], diff: 'x'.repeat(30_000), staged: false });
+	assert.match(unstaged, /Nothing is staged/);
+	assert.match(unstaged, /\[diff truncated: 6000 more characters\]/);
+
+	setLocale('es');
+	assert.match(buildCommitMessagePrompt({ files: [], diff: 'd', staged: true }), /Escribe el mensaje en español\./);
+
+	assert.equal(cleanGeneratedCommitMessage('feat(ui): add menu'), 'feat(ui): add menu');
+	assert.equal(cleanGeneratedCommitMessage('```\nfix: avoid crash\n\n- detail\n```'), 'fix: avoid crash\n\n- detail');
+	assert.equal(cleanGeneratedCommitMessage('Commit message:\nchore: bump deps'), 'chore: bump deps');
+	assert.equal(cleanGeneratedCommitMessage('"docs: update README"'), 'docs: update README');
+	assert.equal(cleanGeneratedCommitMessage('fix: a\r\n\r\n\r\n\r\n- b'), 'fix: a\n\n- b');
+	assert.equal(cleanGeneratedCommitMessage('   '), '');
+	console.log('  ✓ mensaje de commit con M365: prompt en el idioma activo, diff acotado y limpieza de la respuesta');
+}
+
+// ---- runToolLoop (shared by sub-agents and @m365) ---------------------------
+
+async function testToolLoopStreamsProse() {
+	const server = await startScriptedServer((index) =>
+		index === 0
+			? `Voy a buscar.\n<ms365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</ms365_tool_call>`
+			: 'Está en a.ts.',
+	);
+	const prose: string[] = [];
+	const starts: number[] = [];
+	const toolNames: string[] = [];
+	const result = await runToolLoop({
+		framing: 'Busca foo.',
+		profile: makeProfile(server.port),
+		tone: null,
+		maxSteps: 3,
+		signal: new AbortController().signal,
+		offeredTools: [{ name: M365_TOOL_NAMES.searchText }],
+		endpointBase: mockBase(server.port),
+		executeTool: async () => 'a.ts:1: foo',
+		onProse: (delta) => prose.push(delta),
+		onStepStart: (step) => starts.push(step),
+		onStep: (info) => {
+			if (info.toolName) toolNames.push(info.toolName);
+		},
+	});
+	server.close();
+
+	assert.equal(result.outcome, 'done');
+	assert.equal(result.ok, true);
+	assert.equal(result.summary, 'Está en a.ts.');
+	assert.deepEqual(starts, [1, 2]);
+	assert.deepEqual(toolNames, [M365_TOOL_NAMES.searchText]);
+	// The preamble of the tool-call step streams too; the marker never does.
+	assert.equal(prose.join(''), 'Voy a buscar.\nEstá en a.ts.');
+	console.log('  ✓ runToolLoop retransmite la prosa en vivo (nunca el marcador) e informa de cada paso');
+}
+
+/** BizChat's `message.locale` follows the extension language. */
+async function testInvocationLocale() {
+	const seen: unknown[] = [];
+	const server = await startScriptedServer(
+		() => 'ok',
+		(frame) => seen.push(frame.arguments[0].message.locale),
+	);
+	for (const locale of ['en', 'es'] as const) {
+		setLocale(locale);
+		await streamCopilotTurn({
+			profile: makeProfile(server.port),
+			endpointBase: mockBase(server.port),
+			prompt: 'PROMPT',
+			tone: null,
+			signal: new AbortController().signal,
+			callbacks: { onText: () => {} },
+		});
+	}
+	server.close();
+	assert.deepEqual(seen, ['en-US', 'es-ES']);
+	console.log('  ✓ la invocación a BizChat envía locale en-US / es-ES según el idioma');
+}
+
 async function main() {
+	// The assertions below were written against the Spanish catalog (the
+	// extension's original language); the i18n tests switch locale themselves
+	// and put it back.
+	setLocale('es');
+	console.log('i18n');
+	testI18nCatalogs();
+	testManifestLocalization();
+	testPromptsFollowLocale();
 	console.log('profile.ts');
 	testProfileParsing();
 	console.log('markdown.ts');
@@ -1158,6 +1399,12 @@ async function main() {
 	await testSubagentLoopStepLimit();
 	await testSubagentLoopWallClock();
 	testClipClosesDanglingFence();
+	await testToolLoopStreamsProse();
+	console.log('participant / editor');
+	testParticipantPrompts();
+	testCommitMessageGeneration();
+	await testInvocationLocale();
+	setLocale('es');
 	console.log('\nAll tests passed.');
 }
 

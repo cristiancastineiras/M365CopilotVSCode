@@ -8,6 +8,7 @@ import {
 import { registerHandlers } from '@/utils/messaging';
 import { getStorage, patchStorage, setStorage } from '@/utils/storage';
 import { logger } from '@/utils/logger';
+import { t } from '@/utils/i18n';
 import {
   describeMinutesLeft,
   forceRefreshNow,
@@ -15,6 +16,9 @@ import {
   runRefreshCycle,
   setupTokenRefresher,
 } from '@/utils/tokenRefresher';
+
+/** `syncState.lastError` when the stored token had already expired (not sent). */
+const TOKEN_EXPIRED_SYNC_ERROR = 'token-expired';
 
 export default defineBackground(() => {
   logger.info('M365 Copilot Background Script loaded', { id: chrome.runtime.id });
@@ -49,7 +53,7 @@ export default defineBackground(() => {
 
     if (!isTokenUsable(profile)) {
       logger.warn('El token guardado ya caducó: no se envía a VS Code');
-      await patchStorage('syncState', { lastError: 'token caducado' });
+      await patchStorage('syncState', { lastError: TOKEN_EXPIRED_SYNC_ERROR });
       return false;
     }
 
@@ -151,7 +155,7 @@ export default defineBackground(() => {
       const data = await getStorage('currentProfile');
       const profile = buildProfile(data);
       if (!profile) {
-        throw new Error('No profile available');
+        throw new Error(t('error.noProfile'));
       }
       return { profile, text: JSON.stringify(profile, null, 2) };
     },
@@ -159,7 +163,7 @@ export default defineBackground(() => {
     COPY_TOKEN: async () => {
       const data = await getStorage('currentProfile');
       if (!data || !data.accessToken) {
-        throw new Error('No token available');
+        throw new Error(t('error.noToken'));
       }
       return { token: data.accessToken };
     },
@@ -167,16 +171,12 @@ export default defineBackground(() => {
     SEND_TO_VSCODE: async () => {
       const data = await getStorage('currentProfile');
       if (!buildProfile(data)) {
-        throw new Error('No profile available');
+        throw new Error(t('error.noProfile'));
       }
       const ok = await sendProfileToVSCode(data);
       if (!ok) {
         const { lastError } = await getStorage('syncState');
-        throw new Error(
-          lastError === 'token caducado'
-            ? 'El token guardado ha caducado. Pulsa «Renovar ahora».'
-            : 'VS Code no responde. ¿Está abierto con la extensión activa?',
-        );
+        throw new Error(t(lastError === TOKEN_EXPIRED_SYNC_ERROR ? 'error.tokenExpired' : 'error.vscodeUnreachable'));
       }
       return { status: 'ok' as const };
     },

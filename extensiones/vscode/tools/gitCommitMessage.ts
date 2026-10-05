@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ensureNotCancelled, errorMessage, resolveWorkspacePath } from './common';
 import { getGitInfo } from './git';
 import { getGitRepository } from './gitExtension';
+import { t } from '../src/i18n';
 
 export interface GenerateCommitMessageInput {
 	readonly workspaceFolder?: string;
@@ -38,7 +39,7 @@ export async function generateCommitMessage(
 	const hasStaged = repository.state.indexChanges.length > 0;
 	const hasUnstaged = repository.state.workingTreeChanges.length > 0;
 	if (!hasStaged && !hasUnstaged) {
-		return 'No hay ningún cambio (en stage ni en el árbol de trabajo) que commitear en este repositorio.';
+		return t('genCommit.noChanges');
 	}
 
 	const before = repository.inputBox.value;
@@ -60,23 +61,16 @@ export async function generateCommitMessage(
 		token,
 	);
 
-	const noMessageReason = generationError
-		? `error: ${generationError}`
-		: 'puede que no haya un modelo de chat disponible en este momento';
+	const noMessageReason = generationError ? t('genCommit.errorReason', generationError) : t('genCommit.noModelReason');
 	const messageSection =
 		generated && generated !== before.trim()
-			? `Mensaje generado por VS Code (queda en el cuadro de Source Control; edítalo ahí si lo cambias):\n\n${generated}`
-			: `VS Code no generó ningún mensaje ahora mismo (${noMessageReason}). Redacta tú el mensaje a partir del diff de abajo.`;
+			? t('genCommit.generated', generated)
+			: t('genCommit.notGenerated', noMessageReason);
 
 	return [
-		!hasStaged
-			? '⚠️ No hay nada en stage todavía: el diff de abajo es del árbol de trabajo (`git add` pendiente). ' +
-				'Puedes commitear igualmente con `ms365_git_commit` usando `stageAll` o `paths`.'
-			: null,
+		!hasStaged ? t('genCommit.nothingStaged', 'ms365_git_commit') : null,
 		messageSection,
-		'Antes de usarlo con ms365_git_commit, comprueba que la primera línea sigue Conventional Commits: ' +
-			'"tipo(ámbito opcional): resumen en imperativo" (tipos habituales: feat, fix, docs, style, refactor, ' +
-			'perf, test, build, ci, chore, revert), sin punto final.',
+		t('genCommit.checkConventional', 'ms365_git_commit'),
 		diff,
 	]
 		.filter((line): line is string => line !== null)
@@ -86,7 +80,7 @@ export async function generateCommitMessage(
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 	return new Promise((resolve, reject) => {
 		const timer = setTimeout(
-			() => reject(new Error(`git.generateCommitMessage no respondió en ${Math.round(ms / 1000)}s`)),
+			() => reject(new Error(t('genCommit.timeout', Math.round(ms / 1000)))),
 			ms,
 		);
 		promise.then(

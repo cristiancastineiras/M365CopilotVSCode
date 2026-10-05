@@ -19,6 +19,7 @@
  *    pestaña que re-escanee la caché de MSAL (la web renueva su propio token
  *    sola) → recargar la pestaña → abrir una en segundo plano.
  */
+import { M365_CHAT_URL } from '@ms365copilot/core';
 import { logger } from './logger';
 import {
   getStorage,
@@ -42,7 +43,6 @@ const ALARM_NAME = 'ms365copilot-token-refresh';
 const ALARM_PERIOD_MINUTES = 1;
 
 /** Dónde vive el chat; es la pestaña que sabemos que emite el token de Sydney. */
-const M365_CHAT_URL = 'https://m365.cloud.microsoft/chat/';
 const M365_TAB_PATTERNS = ['https://m365.cloud.microsoft/*', 'https://*.cloud.microsoft/*'];
 
 /** El background inyecta aquí su envío a VS Code, para no crear un ciclo de imports. */

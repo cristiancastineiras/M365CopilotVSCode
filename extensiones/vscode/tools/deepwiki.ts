@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ensureNotCancelled, errorMessage } from './common';
+import { t } from '../src/i18n';
 
 /**
  * Sustituto de "web search" para BizChat.
@@ -48,9 +49,7 @@ export async function searchDeepWiki(
 ): Promise<string> {
 	const repo = typeof input.repo === 'string' ? input.repo.trim() : '';
 	if (!repo || !REPO_RE.test(repo)) {
-		throw new Error(
-			'repo debe tener el formato "owner/nombre" de un repositorio PÚBLICO de GitHub (ej. "microsoft/vscode").',
-		);
+		throw new Error(t('deepwiki.badRepo'));
 	}
 	const action = normalizeAction(input.action);
 
@@ -58,7 +57,7 @@ export async function searchDeepWiki(
 	let args: Record<string, unknown>;
 	if (action === 'ask') {
 		const question = typeof input.question === 'string' ? input.question.trim() : '';
-		if (!question) throw new Error('question es obligatorio cuando action="ask".');
+		if (!question) throw new Error(t('deepwiki.noQuestion'));
 		toolName = 'ask_question';
 		args = { repoName: repo, question };
 	} else if (action === 'structure') {
@@ -71,11 +70,11 @@ export async function searchDeepWiki(
 
 	ensureNotCancelled(token);
 	const text = await callDeepWiki(toolName, args, token);
-	if (!text.trim()) return `DeepWiki (${repo}, ${action}): sin resultado.`;
+	if (!text.trim()) return t('deepwiki.empty', repo, action);
 
 	const trimmed = text.trim();
 	const truncated =
-		trimmed.length > MAX_OUTPUT_CHARS ? `${trimmed.slice(0, MAX_OUTPUT_CHARS)}\n... (salida truncada)` : trimmed;
+		trimmed.length > MAX_OUTPUT_CHARS ? `${trimmed.slice(0, MAX_OUTPUT_CHARS)}\n${t('git.truncated')}` : trimmed;
 	return `DeepWiki (${repo}, ${action}):\n${truncated}`;
 }
 
@@ -111,20 +110,18 @@ async function callDeepWiki(
 		} catch (error) {
 			if (controller.signal.aborted) {
 				throw new Error(
-					token.isCancellationRequested
-						? 'La operación fue cancelada.'
-						: `DeepWiki no respondió en ${DEEPWIKI_TIMEOUT_MS / 1000}s.`,
+					token.isCancellationRequested ? t('ws.cancelled') : t('deepwiki.timeout', DEEPWIKI_TIMEOUT_MS / 1000),
 				);
 			}
-			throw new Error(`No se pudo contactar con DeepWiki: ${errorMessage(error)}`);
+			throw new Error(t('deepwiki.unreachable', errorMessage(error)));
 		}
 		if (!response.ok) {
-			throw new Error(`DeepWiki devolvió HTTP ${response.status} ${response.statusText}.`.trimEnd());
+			throw new Error(t('deepwiki.http', `${response.status} ${response.statusText}`.trimEnd()));
 		}
 
 		const body = await response.text();
 		const message = findJsonRpcResponse(body, id);
-		if (!message) throw new Error('DeepWiki no devolvió una respuesta reconocible.');
+		if (!message) throw new Error(t('deepwiki.unrecognised'));
 		if (message.error) {
 			throw new Error(`DeepWiki: ${message.error.message ?? JSON.stringify(message.error)}`);
 		}
@@ -184,7 +181,7 @@ function extractResultText(result: unknown): string {
 	const text = parts.join('\n').trim() || (typeof record.structuredContent?.result === 'string' ? record.structuredContent.result.trim() : '');
 
 	if (record.isError) {
-		throw new Error(text || 'DeepWiki devolvió un error sin detalles.');
+		throw new Error(text || t('deepwiki.errorNoDetails'));
 	}
 	return text;
 }

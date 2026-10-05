@@ -14,76 +14,73 @@ import {
 } from '../tools/terminal';
 import { errorMessage } from '../tools/common';
 import { M365_TOOL_NAMES } from './toolProtocol';
+import { t } from './i18n';
 
 export function registerM365WorkspaceTools(manager: WorkspaceEditManager): vscode.Disposable[] {
 	return [
 		registerTerminalCleanup(),
 		vscode.lm.registerTool<ListFilesInput>(M365_TOOL_NAMES.listFiles, {
 			prepareInvocation: (options) => ({
-				invocationMessage: `Listando ${options.input.path || 'el workspace'}...`,
+				invocationMessage: t('tool.listing', options.input.path || t('tool.listing.workspace')),
 			}),
 			invoke: (options, token) => toolResult(() => listWorkspaceFiles(options.input, token)),
 		}),
 		vscode.lm.registerTool<SearchTextInput>(M365_TOOL_NAMES.searchText, {
 			prepareInvocation: (options) => ({
-				invocationMessage: `Buscando «${options.input.query}»...`,
+				invocationMessage: t('tool.searching', options.input.query),
 			}),
 			invoke: (options, token) => toolResult(() => searchWorkspaceText(options.input, token)),
 		}),
 		vscode.lm.registerTool<ReadFileInput>(M365_TOOL_NAMES.readFile, {
 			prepareInvocation: (options) => ({
-				invocationMessage: `Leyendo ${options.input.path}...`,
+				invocationMessage: t('tool.reading', options.input.path),
 			}),
 			invoke: (options, token) => toolResult(() => readWorkspaceFile(options.input, token)),
 		}),
 		vscode.lm.registerTool<ApplyWorkspaceEditsInput>(M365_TOOL_NAMES.applyWorkspaceEdits, {
 			prepareInvocation: (options) => ({
-				invocationMessage: `Preparando ${Array.isArray(options.input.edits) ? options.input.edits.length : 0} edición(es)...`,
+				invocationMessage: t('tool.preparingEdits', Array.isArray(options.input.edits) ? options.input.edits.length : 0),
 				confirmationMessages: {
-					title: 'Aplicar cambios de M365 Copilot',
-					message:
-						'Los cambios se aplicarán en el editor, resaltados y SIN guardar en disco. ' +
-						'Encima de cada cambio tendrás «Keep» para aceptarlo y «Undo» para revertirlo, además del diff.',
+					title: t('tool.edits.confirmTitle'),
+					message: t('tool.edits.confirmMessage'),
 				},
 			}),
 			invoke: (options, token) => toolResult(() => manager.stageEdits(options.input, token)),
 		}),
 		vscode.lm.registerTool<GetDiagnosticsInput>(M365_TOOL_NAMES.getDiagnostics, {
 			prepareInvocation: (options) => ({
-				invocationMessage: `Leyendo diagnósticos${options.input.path ? ` de ${options.input.path}` : ' del workspace'}...`,
+				invocationMessage: options.input.path
+					? t('tool.diagnostics.file', options.input.path)
+					: t('tool.diagnostics.workspace'),
 			}),
 			invoke: (options, token) => toolResult(() => getWorkspaceDiagnostics(options.input, token)),
 		}),
 		vscode.lm.registerTool<GitInfoInput>(M365_TOOL_NAMES.gitInfo, {
 			prepareInvocation: (options) => ({
-				invocationMessage: `Consultando git ${options.input.action ?? ''}...`,
+				invocationMessage: t('tool.git', options.input.action ?? ''),
 			}),
 			invoke: (options, token) => toolResult(() => getGitInfo(options.input, token)),
 		}),
 		vscode.lm.registerTool<GenerateCommitMessageInput>(M365_TOOL_NAMES.generateCommitMessage, {
 			prepareInvocation: () => ({
-				invocationMessage: 'Generando mensaje de commit con la función nativa de VS Code...',
+				invocationMessage: t('tool.generatingCommit'),
 			}),
 			invoke: (options, token) => toolResult(() => generateCommitMessage(options.input, token)),
 		}),
 		vscode.lm.registerTool<GitCommitInput>(M365_TOOL_NAMES.gitCommit, {
 			prepareInvocation: (options) => {
 				const message = typeof options.input.message === 'string' ? options.input.message : '';
-				const subject = message.split('\n', 1)[0] || '(sin mensaje)';
+				const subject = message.split('\n', 1)[0] || t('tool.commit.noMessage');
 				const staging = options.input.stageAll
-					? '**Se hará `git add -A`** (todos los cambios) antes de commitear.'
+					? t('tool.commit.stageAll')
 					: Array.isArray(options.input.paths) && options.input.paths.length > 0
-						? `**Se hará \`git add\`** de: ${options.input.paths.join(', ')}.`
-						: 'Se commiteará lo que ya esté en stage (no se añade nada nuevo).';
+						? t('tool.commit.stagePaths', options.input.paths.join(', '))
+						: t('tool.commit.stageNone');
 				return {
-					invocationMessage: `Creando commit: ${subject}`,
+					invocationMessage: t('tool.commit.invocation', subject),
 					confirmationMessages: {
-						title: 'Crear commit de M365 Copilot',
-						message: new vscode.MarkdownString(
-							'M365 Copilot quiere crear un commit con este mensaje:\n\n' +
-								`\`\`\`\n${message}\n\`\`\`\n\n${staging}\n\n` +
-								'Esto crea un commit real en el historial del repositorio.',
-						),
+						title: t('tool.commit.confirmTitle'),
+						message: new vscode.MarkdownString(t('tool.commit.confirmMessage', message, staging)),
 					},
 				};
 			},
@@ -92,19 +89,12 @@ export function registerM365WorkspaceTools(manager: WorkspaceEditManager): vscod
 		vscode.lm.registerTool<RunCommandInput>(M365_TOOL_NAMES.runCommand, {
 			prepareInvocation: (options) => {
 				const command = typeof options.input.command === 'string' ? options.input.command : '';
-				const warning = looksRisky(command)
-					? '\n\n⚠️ **Este comando coincide con un patrón potencialmente destructivo** (borrado masivo, push forzado, formateo del disco...). Revísalo con cuidado antes de continuar.'
-					: '';
+				const warning = looksRisky(command) ? t('tool.run.risky') : '';
 				return {
-					invocationMessage: `Ejecutando: ${command}`,
+					invocationMessage: t('tool.run.invocation', command),
 					confirmationMessages: {
-						title: 'Ejecutar comando de M365 Copilot',
-						message: new vscode.MarkdownString(
-							'M365 Copilot quiere ejecutar este comando en tu workspace:\n\n' +
-								`\`\`\`\n${command}\n\`\`\`\n\n` +
-								'Se ejecuta con tus propios permisos de usuario y su salida (stdout/stderr) se envía al modelo en la nube.' +
-								warning,
-						),
+						title: t('tool.run.confirmTitle'),
+						message: new vscode.MarkdownString(t('tool.run.confirmMessage', command, warning)),
 					},
 				};
 			},
@@ -118,7 +108,7 @@ async function toolResult(run: () => Promise<string>): Promise<vscode.LanguageMo
 		return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(await run())]);
 	} catch (error) {
 		return new vscode.LanguageModelToolResult([
-			new vscode.LanguageModelTextPart(`Error de herramienta: ${errorMessage(error)}`),
+			new vscode.LanguageModelTextPart(t('tool.error', errorMessage(error))),
 		]);
 	}
 }

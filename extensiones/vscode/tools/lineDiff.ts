@@ -11,6 +11,7 @@
  *
  * Kept free of the `vscode` import so it can be exercised directly.
  */
+import { t } from '../src/i18n';
 
 export interface ChangedRegion {
 	/** 0-based first changed line in the new text, inclusive. */
@@ -54,12 +55,12 @@ export function changedRegion(before: string, after: string): ChangedRegion | nu
 
 /** A one-line summary of the size of a change, for the review affordances. */
 export function describeChange(before: string | undefined, after: string | undefined): string {
-	if (before === undefined) return 'archivo nuevo';
-	if (after === undefined) return 'archivo borrado';
+	if (before === undefined) return t('diff.newFile');
+	if (after === undefined) return t('diff.deletedFile');
 	const oldCount = splitLines(before).length;
 	const newCount = splitLines(after).length;
 	const delta = newCount - oldCount;
-	if (delta > 0) return `+${delta} línea(s)`;
-	if (delta < 0) return `${delta} línea(s)`;
-	return 'modificado';
+	if (delta > 0) return t('diff.addedLines', delta);
+	if (delta < 0) return t('diff.removedLines', delta);
+	return t('diff.modified');
 }

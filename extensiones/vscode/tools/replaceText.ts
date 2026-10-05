@@ -1,6 +1,8 @@
+import { t } from '../src/i18n';
+
 export function requireText(value: unknown, fieldName: string, allowEmpty = true): string {
-	if (typeof value !== 'string') throw new Error(`${fieldName} debe ser texto.`);
-	if (!allowEmpty && !value) throw new Error(`${fieldName} no puede estar vacío.`);
+	if (typeof value !== 'string') throw new Error(t('edit.text.notString', fieldName));
+	if (!allowEmpty && !value) throw new Error(t('edit.text.empty', fieldName));
 	return value;
 }
 
@@ -38,7 +40,7 @@ export function replaceTextOnce(
 		return `${content.slice(0, direct.index)}${newText}${content.slice(direct.index + oldText.length)}`;
 	}
 	if (direct.kind === 'multiple') {
-		throw new Error(`oldText aparece más de una vez en ${relativePath}. Incluye más contexto para que sea único.`);
+		throw new Error(t('edit.oldText.multiple', relativePath));
 	}
 
 	if (content.includes('\r\n')) {
@@ -54,9 +56,9 @@ export function replaceTextOnce(
 			return merged.replace(/\n/g, '\r\n');
 		}
 		if (viaLf.kind === 'multiple') {
-			throw new Error(`oldText aparece más de una vez en ${relativePath}. Incluye más contexto para que sea único.`);
+			throw new Error(t('edit.oldText.multiple', relativePath));
 		}
 	}
 
-	throw new Error(`oldText no coincide con el contenido actual de ${relativePath}. Vuelve a leer el archivo.`);
+	throw new Error(t('edit.oldText.noMatch', relativePath));
 }

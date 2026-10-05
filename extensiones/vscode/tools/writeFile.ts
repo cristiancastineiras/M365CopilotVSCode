@@ -9,6 +9,7 @@ import {
 import { replaceTextOnce, requireText } from './replaceText';
 import { createContentOf, replaceNewTextOf } from './editFields';
 import { changedRegion, describeChange } from './lineDiff';
+import { t } from '../src/i18n';
 
 const PREVIEW_SCHEME = 'ms365copilot-edit-preview';
 const MAX_EDIT_COUNT = 20;
@@ -76,6 +77,10 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 	private readonly codeLensChanged = new vscode.EventEmitter<void>();
 	readonly onDidChangeCodeLenses = this.codeLensChanged.event;
 
+	private readonly pendingChanged = new vscode.EventEmitter<number>();
+	/** Fires with the new count whenever the set of files awaiting Keep/Undo changes. */
+	readonly onDidChangePending = this.pendingChanged.event;
+
 	private readonly status: vscode.StatusBarItem;
 	private readonly disposables: vscode.Disposable[] = [];
 
@@ -88,8 +93,21 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 			// Decorations live on editors, not documents: re-apply whenever the
 			// set of visible editors changes (split, tab switch, reopen).
 			vscode.window.onDidChangeVisibleTextEditors(() => this.refreshDecorations()),
+			// Drives the Keep/Undo/Diff buttons in the editor title bar.
+			vscode.window.onDidChangeActiveTextEditor(() => this.updateActiveEditorContext()),
 		);
 		this.renderStatus();
+	}
+
+	/** How many files are waiting for Keep/Undo. */
+	get pendingCount(): number {
+		return this.pending.size;
+	}
+
+	/** Re-render the lenses and the status item after a language change. */
+	refreshLocale(): void {
+		this.renderStatus();
+		this.codeLensChanged.fire();
 	}
 
 	// ------------------------------------------------------------- tool entry
@@ -110,11 +128,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 		const summary = files
 			.map((file) => `${file.relativePath} (${describeChange(file.before, file.after)})`)
 			.join(', ');
-		return (
-			`Cambios aplicados en el editor y pendientes de revisión del usuario: ${summary}. ` +
-			'El usuario los verá resaltados con las acciones «Keep» y «Undo» encima del cambio. ' +
-			'No están guardados en disco todavía y el usuario puede revertirlos, así que no des por hecho que son definitivos.'
-		);
+		return t('edit.summary', summary);
 	}
 
 	// ------------------------------------------------------------- planning
@@ -124,10 +138,10 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 		token: vscode.CancellationToken,
 	): Promise<PendingFile[]> {
 		if (!Array.isArray(input.edits) || input.edits.length === 0) {
-			throw new Error('edits debe contener al menos una edición.');
+			throw new Error(t('edit.noEdits'));
 		}
 		if (input.edits.length > MAX_EDIT_COUNT) {
-			throw new Error(`El lote no puede superar ${MAX_EDIT_COUNT} ediciones.`);
+			throw new Error(t('edit.tooMany', MAX_EDIT_COUNT));
 		}
 
 		const byUri = new Map<string, { file: PendingFile; after: string | undefined }>();
@@ -142,20 +156,18 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 				// Collect instead of failing fast: a 16-file batch used to be thrown
 				// away over a single bad field, and the model then had to regenerate
 				// everything just to hit the NEXT problem on the retry.
-				errors.push(`Edición #${index}: ${errorMessage(error)}`);
+				errors.push(t('edit.itemError', index, errorMessage(error)));
 			}
 		}
 
 		if (errors.length > 0) {
-			throw new Error(
-				`${errors.length} de ${input.edits.length} edición(es) no son válidas; no se ha aplicado ninguna:\n${errors.join('\n')}`,
-			);
+			throw new Error(t('edit.invalidBatch', errors.length, input.edits.length, errors.join('\n')));
 		}
 
 		const files = [...byUri.values()]
 			.filter((entry) => entry.file.before !== entry.after)
 			.map((entry) => ({ ...entry.file, after: entry.after }));
-		if (files.length === 0) throw new Error('La propuesta no produce ningún cambio.');
+		if (files.length === 0) throw new Error(t('edit.noChange'));
 		return files;
 	}
 
@@ -163,7 +175,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 		rawEdit: unknown,
 		byUri: Map<string, { file: PendingFile; after: string | undefined }>,
 	): Promise<void> {
-		if (!isRecord(rawEdit)) throw new Error('Cada edición debe ser un objeto.');
+		if (!isRecord(rawEdit)) throw new Error(t('edit.notObject'));
 		const target = resolveWorkspacePath(rawEdit.path, rawEdit.workspaceFolder);
 		const key = target.uri.toString();
 		let entry = byUri.get(key);
@@ -185,7 +197,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 		switch (operation) {
 			case 'replace': {
 				if (entry.after === undefined) {
-					throw new Error(`No se puede reemplazar ${target.relativePath} porque no existe.`);
+					throw new Error(t('edit.replaceMissing', target.relativePath));
 				}
 				const oldText = requireText(rawEdit.oldText, 'oldText', false);
 				const newText = requireText(replaceNewTextOf(rawEdit), 'newText');
@@ -196,7 +208,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 			}
 			case 'create': {
 				if (entry.after !== undefined) {
-					throw new Error(`${target.relativePath} ya existe; usa replace para modificarlo.`);
+					throw new Error(t('edit.createExists', target.relativePath));
 				}
 				const content = requireText(createContentOf(rawEdit), 'content');
 				assertEditTextSize(content, 'content');
@@ -205,12 +217,12 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 			}
 			case 'delete':
 				if (entry.after === undefined) {
-					throw new Error(`No se puede borrar ${target.relativePath} porque no existe.`);
+					throw new Error(t('edit.deleteMissing', target.relativePath));
 				}
 				entry.after = undefined;
 				break;
 			default:
-				throw new Error('operation debe ser replace, create o delete.');
+				throw new Error(t('edit.invalidOperation'));
 		}
 	}
 
@@ -219,7 +231,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 	private async applyToEditor(files: readonly PendingFile[]): Promise<void> {
 		const edit = new vscode.WorkspaceEdit();
 		for (const file of files) {
-			this.previews.set(this.previewUri(file, 'antes'), file.before ?? '');
+			this.previews.set(this.previewUri(file, 'before'), file.before ?? '');
 			if (file.before === undefined) {
 				if (file.after === undefined) continue;
 				edit.createFile(file.uri, { overwrite: false, ignoreIfExists: true });
@@ -231,7 +243,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 			}
 		}
 		if (!(await vscode.workspace.applyEdit(edit))) {
-			throw new Error('VS Code no pudo aplicar los cambios.');
+			throw new Error(t('edit.applyFailed'));
 		}
 	}
 
@@ -274,10 +286,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 		this.refreshDecorations();
 		this.renderStatus();
 		this.codeLensChanged.fire();
-		void vscode.window.setStatusBarMessage(
-			`M365 Copilot: ${files.length} archivo(s) aceptados. Sin guardar todavía — Ctrl+S para escribirlos.`,
-			5000,
-		);
+		void vscode.window.setStatusBarMessage(t('edit.kept', files.length), 5000);
 	}
 
 	async undo(uri?: vscode.Uri): Promise<void> {
@@ -285,9 +294,9 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 		if (files.length === 0) return;
 		try {
 			await this.revert(files);
-			void vscode.window.setStatusBarMessage(`M365 Copilot: ${files.length} archivo(s) revertidos.`, 5000);
+			void vscode.window.setStatusBarMessage(t('edit.reverted', files.length), 5000);
 		} catch (error) {
-			void vscode.window.showErrorMessage(`M365 Copilot: no se pudo revertir: ${errorMessage(error)}`);
+			void vscode.window.showErrorMessage(t('edit.revertFailed', errorMessage(error)));
 		}
 		this.refreshDecorations();
 		this.renderStatus();
@@ -297,18 +306,16 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 	/** Revert a batch the user already kept — the "me arrepentí" path. */
 	async undoLastBatch(): Promise<void> {
 		if (this.lastKept.length === 0) {
-			void vscode.window.showInformationMessage('M365 Copilot: no hay un lote de cambios para deshacer.');
+			void vscode.window.showInformationMessage(t('edit.noBatch'));
 			return;
 		}
 		const files = this.lastKept;
 		this.lastKept = [];
 		try {
 			await this.revert(files);
-			void vscode.window.showInformationMessage(
-				`M365 Copilot: se deshizo el lote de ${files.length} archivo(s).`,
-			);
+			void vscode.window.showInformationMessage(t('edit.batchUndone', files.length));
 		} catch (error) {
-			void vscode.window.showErrorMessage(`M365 Copilot: no se pudo deshacer el lote: ${errorMessage(error)}`);
+			void vscode.window.showErrorMessage(t('edit.batchUndoFailed', errorMessage(error)));
 		}
 	}
 
@@ -325,7 +332,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 			}
 		}
 		if (!(await vscode.workspace.applyEdit(edit))) {
-			throw new Error('VS Code no pudo restaurar el contenido anterior.');
+			throw new Error(t('edit.restoreFailed'));
 		}
 	}
 
@@ -347,24 +354,24 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 	async showDiff(uri?: vscode.Uri): Promise<void> {
 		const file = uri ? this.pending.get(uri.toString()) : [...this.pending.values()][0];
 		if (!file) {
-			void vscode.window.showInformationMessage('M365 Copilot: no hay cambios de agente pendientes.');
+			void vscode.window.showInformationMessage(t('edit.nonePending'));
 			return;
 		}
-		const beforeUri = this.previewUri(file, 'antes');
+		const beforeUri = this.previewUri(file, 'before');
 		this.previews.set(beforeUri, file.before ?? '');
 		// Right-hand side is the real document, so the diff is live and
 		// editable — except for a deletion, where there is no document left to
 		// point at and an empty virtual one shows the removal properly.
 		let rightUri = file.uri;
 		if (file.after === undefined) {
-			rightUri = this.previewUri(file, 'borrado');
+			rightUri = this.previewUri(file, 'deleted');
 			this.previews.set(rightUri, '');
 		}
 		await vscode.commands.executeCommand(
 			'vscode.diff',
 			beforeUri,
 			rightUri,
-			`${file.relativePath}: antes ↔ propuesta de M365 Copilot`,
+			t('edit.diffTitle', file.relativePath),
 			{ preview: true },
 		);
 	}
@@ -373,7 +380,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 	async reviewPendingEdits(): Promise<void> {
 		const files = [...this.pending.values()];
 		if (files.length === 0) {
-			void vscode.window.showInformationMessage('M365 Copilot: no hay cambios de agente pendientes.');
+			void vscode.window.showInformationMessage(t('edit.nonePending'));
 			return;
 		}
 		if (files.length === 1) {
@@ -386,7 +393,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 				description: describeChange(file.before, file.after),
 				uri: file.uri,
 			})),
-			{ title: 'Cambios de M365 Copilot pendientes', placeHolder: 'Elige un archivo para ver el diff' },
+			{ title: t('edit.review.title'), placeHolder: t('edit.review.placeholder') },
 		);
 		if (picked) await this.showDiff(picked.uri);
 	}
@@ -425,20 +432,20 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 		const args = [file.uri];
 		return [
 			new vscode.CodeLens(range, {
-				title: `$(check) Keep (${describeChange(file.before, file.after)})`,
-				tooltip: 'Aceptar este cambio de M365 Copilot',
+				title: t('edit.lens.keep', describeChange(file.before, file.after)),
+				tooltip: t('edit.lens.keepTooltip'),
 				command: 'ms365copilot.keepEdits',
 				arguments: args,
 			}),
 			new vscode.CodeLens(range, {
-				title: '$(discard) Undo',
-				tooltip: 'Revertir este cambio y restaurar el contenido anterior',
+				title: t('edit.lens.undo'),
+				tooltip: t('edit.lens.undoTooltip'),
 				command: 'ms365copilot.undoEdits',
 				arguments: args,
 			}),
 			new vscode.CodeLens(range, {
-				title: '$(diff) Ver diff',
-				tooltip: 'Comparar con el contenido anterior',
+				title: t('edit.lens.diff'),
+				tooltip: t('edit.lens.diffTooltip'),
 				command: 'ms365copilot.showEditDiff',
 				arguments: args,
 			}),
@@ -449,23 +456,33 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 
 	private renderStatus(): void {
 		const count = this.pending.size;
+		void vscode.commands.executeCommand('setContext', 'ms365copilot.hasPendingEdits', count > 0);
+		this.updateActiveEditorContext();
+		this.pendingChanged.fire(count);
 		if (count === 0) {
 			this.status.hide();
 			return;
 		}
-		this.status.text = `$(edit) M365: ${count} cambio(s) sin revisar`;
-		this.status.tooltip = 'Cambios de M365 Copilot pendientes de Keep/Undo. Clic para revisarlos.';
+		this.status.text = t('edit.status.text', count);
+		this.status.tooltip = t('edit.status.tooltip');
 		this.status.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
 		this.status.show();
 	}
 
-	private previewUri(file: PendingFile, side: 'antes' | 'borrado'): vscode.Uri {
+	private updateActiveEditorContext(): void {
+		const active = vscode.window.activeTextEditor?.document.uri.toString();
+		const pendingHere = active !== undefined && this.pending.has(active);
+		void vscode.commands.executeCommand('setContext', 'ms365copilot.activeEditorHasPendingEdits', pendingHere);
+	}
+
+	private previewUri(file: PendingFile, side: 'before' | 'deleted'): vscode.Uri {
 		return vscode.Uri.from({ scheme: PREVIEW_SCHEME, path: `/${side}/${file.relativePath}` });
 	}
 
 	dispose(): void {
 		this.changedLines.dispose();
 		this.codeLensChanged.dispose();
+		this.pendingChanged.dispose();
 		this.status.dispose();
 		this.previews.dispose();
 		for (const disposable of this.disposables) disposable.dispose();
@@ -480,6 +497,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function assertEditTextSize(value: string, name: string): void {
 	if (value.length > MAX_EDIT_TEXT_CHARS) {
-		throw new Error(`${name} supera el límite de ${MAX_EDIT_TEXT_CHARS} caracteres.`);
+		throw new Error(t('edit.tooLarge', name, MAX_EDIT_TEXT_CHARS));
 	}
 }

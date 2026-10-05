@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { t } from '@/utils/i18n';
 
 interface Props {
   children: ReactNode;
@@ -26,7 +27,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         this.props.fallback ?? (
           <div style={{ padding: 16, color: '#b91c1c' }}>
-            <h2>Algo salió mal</h2>
+            <h2>{t('error.title')}</h2>
             <p style={{ fontSize: 12 }}>{this.state.message}</p>
           </div>
         )

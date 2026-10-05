@@ -2,6 +2,7 @@ import { exec, type ExecException } from 'node:child_process';
 import * as vscode from 'vscode';
 import { boundedInteger, ensureNotCancelled, resolveWorkspacePath } from './common';
 import { cleanTerminalOutput, truncateOutput } from './terminalOutput';
+import { t } from '../src/i18n';
 
 export { looksRisky } from './commandSafety';
 
@@ -50,10 +51,8 @@ export async function runWorkspaceCommand(
 	token: vscode.CancellationToken,
 ): Promise<string> {
 	const command = typeof input.command === 'string' ? input.command.trim() : '';
-	if (!command) throw new Error('command no puede estar vacío.');
-	if (command.length > MAX_COMMAND_CHARS) {
-		throw new Error(`command supera el límite de ${MAX_COMMAND_CHARS} caracteres.`);
-	}
+	if (!command) throw new Error(t('run.empty'));
+	if (command.length > MAX_COMMAND_CHARS) throw new Error(t('run.tooLong', MAX_COMMAND_CHARS));
 
 	const target = resolveWorkspacePath(input.cwd ?? '', input.workspaceFolder, { allowEmpty: true });
 	const timeoutSeconds = boundedInteger(input.timeoutSeconds, DEFAULT_TIMEOUT_SECONDS, 1, MAX_TIMEOUT_SECONDS);
@@ -63,16 +62,13 @@ export async function runWorkspaceCommand(
 		(await runInIntegratedTerminal(command, target.uri, timeoutSeconds * 1000, token)) ??
 		(await runHeadless(command, target.uri.fsPath, timeoutSeconds * 1000, token));
 
-	const body = truncateOutput(result.output, MAX_OUTPUT_CHARS) || '(sin salida)';
+	const body = truncateOutput(result.output, MAX_OUTPUT_CHARS) || t('run.noOutput');
 	const status = result.timedOut
-		? `Cancelado por timeout (${timeoutSeconds}s).`
+		? t('run.timedOut', timeoutSeconds)
 		: result.exitCode === null
-			? 'Proceso terminado sin código de salida (cancelado).'
-			: `Código de salida: ${result.exitCode}.`;
-	const where =
-		result.channel === 'terminal'
-			? `Ejecutado en el terminal «${TERMINAL_NAME}» de VS Code.`
-			: 'Ejecutado en segundo plano (la shell integration de VS Code no estaba disponible).';
+			? t('run.noExitCode')
+			: t('run.exitCode', result.exitCode);
+	const where = result.channel === 'terminal' ? t('run.inTerminal', TERMINAL_NAME) : t('run.headless');
 
 	return [`$ ${command}`, `(cwd: ${target.relativePath || '.'})`, '```text', body, '```', status, where].join('\n');
 }

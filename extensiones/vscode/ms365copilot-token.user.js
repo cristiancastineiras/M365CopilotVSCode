@@ -1,8 +1,10 @@
 // ==UserScript==
-// @name         M365 Copilot — Copiar perfil / token
+// @name         M365 Copilot — Copy profile / token
+// @name:es      M365 Copilot — Copiar perfil / token
 // @namespace    https://github.com/local/ms365-vscode
-// @version      1.2.0
-// @description  Captura el token de acceso (aud: substrate.office.com/sydney), el endpoint WebSocket real y la plantilla de invocación de Microsoft 365 Copilot, y los copia al portapapeles para pegarlos en la extensión de VS Code.
+// @version      1.3.0
+// @description  Captures the Microsoft 365 Copilot access token (aud: substrate.office.com/sydney), the real WebSocket endpoint and the invocation template, and copies them to the clipboard to paste into the VS Code extension.
+// @description:es Captura el token de acceso (aud: substrate.office.com/sydney), el endpoint WebSocket real y la plantilla de invocación de Microsoft 365 Copilot, y los copia al portapapeles para pegarlos en la extensión de VS Code.
 // @author       Cristian Castineiras
 // @run-at       document-start
 // @match        https://m365.cloud.microsoft/*
@@ -40,6 +42,43 @@
   'use strict';
 
   const STORE_KEY = 'ms365copilot.capture.v1';
+
+  // ---------------------------------------------------------------- idioma
+
+  /** Textos del panel: español si el navegador está en español, inglés si no. */
+  const TEXTS = {
+    en: {
+      hide: 'Hide',
+      tokenNone: 'Token: not captured',
+      tokenOk: 'Token: ok',
+      expired: 'expired',
+      endpointNone: 'Endpoint: not captured',
+      endpointOk: 'Endpoint: captured',
+      frameNone: 'Template: not captured',
+      frameOk: 'Template: captured',
+      copyProfile: 'Copy full profile',
+      copyToken: 'Copy token only',
+      copied: 'Copied!',
+      hintCapture: 'Send a message in the chat to capture everything.',
+      hintReady: 'Ready. Paste it in VS Code: “M365 Copilot: Paste profile or token”.',
+    },
+    es: {
+      hide: 'Ocultar',
+      tokenNone: 'Token: sin capturar',
+      tokenOk: 'Token: ok',
+      expired: 'caducado',
+      endpointNone: 'Endpoint: sin capturar',
+      endpointOk: 'Endpoint: capturado',
+      frameNone: 'Plantilla: sin capturar',
+      frameOk: 'Plantilla: capturada',
+      copyProfile: 'Copiar perfil completo',
+      copyToken: 'Copiar sólo el token',
+      copied: '¡Copiado!',
+      hintCapture: 'Envía un mensaje en el chat para capturarlo todo.',
+      hintReady: 'Listo. Pégalo en VS Code: «M365 Copilot: Pegar perfil o token».',
+    },
+  };
+  const T = /^es\b/i.test(navigator.language || '') ? TEXTS.es : TEXTS.en;
   const PAGE = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
   const IS_TOP = (() => {
     try {
@@ -393,15 +432,20 @@
 
     const panel = document.createElement('div');
     panel.className = 'panel';
+    // Estructura fija y textos asignados con textContent: ninguno de los textos
+    // llega a interpretarse como HTML.
     panel.innerHTML = [
-      '<div class="title"><span>M365 Copilot → VS Code</span><button class="close" title="Ocultar">✕</button></div>',
-      '<div class="row"><span class="dot no" data-dot="token"></span><span data-label="token">Token: sin capturar</span></div>',
-      '<div class="row"><span class="dot no" data-dot="endpoint"></span><span data-label="endpoint">Endpoint: sin capturar</span></div>',
-      '<div class="row"><span class="dot no" data-dot="frame"></span><span data-label="frame">Plantilla: sin capturar</span></div>',
-      '<button class="act" data-action="profile" disabled>Copiar perfil completo</button>',
-      '<button class="act ghost" data-action="token" disabled>Copiar sólo el token</button>',
-      '<div class="hint" data-hint>Envía un mensaje en el chat para capturarlo todo.</div>',
+      '<div class="title"><span>M365 Copilot → VS Code</span><button class="close">✕</button></div>',
+      '<div class="row"><span class="dot no" data-dot="token"></span><span data-label="token"></span></div>',
+      '<div class="row"><span class="dot no" data-dot="endpoint"></span><span data-label="endpoint"></span></div>',
+      '<div class="row"><span class="dot no" data-dot="frame"></span><span data-label="frame"></span></div>',
+      '<button class="act" data-action="profile" disabled></button>',
+      '<button class="act ghost" data-action="token" disabled></button>',
+      '<div class="hint" data-hint></div>',
     ].join('');
+    panel.querySelector('.close').title = T.hide;
+    panel.querySelector('[data-action="profile"]').textContent = T.copyProfile;
+    panel.querySelector('[data-action="token"]').textContent = T.copyToken;
 
     root.appendChild(style);
     root.appendChild(panel);
@@ -425,18 +469,15 @@
         'token',
         hasToken,
         hasToken
-          ? 'Token: ok' + (left === null ? '' : left > 0 ? ' (' + left + ' min)' : ' (caducado)')
-          : 'Token: sin capturar',
+          ? T.tokenOk + (left === null ? '' : left > 0 ? ' (' + left + ' min)' : ' (' + T.expired + ')')
+          : T.tokenNone,
       );
-      set('endpoint', hasEndpoint, hasEndpoint ? 'Endpoint: capturado' : 'Endpoint: sin capturar');
-      set('frame', hasFrame, hasFrame ? 'Plantilla: capturada' : 'Plantilla: sin capturar');
+      set('endpoint', hasEndpoint, hasEndpoint ? T.endpointOk : T.endpointNone);
+      set('frame', hasFrame, hasFrame ? T.frameOk : T.frameNone);
 
       q('[data-action="profile"]').disabled = !hasToken;
       q('[data-action="token"]').disabled = !hasToken;
-      q('[data-hint]').textContent =
-        hasEndpoint && hasFrame
-          ? 'Listo. Pégalo en VS Code: «M365 Copilot: Pegar perfil o token».'
-          : 'Envía un mensaje en el chat para capturarlo todo.';
+      q('[data-hint]').textContent = hasEndpoint && hasFrame ? T.hintReady : T.hintCapture;
     }
 
     q('.close').addEventListener('click', () => host.remove());
@@ -445,16 +486,16 @@
       const profile = buildProfile();
       if (!profile) return;
       copy(JSON.stringify(profile, null, 2));
-      e.target.textContent = '¡Copiado!';
-      setTimeout(() => (e.target.textContent = 'Copiar perfil completo'), 1600);
+      e.target.textContent = T.copied;
+      setTimeout(() => (e.target.textContent = T.copyProfile), 1600);
     });
 
     q('[data-action="token"]').addEventListener('click', (e) => {
       const s = readStore();
       if (!s.accessToken) return;
       copy(s.accessToken);
-      e.target.textContent = '¡Copiado!';
-      setTimeout(() => (e.target.textContent = 'Copiar sólo el token'), 1600);
+      e.target.textContent = T.copied;
+      setTimeout(() => (e.target.textContent = T.copyToken), 1600);
     });
 
     render();

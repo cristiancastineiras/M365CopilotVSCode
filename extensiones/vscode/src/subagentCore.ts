@@ -17,6 +17,7 @@ import {
 	type OfferedTool,
 	type ToolCatalog,
 } from './toolProtocol';
+import { t } from './i18n';
 
 // --------------------------------------------------------- concurrency
 
@@ -63,24 +64,53 @@ export interface SubagentStepInfo {
 	readonly step: number;
 	readonly kind: 'call' | 'done' | 'limit' | 'error';
 	readonly detail: string;
+	/** Nombre de la herramienta, sólo cuando `kind === 'call'`. */
+	readonly toolName?: string;
 }
 
-export interface SubagentTaskParams {
-	readonly label: string;
-	readonly task: string;
+/** Por qué terminó el bucle — el participante de chat lo usa para decidir qué mostrar. */
+export type ToolLoopOutcome = 'done' | 'stepLimit' | 'timeLimit' | 'error' | 'cancelled';
+
+export interface ToolLoopParams {
+	/**
+	 * Texto que va entre las instrucciones del protocolo y el historial de
+	 * pasos: la tarea en sí y cómo debe terminar. Es lo único que distingue a
+	 * un sub-agente del participante `@m365` (ver `participant.ts`).
+	 */
+	readonly framing: string;
 	readonly profile: CopilotProfile;
 	readonly tone: string | null;
 	readonly maxSteps: number;
 	readonly signal: AbortSignal;
-	/** Herramientas ofrecidas al sub-agente (normalmente las 7 de workspace, nunca `ms365_spawn_agents`). */
+	/** Herramientas ofrecidas al bucle (normalmente las 9 de workspace, nunca `ms365_spawn_agents`). */
 	readonly offeredTools: readonly OfferedTool[];
 	readonly executeTool: SubagentToolExecutor;
 	readonly onStep?: (info: SubagentStepInfo) => void;
+	/**
+	 * Recibe en vivo la prosa que el modelo escribe en cada paso (lo que el
+	 * decodificador deja pasar: nunca los marcadores de herramienta). Sin esto
+	 * el texto sólo se conoce al final, en `summary`.
+	 */
+	readonly onProse?: (delta: string) => void;
+	/** Llamado justo antes de pedir cada paso al modelo. */
+	readonly onStepStart?: (step: number) => void;
 	readonly log?: (message: string) => void;
 	/** Sólo para tests: apunta `streamCopilotTurn` a un servidor BizChat simulado. */
 	readonly endpointBase?: string;
-	/** Sólo para tests: sustituye {@link MAX_TASK_WALL_CLOCK_MS} por un techo más corto. */
+	/** Sustituye {@link MAX_TASK_WALL_CLOCK_MS} (los tests usan un techo más corto). */
 	readonly maxWallClockMs?: number;
+}
+
+export interface ToolLoopResult {
+	readonly ok: boolean;
+	readonly outcome: ToolLoopOutcome;
+	readonly summary: string;
+	readonly steps: number;
+}
+
+export interface SubagentTaskParams extends Omit<ToolLoopParams, 'framing' | 'onProse' | 'onStepStart'> {
+	readonly label: string;
+	readonly task: string;
 }
 
 export interface SubagentTaskResult {
@@ -105,7 +135,7 @@ const MAX_LAST_RESULT_PREVIEW_CHARS = 2_000;
  * comprueba ENTRE pasos (nunca corta uno ya en curso) para no perder trabajo
  * a medio hacer.
  */
-const MAX_TASK_WALL_CLOCK_MS = 8 * 60_000;
+export const MAX_TASK_WALL_CLOCK_MS = 8 * 60_000;
 
 /**
  * Bucle de un sub-agente: llama a BizChat, decodifica la respuesta y, si pide
@@ -115,7 +145,18 @@ const MAX_TASK_WALL_CLOCK_MS = 8 * 60_000;
  * texto, no una excepción que tumbe al resto de sub-agentes en curso.
  */
 export async function runSubagentTask(params: SubagentTaskParams): Promise<SubagentTaskResult> {
-	const { label, task, profile, tone, maxSteps, signal, offeredTools, executeTool, endpointBase } = params;
+	const { label, task, ...loop } = params;
+	const result = await runToolLoop({ ...loop, framing: buildSubagentFraming(task) });
+	return { label, ok: result.ok, summary: result.summary, steps: result.steps };
+}
+
+/**
+ * El bucle de herramientas en sí, compartido por los sub-agentes y por el
+ * participante de chat `@m365`. Igual que {@link runSubagentTask}, nunca
+ * lanza: el resultado dice cómo terminó (`outcome`).
+ */
+export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResult> {
+	const { framing, profile, tone, maxSteps, signal, offeredTools, executeTool, endpointBase } = params;
 	const log = params.log ?? (() => {});
 	const onStep = params.onStep ?? (() => {});
 
@@ -130,14 +171,12 @@ export async function runSubagentTask(params: SubagentTaskParams): Promise<Subag
 	const wallClockBudgetMs = params.maxWallClockMs ?? MAX_TASK_WALL_CLOCK_MS;
 
 	for (let step = 1; step <= maxSteps; step += 1) {
-		if (signal.aborted) return { label, ok: false, summary: 'Cancelado.', steps: step - 1 };
+		if (signal.aborted) return { ok: false, outcome: 'cancelled', summary: t('subagent.cancelled'), steps: step - 1 };
 		if (Date.now() - startedAt > wallClockBudgetMs) {
 			const minutes = (wallClockBudgetMs / 60_000).toFixed(wallClockBudgetMs < 60_000 ? 2 : 0);
-			const summary =
-				`⏱️ Se alcanzó el tiempo máximo (${minutes} min) para esta sub-tarea sin una respuesta final. ` +
-				`Último resultado:\n${clip(lastResultText, MAX_LAST_RESULT_PREVIEW_CHARS)}`;
+			const summary = t('subagent.timeLimit', minutes, clip(lastResultText, MAX_LAST_RESULT_PREVIEW_CHARS));
 			onStep({ step, kind: 'limit', detail: summary });
-			return { label, ok: false, summary, steps: step - 1 };
+			return { ok: false, outcome: 'timeLimit', summary, steps: step - 1 };
 		}
 
 		let call: DecodedToolCall | null = null;
@@ -146,16 +185,18 @@ export async function runSubagentTask(params: SubagentTaskParams): Promise<Subag
 			catalog.callable,
 			(delta) => {
 				text += delta;
+				params.onProse?.(delta);
 			},
 			(decoded) => {
 				call = decoded;
 			},
 		);
 
+		params.onStepStart?.(step);
 		try {
 			await streamCopilotTurnWithRetry({
 				profile,
-				prompt: buildSubagentPrompt(task, catalog, blocks),
+				prompt: buildLoopPrompt(framing, catalog, blocks),
 				tone,
 				signal,
 				endpointBase,
@@ -164,49 +205,44 @@ export async function runSubagentTask(params: SubagentTaskParams): Promise<Subag
 			});
 			decoder.finish();
 		} catch (error) {
-			if (signal.aborted) return { label, ok: false, summary: 'Cancelado.', steps: step - 1 };
+			if (signal.aborted) return { ok: false, outcome: 'cancelled', summary: t('subagent.cancelled'), steps: step - 1 };
 			const message = error instanceof Error ? error.message : String(error);
 			onStep({ step, kind: 'error', detail: message });
-			return { label, ok: false, summary: `Error: ${message}`, steps: step - 1 };
+			return { ok: false, outcome: 'error', summary: t('subagent.errorPrefix', message), steps: step - 1 };
 		}
 
 		if (!call) {
-			const summary = text.trim() || '(el sub-agente no devolvió texto).';
+			const summary = text.trim() || t('subagent.noText');
 			onStep({ step, kind: 'done', detail: summary });
-			return { label, ok: true, summary, steps: step };
+			return { ok: true, outcome: 'done', summary, steps: step };
 		}
 
 		// `call` is mutated inside the decoder's closures; a type assertion
 		// (rather than relying on narrowing across that boundary) is used here
 		// on purpose — the `if (!call) return` above already proved it's set.
 		const finishedCall = call as DecodedToolCall;
-		onStep({ step, kind: 'call', detail: `${finishedCall.name}(${safeJsonPreview(finishedCall.input)})` });
+		onStep({
+			step,
+			kind: 'call',
+			detail: `${finishedCall.name}(${safeJsonPreview(finishedCall.input)})`,
+			toolName: finishedCall.name,
+		});
 		const resultText = await executeTool(finishedCall.name, finishedCall.input);
 		lastResultText = resultText;
 		blocks.push(renderCallBlock(step, finishedCall));
 		blocks.push(renderResultBlock(finishedCall.name, resultText));
 	}
 
-	const summary =
-		`⚠️ Se alcanzó el límite de ${maxSteps} paso(s) sin una respuesta final. ` +
-		`Último resultado:\n${clip(lastResultText, MAX_LAST_RESULT_PREVIEW_CHARS)}`;
+	const summary = t('subagent.stepLimit', maxSteps, clip(lastResultText, MAX_LAST_RESULT_PREVIEW_CHARS));
 	onStep({ step: maxSteps, kind: 'limit', detail: summary });
-	return { label, ok: false, summary, steps: maxSteps };
+	return { ok: false, outcome: 'stepLimit', summary, steps: maxSteps };
 }
 
-function buildSubagentPrompt(task: string, catalog: ToolCatalog, blocks: readonly string[]): string {
-	const framing = [
-		'Eres un SUB-AGENTE autónomo dentro de VS Code, delegado por el agente principal de M365 Copilot para UNA ' +
-			'tarea concreta y acotada. No ves el resto de la conversación con el usuario — sólo la tarea de abajo — ' +
-			'así que no des nada por hecho fuera de ella.',
-		`Tarea encomendada:\n${task}`,
-		'Usa las herramientas que necesites, un paso a la vez. Cuando termines, responde en Markdown con un RESUMEN ' +
-			'CONCISO (unos pocos párrafos o una lista de puntos como mucho) de lo que hiciste y lo que encontraste o ' +
-			'cambiaste — es lo ÚNICO que va a leer el agente principal, así que no dejes fuera nada importante ni ' +
-			'emitas más marcadores de herramienta una vez tengas esa respuesta final. Si el resumen incluye código de ' +
-			'2 o más líneas, ponlo entre vallas ``` con el lenguaje.',
-	].join('\n\n');
+function buildSubagentFraming(task: string): string {
+	return [t('subagent.prompt.framing'), t('subagent.prompt.task', task), t('subagent.prompt.finish')].join('\n\n');
+}
 
+function buildLoopPrompt(framing: string, catalog: ToolCatalog, blocks: readonly string[]): string {
 	return [
 		buildToolProtocolInstructions(catalog),
 		framing,
@@ -233,16 +269,16 @@ function compactBlocks(blocks: readonly string[]): string {
 		kept.unshift(clip(block, remaining));
 		remaining -= block.length;
 	}
-	if (omitted) kept.unshift('[pasos anteriores del sub-agente omitidos para conservar contexto]');
+	if (omitted) kept.unshift(t('subagent.prompt.omitted'));
 	return kept.join('\n\n');
 }
 
 function renderCallBlock(step: number, call: DecodedToolCall): string {
-	return `Sub-agente (paso ${step}): llamó a ${call.name} con ${safeJsonPreview(call.input)}`;
+	return t('subagent.prompt.callBlock', step, call.name, safeJsonPreview(call.input));
 }
 
 function renderResultBlock(name: string, resultText: string): string {
-	return `Resultado de ${name}:\n${clip(resultText, MAX_STEP_RESULT_CHARS)}`;
+	return t('subagent.prompt.resultBlock', name, clip(resultText, MAX_STEP_RESULT_CHARS));
 }
 
 function safeJsonPreview(input: Record<string, unknown>): string {
@@ -265,7 +301,7 @@ function safeJsonPreview(input: Record<string, unknown>): string {
 export function clip(text: string, maxChars: number): string {
 	if (text.length <= maxChars) return text;
 	const omitted = text.length - maxChars;
-	return `${closeDanglingFence(text.slice(0, maxChars))}\n… (${omitted} caracteres omitidos)`;
+	return `${closeDanglingFence(text.slice(0, maxChars))}\n${t('subagent.clipNote', omitted)}`;
 }
 
 /**

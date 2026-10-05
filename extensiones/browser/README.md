@@ -1,89 +1,66 @@
-# 🚀 WXT Modern Extension
+# M365 Copilot — browser extension
 
-Un proyecto de extensión de navegador ultra-rápido construido con las últimas tecnologías.
+**English** · [Español](README.es.md)
 
-## ✨ Stack Tecnológico
+Companion of the [M365 Copilot for VS Code](../vscode) extension. It captures
+your **Microsoft 365 Copilot** session token on the M365 website and keeps it in
+sync with VS Code, so you never copy and paste a token by hand.
 
-- **[WXT](https://wxt.dev/)** - Framework moderno para extensiones de navegador
-- **React 18** - UI library
-- **TypeScript 5** - Type safety
-- **Vite 8** (beta) - Build tool ultra-rápido
-- **Rolldown** - Bundler de próxima generación
-- **OXC** - Transformaciones ultra-rápidas
-- **pnpm** - Package manager eficiente
+- **Capture:** on `m365.cloud.microsoft` (and Office/Outlook/Teams pages), a
+  content script running in the page reads the token the web app already uses
+  (WebSocket URL, request headers and the MSAL cache).
+- **Sync:** the background sends it to the VS Code extension's local server
+  (`http://localhost:51827/token`) and resends it when VS Code starts later.
+- **Renewal:** about 12 minutes before the token expires it asks the M365 tab
+  for a fresh one, then reloads that tab, then opens one in the background if
+  there is none — with back-off, and a red badge when you have to sign in.
 
-## 🛠️ Instalación
+The popup shows the token, endpoint, VS Code connection and renewal state, and
+has **Send to VS Code**, **Copy token** and **Renew now** buttons. It is
+available in **English and Spanish** (following the browser's language), as are
+the extension's name and description.
+
+## Install
+
+Download `m365-copilot-vscode-extension-chrome.zip` or `…-firefox.zip` from the
+[releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases),
+unzip it and:
+
+- **Chrome / Edge:** `chrome://extensions` → *Developer mode* → *Load unpacked*.
+- **Firefox:** `about:debugging` → *This Firefox* → *Load Temporary Add-on*.
+
+Then open <https://m365.cloud.microsoft/chat/> and send a message.
+
+## Development
 
 ```bash
-# Instalar dependencias
-pnpm install
-
-# Preparar WXT
-pnpm run postinstall
-```
-
-## 🚀 Desarrollo
-
-```bash
-# Chrome/Edge
-pnpm dev
-
-# Firefox
+pnpm install            # from the repository root
+pnpm dev                # Chrome/Edge with HMR
 pnpm dev:firefox
+pnpm build              # → ../../releases/chrome
+pnpm zip && pnpm zip:firefox
+pnpm typecheck
+pnpm test               # refresh policy and refresh cycle against a fake `chrome`
 ```
 
-Luego carga la extensión desde `.output/chrome-mv3` (o `firefox-mv3`) en tu navegador:
-- **Chrome**: `chrome://extensions` → Activar modo desarrollador → Cargar extensión sin empaquetar
-- **Firefox**: `about:debugging` → Este Firefox → Cargar complemento temporal
-
-## 📦 Build
-
-```bash
-# Chrome/Edge
-pnpm build
-
-# Firefox
-pnpm build:firefox
-
-# Crear ZIP para distribución
-pnpm zip
-```
-
-## 📁 Estructura del Proyecto
+Stack: [WXT](https://wxt.dev/) + React 18 + TypeScript. The shared contract with
+VS Code (port, paths, profile types, JWT helpers) lives in
+[`@ms365copilot/core`](../../packages/core).
 
 ```
-├── entrypoints/
-│   ├── background.ts      # Service worker / background script
-│   ├── content.ts         # Content script
-│   └── popup/
-│       ├── index.html     # Popup HTML
-│       ├── main.tsx       # Popup entry point
-│       ├── App.tsx        # Popup React component
-│       └── style.css      # Estilos globales
-├── wxt.config.ts          # Configuración de WXT
-├── tsconfig.json          # Configuración de TypeScript
-└── package.json
+entrypoints/
+  background.ts            service worker: storage, sync with VS Code, renewal
+  content.ts               ISOLATED-world bridge between the page and the background
+  interceptor.content.ts   MAIN-world capture (WebSocket / fetch / XHR / MSAL cache)
+  popup/                   React popup
+utils/
+  i18n.ts                  popup and error texts (en / es)
+  refreshPolicy.ts         pure renewal decision (tested)
+  tokenRefresher.ts        renewal cycle on chrome.alarms (tested)
+public/
+  _locales/{en,es}/        extension name, description and toolbar tooltip
 ```
 
-## 🎯 Características
-
-- ⚡ Hot Module Replacement (HMR) en desarrollo
-- 📦 Tree-shaking automático
-- 🎨 React con TypeScript
-- 🔧 Configuración optimizada para producción
-- 🌐 Soporte multi-navegador (Chrome, Firefox, Edge, Safari)
-- 📝 Type-safe con definiciones de Chrome APIs
-
-## 📚 Documentación
-
-- https://wxt.dev/
-- [Chrome Extensions API](https://developer.chrome.com/docs/extensions/)
-- https://vitejs.dev/
-
-## 🤝 Contribuir
-
-¡Las contribuciones son bienvenidas! Abre un issue o pull request.
-
-## 📄 Licencia
-
-MIT
+**Translations:** UI text is in [`utils/i18n.ts`](utils/i18n.ts) (the Spanish
+catalog is typed against the English keys); the manifest's name, description and
+tooltip are in `public/_locales/<language>/messages.json`.

@@ -9,8 +9,11 @@ import type { UserManifest } from 'wxt';
  * @m365copilot/core). Ahora hay un único sitio que editar.
  */
 export const sharedManifest: UserManifest = {
-  name: 'Microsoft 365 Copilot VS Code Extension',
-  description: 'Browser extension to capture M365 Copilot authentication tokens and sync with VS Code',
+  // Nombre y descripción traducidos por el i18n nativo del navegador
+  // (public/_locales/<idioma>/messages.json); el inglés es el de reserva.
+  default_locale: 'en',
+  name: '__MSG_extName__',
+  description: '__MSG_extDescription__',
   // Sin `version` aquí: WXT usa la de package.json (`pkg?.version`) por
   // defecto. Fijarla a mano es un tercer sitio que sincronizar a cada release
   // — igual que el bug de duplicación que ya arregló wxt.config.base.ts.
@@ -30,6 +33,7 @@ export const sharedManifest: UserManifest = {
     120: '/favicon-120x120.png',
   },
   action: {
+    default_title: '__MSG_actionTitle__',
     default_icon: {
       16: '/favicon-16x16.png',
       32: '/favicon-32x32.png',

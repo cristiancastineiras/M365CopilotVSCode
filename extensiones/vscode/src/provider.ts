@@ -5,10 +5,11 @@ import { log } from './logger';
 
 import { MarkdownStreamFormatter } from './markdown';
 import { flattenMessages } from './messages';
-import { findModel, MODELS, toChatInformation } from './models';
+import { findModel, MODELS, toChatInformation, type TokenState } from './models';
 import { isTokenUsable, minutesUntilExpiry } from './profile';
 import { buildToolCatalog, ToolCallDecoder, type DuplicatePolicy } from './toolProtocol';
 import type { ProfileStore } from './secrets';
+import { t } from './i18n';
 
 /** Rough token estimate; BizChat exposes no tokenizer. */
 const CHARS_PER_TOKEN = 3.5;
@@ -45,8 +46,9 @@ export class Ms365CopilotProvider implements vscode.LanguageModelChatProvider, v
 		_options: vscode.PrepareLanguageModelChatModelOptions,
 		_token: vscode.CancellationToken,
 	): Promise<vscode.LanguageModelChatInformation[]> {
-		const hasProfile = await this.store.has();
-		return MODELS.map((m) => toChatInformation(m, hasProfile));
+		const profile = await this.store.get();
+		const state: TokenState = !profile ? 'missing' : isTokenUsable(profile) ? 'ok' : 'expired';
+		return MODELS.map((m) => toChatInformation(m, state));
 	}
 
 	async provideLanguageModelChatResponse(
@@ -58,18 +60,12 @@ export class Ms365CopilotProvider implements vscode.LanguageModelChatProvider, v
 	): Promise<void> {
 		const profile = await this.store.get();
 		if (!profile) {
-			throw new Error(
-				'No hay token de M365 Copilot. Ejecuta «M365 Copilot: Pegar perfil o token».',
-			);
+			throw new Error(t('provider.noToken'));
 		}
 		if (!isTokenUsable(profile)) {
 			const mins = minutesUntilExpiry(profile);
 			this.changeEmitter.fire();
-			throw new Error(
-				`El token de M365 Copilot ha caducado${
-					mins !== null ? ` (hace ${Math.abs(mins)} min)` : ''
-				}. Vuelve a capturarlo con el userscript y pégalo de nuevo.`,
-			);
+			throw new Error(t('provider.tokenExpired', mins !== null ? t('provider.expiredAgo', Math.abs(mins)) : ''));
 		}
 
 		const selected = findModel(model.id);
@@ -82,13 +78,19 @@ export class Ms365CopilotProvider implements vscode.LanguageModelChatProvider, v
 		const toolsRequired = options.toolMode === vscode.LanguageModelChatToolMode.Required;
 		const prompt = flattenMessages(messages, { catalog, toolsRequired });
 		log(
-			`petición del chat: modelo=${model.id}, ${messages.length} mensajes, prompt=${prompt.length} chars, ` +
-				`herramientas=${catalog.entries.length}/${catalog.callable.size} ` +
-				`(${catalog.ms365Count} propias, ${catalog.editorCount} del editor)` +
-				(catalog.omitted.length > 0 ? `, sin describir: ${catalog.omitted.join(', ')}` : ''),
+			t(
+				'log.chatRequest',
+				model.id,
+				messages.length,
+				prompt.length,
+				catalog.entries.length,
+				catalog.callable.size,
+				catalog.ms365Count,
+				catalog.editorCount,
+			) + (catalog.omitted.length > 0 ? t('log.chatRequestOmitted', catalog.omitted.join(', ')) : ''),
 		);
 		if (!prompt.trim()) {
-			log('prompt vacío tras aplanar; no se envía nada');
+			log(t('log.emptyPrompt'));
 			return;
 		}
 
@@ -102,7 +104,7 @@ export class Ms365CopilotProvider implements vscode.LanguageModelChatProvider, v
 			catalog.callable,
 			emitMarkdown,
 			(toolCall) => {
-				log(`llamada de herramienta solicitada: ${toolCall.name}`);
+				log(t('log.toolCallRequested', toolCall.name));
 				progress.report(
 					new vscode.LanguageModelToolCallPart(randomUUID(), toolCall.name, toolCall.input),
 				);
