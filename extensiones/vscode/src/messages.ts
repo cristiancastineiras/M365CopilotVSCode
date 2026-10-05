@@ -1,35 +1,17 @@
 import * as vscode from 'vscode';
 import { buildToolProtocolInstructions, buildToolProtocolReminder, type ToolCatalog } from './toolProtocol';
+import { t } from './i18n';
 
-/**
- * Tono/estilo de comunicación, deliberadamente estricto: por defecto, un modelo
- * de chat tiende a rellenar con cháchara (celebrar la pregunta, anunciar el plan
- * con un párrafo entero, resumir al final lo que ya se acaba de decir) porque
- * ESO es lo que un asistente conversacional genérico premia — aquí se pide
- * justo lo contrario: un compañero de equipo serio y funcional que va al grano.
+/*
+ * Tono/estilo de comunicación (`prompt.tone`), deliberadamente estricto: por
+ * defecto, un modelo de chat tiende a rellenar con cháchara (celebrar la
+ * pregunta, anunciar el plan con un párrafo entero, resumir al final lo que ya
+ * se acaba de decir) porque ESO es lo que un asistente conversacional genérico
+ * premia — aquí se pide justo lo contrario: un compañero de equipo serio y
+ * funcional que va al grano. Junto con `prompt.markdown` y su recordatorio
+ * final, vive en los catálogos de locales/ para que el modelo reciba las
+ * instrucciones en el idioma del usuario.
  */
-const TONE_INSTRUCTIONS = [
-	'Sé serio, directo y funcional: ve al grano, sin cháchara ni relleno.',
-	'Nada de coletillas de relleno ("¡Claro!", "¡Buena pregunta!", "Voy a ayudarte con eso", disculpas innecesarias) ' +
-		'ni emojis decorativos que no aportan información. Empieza directamente por la respuesta o la acción.',
-	'Antes de una llamada a herramienta, como mucho UNA frase corta de qué vas a hacer — nunca un párrafo explicando ' +
-		'el plan paso a paso antes de ejecutarlo.',
-	'No repitas la pregunta del usuario ni resumas al final lo que ya has dicho o hecho arriba. Si hiciste cambios, ' +
-		'di escuetamente QUÉ cambió, no el relato de cómo llegaste ahí.',
-	'Sé breve por defecto: respuestas largas sólo cuando el contenido de verdad lo requiere (código, una explicación ' +
-		'técnica que el usuario pidió en detalle), nunca por rellenar espacio.',
-].join('\n');
-
-const MARKDOWN_RESPONSE_INSTRUCTIONS = [
-	'Responde SIEMPRE en Markdown bien formado.',
-	'OBLIGATORIO: todo bloque de código de 2 o más líneas debe ir entre vallas ``` con el lenguaje adecuado (por ejemplo, ```ts). Nunca lo pegues como texto plano: fuera de una valla, Markdown convierte cada salto de línea en un espacio y el código sale ilegible, todo en una línea.',
-	'Usa código en línea (una sola voz entre `backticks`) sólo para identificadores, rutas, comandos y fragmentos muy cortos de una sola línea.',
-].join('\n');
-
-/** Placed at the very END of the prompt — see the reminder note on {@link buildToolProtocolReminder}. */
-const MARKDOWN_RESPONSE_REMINDER =
-	'Recuerda: si tu respuesta incluye código de 2 o más líneas, ponlo entre vallas ``` con el lenguaje. Nunca como ' +
-	'texto plano. Y sé breve y directo: sin cháchara, sin repetir lo obvio, sin párrafos de más.';
 
 const MAX_CONTEXT_CHARS = 48_000;
 const MAX_MESSAGE_CHARS = 12_000;
@@ -75,11 +57,7 @@ export function flattenMessages(
 	// context. A trailing marker nudges plain single-turn rings to answer.
 	const transcript =
 		messages.length > 1
-			? (
-			'Continúa esta conversación. Responde únicamente al último turno del usuario.\n\n' +
-				compactContext(blocks) +
-			'\n\nAssistant:'
-			)
+			? `${t('prompt.continue')}\n\n${compactContext(blocks)}\n\nAssistant:`
 			: blocks[0];
 
 	// A short reminder placed AFTER the transcript — the last thing the model
@@ -90,15 +68,15 @@ export function flattenMessages(
 	// next to the question measurably improves compliance for all of them.
 	const catalog = options.catalog;
 	const reminder = [
-		MARKDOWN_RESPONSE_REMINDER,
+		t('prompt.markdownReminder'),
 		catalog ? buildToolProtocolReminder(catalog, options.toolsRequired) : '',
 	]
 		.filter(Boolean)
 		.join('\n');
 
 	return [
-		TONE_INSTRUCTIONS,
-		MARKDOWN_RESPONSE_INSTRUCTIONS,
+		t('prompt.tone'),
+		t('prompt.markdown'),
 		catalog ? buildToolProtocolInstructions(catalog) : '',
 		transcript,
 		reminder,
@@ -128,17 +106,14 @@ function partsToText(content: ReadonlyArray<unknown>, callNames: ReadonlyMap<str
 		} else if (part instanceof vscode.LanguageModelToolResultPart) {
 			const name = callNames.get(part.callId);
 			out.push(
-				`[resultado de la herramienta ${name ?? part.callId}]\n${trimForContext(
+				`${t('prompt.toolResult', name ?? part.callId)}\n${trimForContext(
 					toolResultToText(part.content),
 					MAX_TOOL_RESULT_CHARS,
 				)}`,
 			);
 		} else if (part instanceof vscode.LanguageModelToolCallPart) {
 			out.push(
-				`[llamada a herramienta ${part.name}(${trimForContext(
-					safeJson(part.input),
-					MAX_TOOL_CALL_INPUT_CHARS,
-				)})]`,
+				t('prompt.toolCall', part.name, trimForContext(safeJson(part.input), MAX_TOOL_CALL_INPUT_CHARS)),
 			);
 		} else if (typeof part === 'string') {
 			out.push(part);
@@ -177,7 +152,7 @@ function unknownPartToText(part: unknown): string {
 		const value = (part as { value: unknown }).value;
 		return typeof value === 'string' ? value : safeJson(value);
 	}
-	return '[contenido adjunto no textual omitido]';
+	return t('prompt.nonTextOmitted');
 }
 
 /** Texto legible de un dato adjunto; lo binario sólo se anuncia. */
@@ -190,7 +165,7 @@ function dataPartToText(part: vscode.LanguageModelDataPart): string {
 			/* no era UTF-8 válido: se anuncia como binario */
 		}
 	}
-	return `[adjunto ${mime}, ${Math.ceil(part.data.byteLength / 1024)} KB, omitido]`;
+	return t('prompt.attachmentOmitted', mime, Math.ceil(part.data.byteLength / 1024));
 }
 
 /**
@@ -249,7 +224,7 @@ function compactContext(blocks: readonly string[]): string {
 		break;
 	}
 
-	if (omitted) selected.unshift('[turnos anteriores omitidos para conservar el contexto relevante]');
+	if (omitted) selected.unshift(t('prompt.earlierOmitted'));
 	return selected.join('\n\n');
 }
 
@@ -260,5 +235,5 @@ function trimForContext(value: string, maxChars: number): string {
 	const headLength = Math.floor(maxChars * 0.65);
 	const tailLength = maxChars - headLength - 72;
 	const omitted = value.length - headLength - tailLength;
-	return `${value.slice(0, headLength)}\n\n[... ${omitted} caracteres omitidos ...]\n\n${value.slice(-tailLength)}`;
+	return `${value.slice(0, headLength)}\n\n${t('prompt.charsOmitted', omitted)}\n\n${value.slice(-tailLength)}`;
 }

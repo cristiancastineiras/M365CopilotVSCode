@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
+import { t } from '../src/i18n';
 import {
 	boundedInteger,
+	CancelledError,
 	ensureNotCancelled,
-	errorMessage,
 	readWorkspaceText,
 	relativePathForUri,
 	resolveWorkspacePath,
@@ -58,15 +59,15 @@ export async function listWorkspaceFiles(
 		.sort((left, right) => left.localeCompare(right));
 
 	if (visibleFiles.length === 0) {
-		return `No hay archivos en ${target.relativePath || '.'} (o están todos excluidos).`;
+		return t('list.empty', target.relativePath || '.');
 	}
 
 	return [
-		`Archivos en ${target.relativePath || '.'}:`,
+		t('list.header', target.relativePath || '.'),
 		'```text',
 		...visibleFiles,
 		'```',
-		limited ? `Resultado limitado a ${maxEntries} archivos. Acota path antes de seguir.` : '',
+		limited ? t('list.limited', maxEntries) : '',
 	]
 		.filter(Boolean)
 		.join('\n');
@@ -77,10 +78,10 @@ export async function searchWorkspaceText(
 	token: vscode.CancellationToken,
 ): Promise<string> {
 	if (typeof input.query !== 'string' || !input.query.trim()) {
-		throw new Error('query debe contener texto para buscar.');
+		throw new Error(t('search.queryEmpty'));
 	}
 	const query = input.query.trim();
-	if (query.length > 500) throw new Error('query no puede superar 500 caracteres.');
+	if (query.length > 500) throw new Error(t('search.queryTooLong'));
 
 	const target = resolveWorkspacePath(input.path ?? '', input.workspaceFolder, { allowEmpty: true });
 	const maxResults = boundedInteger(input.maxResults, 30, 1, MAX_SEARCH_RESULTS);
@@ -107,7 +108,7 @@ export async function searchWorkspaceText(
 		try {
 			text = await readWorkspaceText(file, 128 * 1024);
 		} catch (error) {
-			if (errorMessage(error).includes('cancelada')) throw error;
+			if (error instanceof CancelledError) throw error;
 			skipped += 1; // binary, too large, unreadable — not "no match"
 			continue;
 		}
@@ -135,24 +136,20 @@ export async function searchWorkspaceText(
 	// act on that. Say what was actually looked at.
 	const coverage: string[] = [];
 	if (moreFilesThanScanned) {
-		coverage.push(
-			`AVISO: sólo se revisaron ${scanned} de más de ${MAX_SEARCH_FILES} archivos; la búsqueda NO es exhaustiva. Acota con path para cubrirlo todo.`,
-		);
+		coverage.push(t('search.notExhaustive', scanned, MAX_SEARCH_FILES));
 	}
-	if (skipped > 0) coverage.push(`${skipped} archivo(s) omitidos por ser binarios o demasiado grandes.`);
-	if (hitResultCap) coverage.push(`Se alcanzó el límite de ${maxResults} coincidencias; puede haber más.`);
+	if (skipped > 0) coverage.push(t('search.skipped', skipped));
+	if (hitResultCap) coverage.push(t('search.resultCap', maxResults));
 
 	if (matches.length === 0) {
 		return [
-			`Sin coincidencias para «${query}» en ${target.relativePath || '.'} (${scanned} archivo(s) revisados${
-				caseSensitive ? ', distinguiendo mayúsculas' : ''
-			}).`,
+			t('search.none', query, target.relativePath || '.', scanned, caseSensitive ? t('search.caseSensitive') : ''),
 			...coverage,
 		].join('\n');
 	}
 
 	return [
-		`Coincidencias para «${query}» (${matches.length} en ${scanned} archivo(s) revisados):`,
+		t('search.header', query, matches.length, scanned),
 		'```text',
 		...matches,
 		'```',

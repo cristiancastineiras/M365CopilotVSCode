@@ -11,6 +11,7 @@
  * es específico de VS Code.
  */
 import { extractClaims, type CopilotProfile, type TokenClaims } from '@ms365copilot/core';
+import { t } from './i18n';
 
 export type { CopilotProfile, TokenClaims } from '@ms365copilot/core';
 export { decodeJwtPayload, isTokenUsable, minutesUntilExpiry } from '@ms365copilot/core';
@@ -27,7 +28,7 @@ export class ProfileParseError extends Error {}
  */
 export function parsePastedProfile(input: string): CopilotProfile {
 	const text = input.trim();
-	if (!text) throw new ProfileParseError('No se pegó nada.');
+	if (!text) throw new ProfileParseError(t('profile.error.empty'));
 
 	// ¿JWT pelado?
 	if (/^ey[\w-]+\.[\w-]+\.[\w-]+$/.test(text)) {
@@ -38,13 +39,11 @@ export function parsePastedProfile(input: string): CopilotProfile {
 	try {
 		obj = JSON.parse(text);
 	} catch {
-		throw new ProfileParseError(
-			'Lo pegado no es ni un JWT ni un JSON válido. Usa el botón «Copiar perfil completo» de la extensión o el userscript.',
-		);
+		throw new ProfileParseError(t('profile.error.notJwtOrJson'));
 	}
 
 	if (!obj || typeof obj !== 'object') {
-		throw new ProfileParseError('El JSON pegado no es un objeto de perfil.');
+		throw new ProfileParseError(t('profile.error.notObject'));
 	}
 
 	const record = obj as Record<string, unknown>;
@@ -54,7 +53,7 @@ export function parsePastedProfile(input: string): CopilotProfile {
 		(typeof record.token === 'string' && record.token) ||
 		'';
 	if (!token) {
-		throw new ProfileParseError('El perfil no contiene ningún accessToken.');
+		throw new ProfileParseError(t('profile.error.noToken'));
 	}
 
 	return normalize(record, token);
@@ -66,7 +65,7 @@ function normalize(record: Record<string, unknown>, token?: string): CopilotProf
 		extractClaims(accessToken) ?? (record.claims as TokenClaims | undefined) ?? null;
 
 	if (!accessToken || accessToken.split('.').length !== 3) {
-		throw new ProfileParseError('El accessToken no parece un JWT válido.');
+		throw new ProfileParseError(t('profile.error.invalidJwt'));
 	}
 
 	return {

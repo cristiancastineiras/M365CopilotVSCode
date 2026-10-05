@@ -1,6 +1,8 @@
 import * as http from 'http';
+import type { CopilotProfile } from './profile';
 import type { ProfileStore } from './secrets';
 import { log } from './logger';
+import { t } from './i18n';
 
 // Orígenes desde los que el userscript puede llegar a correr (mismo conjunto
 // que sus `@match`). Cualquier otro origen no recibe cabeceras CORS, así que
@@ -40,7 +42,14 @@ export class TokenAutoRefreshServer {
 	private server: http.Server | null = null;
 	private readonly port = 51827; // Puerto fijo local para el userscript
 
-	constructor(private readonly store: ProfileStore) {}
+	/**
+	 * @param onTokenReceived called after a profile pushed by the browser has
+	 * been stored, so the editor can confirm the silent renewal (status bar).
+	 */
+	constructor(
+		private readonly store: ProfileStore,
+		private readonly onTokenReceived?: (profile: CopilotProfile) => void,
+	) {}
 
 	start(): void {
 		if (this.server) return;
@@ -70,9 +79,11 @@ export class TokenAutoRefreshServer {
 
 			if (req.method === 'POST' && req.url === '/token') {
 				if (typeof origin === 'string' && origin && !originAllowed) {
-					log(`⚠️ Solicitud a /token rechazada: origen no permitido (${origin})`);
+					log(t('log.server.originRejected', origin));
 					res.writeHead(403, { 'Content-Type': 'application/json' });
-					res.end(JSON.stringify({ success: false, error: 'Origen no permitido' }));
+					// API errors stay in English on purpose: they are read by the
+					// browser extension / userscript, not shown as UI text.
+					res.end(JSON.stringify({ success: false, error: 'Origin not allowed' }));
 					return;
 				}
 
@@ -84,18 +95,19 @@ export class TokenAutoRefreshServer {
 					if (body.length > MAX_BODY_BYTES) {
 						tooLarge = true;
 						res.writeHead(413, { 'Content-Type': 'application/json' });
-						res.end(JSON.stringify({ success: false, error: 'Payload demasiado grande' }));
+						res.end(JSON.stringify({ success: false, error: 'Payload too large' }));
 						req.destroy();
 					}
 				});
 				req.on('error', (error) => {
-					log(`❌ Error leyendo la petición del userscript: ${error}`);
+					log(t('log.server.readError', String(error)));
 				});
 				req.on('end', async () => {
 					if (tooLarge) return;
 					try {
 						const profile = await this.store.setFromPaste(body);
-						log('🔄 Token auto-renovado desde el userscript');
+						log(t('log.server.renewed'));
+						this.onTokenReceived?.(profile);
 						res.writeHead(200, { 'Content-Type': 'application/json' });
 						res.end(
 							JSON.stringify({
@@ -105,7 +117,7 @@ export class TokenAutoRefreshServer {
 							}),
 						);
 					} catch (error) {
-						log(`❌ Error al procesar token del userscript: ${error}`);
+						log(t('log.server.processError', String(error)));
 						res.writeHead(400, { 'Content-Type': 'application/json' });
 						res.end(JSON.stringify({ success: false, error: String(error) }));
 					}
@@ -125,14 +137,14 @@ export class TokenAutoRefreshServer {
 		});
 
 		this.server.listen(this.port, 'localhost', () => {
-			log(`✅ Servidor de auto-renovación escuchando en http://localhost:${this.port}`);
+			log(t('log.server.listening', this.port));
 		});
 
 		this.server.on('error', (error: NodeJS.ErrnoException) => {
 			if (error.code === 'EADDRINUSE') {
-				log(`⚠️ Puerto ${this.port} ya en uso. El servidor de auto-renovación no está disponible.`);
+				log(t('log.server.portInUse', this.port));
 			} else {
-				log(`❌ Error en servidor de auto-renovación: ${error.message}`);
+				log(t('log.server.error', error.message));
 			}
 		});
 	}
@@ -141,7 +153,7 @@ export class TokenAutoRefreshServer {
 		if (this.server) {
 			this.server.close();
 			this.server = null;
-			log('🔌 Servidor de auto-renovación detenido');
+			log(t('log.server.stopped'));
 		}
 	}
 }

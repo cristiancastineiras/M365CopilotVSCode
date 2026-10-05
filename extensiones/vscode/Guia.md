@@ -1,20 +1,47 @@
 # Guía de instalación y uso de la extensión de VS Code para M365 Copilot
 
-## 1. Instalar Tampermonkey
+[English](Guide.md) · **Español**
+
+Hay dos formas de llevar el token de Microsoft 365 Copilot a VS Code:
+
+- **Opción A — extensión de navegador (recomendada).** Captura el token, lo
+  renueva antes de que caduque y lo envía a VS Code sin que tengas que copiar ni
+  pegar nada.
+- **Opción B — userscript de Tampermonkey.** Te muestra un panel en la web de
+  M365 Copilot desde el que copias el token para pegarlo en VS Code a mano (y
+  repetirlo cuando caduque, ~cada hora).
+
+> Dentro de VS Code tienes además el recorrido **Primeros pasos** de M365
+> Copilot (*Ayuda → Bienvenida*, o desde el menú del elemento **M365** de la
+> barra de estado), con estos mismos pasos.
+
+## 1. Opción A: extensión de navegador
+
+1. Descarga la extensión para tu navegador desde las
+   [releases del repositorio](https://github.com/cristiancastineiras/M365CopilotVSCode/releases)
+   (Chrome/Edge o Firefox), descomprímela y cárgala (en Chrome/Edge:
+   `chrome://extensions` → *Modo de desarrollador* → *Cargar descomprimida*; en
+   Firefox: `about:debugging` → *Este Firefox* → *Cargar complemento temporal*).
+2. Entra en [Microsoft 365 Copilot](https://m365.cloud.microsoft/chat/) y envía
+   cualquier mensaje.
+3. Abre el popup de la extensión: cuando todo está en verde, el token ya está en
+   VS Code. Mientras tengas alguna pestaña de M365 abierta, se renueva solo.
+
+![Popup de la extensión de navegador](imgs/ui-extension-navegador.png)
+
+Si usas esta opción, salta al [paso 4](#4-instalar-la-extensión-de-vs-code).
+
+## 2. Opción B: instalar Tampermonkey y el userscript
 
 Primero, dependiendo del navegador que uses, hay que instalar Tampermonkey, que
-es un gestor de userscripts. En este caso se ha probado en Chrome y Edge.
+es un gestor de userscripts. Se ha probado en Chrome y Edge.
 
 - [Google Chrome](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
 - [Mozilla Firefox](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/)
 - [Microsoft Edge](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
 
-## 2. Instalar el userscript
-
-Una vez instalado Tampermonkey, hay que añadir el userscript que captura el token
-de acceso, el endpoint y la plantilla de invocación de Microsoft 365 Copilot.
-
-Para ello puedes instalarlo manualmente:
+Después hay que añadir el userscript que captura el token de acceso, el endpoint
+y la plantilla de invocación de Microsoft 365 Copilot:
 
 1. Fija la extensión en la barra de extensiones del navegador y haz clic en ella.
 
@@ -32,7 +59,10 @@ Una vez instalado o guardado, debe aparecer en la sección de scripts instalados
 
 ![Userscript instalado en Tampermonkey](imgs/tampermonkey-script-instalado.png)
 
-## 3. Capturar el token
+El panel del userscript sale en español o en inglés según el idioma de tu
+navegador.
+
+## 3. Opción B: capturar el token
 
 Con el script instalado y habilitado, entra en [Microsoft 365 Copilot](https://m365.cloud.microsoft/chat/).
 
@@ -47,37 +77,35 @@ listo.
 
 ![token copiado](imgs/copiado-token-perfil.png)
 
-Puedes copiar el perfil entero o solo el token. La diferencia es que el perfil
-entero incluye el endpoint y la plantilla de invocación, mientras que el token
-solo incluye el token de acceso.
-
-Yo sugiero copiar solo el token. Suele responder mejor porque no copia la
-plantilla de invocación predeterminada de Microsoft 365 Copilot, que hace que el
-chat se comporte de forma diferente a la web. Así funciona mejor con las
-herramientas de desarrollo de VS Code.
+Puedes copiar el perfil entero o solo el token: la extensión sólo usa el token
+de acceso, así que da igual cuál pegues. Lo más cómodo es **Copiar sólo el
+token**.
 
 ## 4. Instalar la extensión de VS Code
 
-Una vez copiado el token, abre VS Code e instala la extensión de M365 Copilot,
-que permite invocar Microsoft 365 Copilot desde el editor.
+Abre VS Code e instala la extensión de M365 Copilot.
 
 ![Extensión de M365 Copilot en VS Code](imgs/marketplace-vscode-extension.png)
 
-Una vez instalada, abre la paleta de comandos con `Ctrl + Shift + P` y busca `M365`.
+Al instalarla aparece el elemento **M365** en la barra de estado (abajo a la
+derecha). Su icono te dice el estado del token (🔑 aún no hay, ⚠ caducado) y al
+pulsarlo se abre el menú con todas las acciones.
+
+Si usas el userscript, pega el token: abre la paleta de comandos con
+`Ctrl + Shift + P`, busca `M365` y ejecuta **M365 Copilot: Pegar perfil o token**
+(o elige *Pegar perfil o token* en el menú de la barra de estado).
 
 ![Comandos de M365 Copilot en la paleta de VS Code](imgs/m365-ctrl-shift-p.png)
 
-El comando más importante es **M365 Copilot: Pegar perfil o token**, que permite
-pegar el token copiado anteriormente desde el userscript.
-
 ![Campo para pegar el token o perfil](imgs/pegar-token-perfil.png)
-
-Una vez pegado, ya puedes invocar Microsoft 365 Copilot desde VS Code.
 
 ## 5. Mostrar los modelos en el chat
 
-Antes de empezar, hay que configurar los modelos porque no aparecen en el chat
-de primeras:
+La forma más directa es escribir **`@m365`** en el chat: responde siempre M365
+Copilot, sin tocar el selector de modelos.
+
+Si prefieres usarlo como modelo (por ejemplo en modo agente), hay que mostrarlo
+en el selector, porque no aparece de primeras:
 
 ![Interfaz predeterminada del chat de VS Code](imgs/ui-chat-copilot-default.png)
 
@@ -89,21 +117,38 @@ Desplázate hasta abajo para ver las opciones de M365 Copilot:
 
 ![Modelos de M365 Copilot disponibles](imgs/modelos-opciones.png)
 
-Yo los tengo fijados, pero es opcional. En la interfaz normal aparecen al final
-del selector de modelos.
+Puedes fijarlos; si no, aparecen al final del selector de modelos.
 
 ## 6. Empezar a usarlo
 
-Una vez hecho esto, ya puedes empezar a usarlo.
-
-Por ejemplo, puedes hacer una pregunta de código:
+Puedes hacer una pregunta de código:
 
 ![Ejemplo de una pregunta de código](imgs/prompt-pregunta.png)
 
-También puedes pedir una edición de código:
+O pedir una edición de código: los cambios aparecen resaltados en el editor con
+**Keep / Undo** encima (y también en la barra de título del editor) para que los
+aceptes o los reviertas.
 
 ![Ejemplo de una edición de código](imgs/ejemplo-edicion-codigo.png)
 
-De momento funciona con tareas básicas: explorar archivos y carpetas, responder
-preguntas y editar código. Está bastante bien teniendo en cuenta que es un
-wrapper de un modelo que no está hecho para funcionar como agente ni como MCP.
+Desde el propio editor:
+
+- **Clic derecho → M365 Copilot**: explicar, preguntar, corregir, documentar o
+  generar tests del código seleccionado (o de la función en la que está el
+  cursor).
+- **Bombilla (`Ctrl + .`)** sobre un error: **Corregir con M365 Copilot**.
+- **Source Control**: el botón ✨ de la barra de título redacta el mensaje de
+  commit con M365 Copilot.
+
+## 7. Idioma
+
+La extensión sigue por defecto el idioma de VS Code (español o inglés). Para
+cambiarlo: menú de la barra de estado → **Idioma**, o el ajuste
+`ms365copilot.language`. Cambia también el idioma de las instrucciones que se
+envían al modelo, así que responde en ese idioma.
+
+---
+
+Funciona bien con tareas de exploración de archivos y carpetas, preguntas y
+edición de código. Está bastante bien teniendo en cuenta que es un wrapper de un
+modelo que no está hecho para funcionar como agente ni como MCP.

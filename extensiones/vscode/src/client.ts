@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import type { CopilotProfile } from './profile';
 import { RunawayRepetitionGuard } from './repetitionGuard';
+import { bizChatLocale, t } from './i18n';
 
 /** SignalR frame terminator (record separator, U+001E). */
 const RS = String.fromCharCode(0x1e);
@@ -51,29 +52,10 @@ export class CopilotAuthError extends CopilotClientError {
 
 /** Map a rejected WS upgrade status to an accurate, actionable client error. */
 function describeUpgradeFailure(status: number, statusMessage: string): CopilotClientError {
-	if (status === 401) {
-		return new CopilotAuthError(
-			'M365 Copilot rechazó el token (401 Unauthorized). El token ha caducado o el servidor lo ha ' +
-				'invalidado aunque su fecha de expiración aún no había pasado. Vuelve a capturarlo con el ' +
-				'userscript en m365.cloud.microsoft y pégalo de nuevo con «M365 Copilot: Pegar perfil o token».',
-			status,
-		);
-	}
-	if (status === 403) {
-		return new CopilotAuthError(
-			'M365 Copilot denegó el acceso (403 Forbidden). Puede que tu cuenta no tenga licencia de Copilot ' +
-				'o que el token capturado no tenga permiso para este endpoint. Recaptura el perfil e inténtalo de nuevo.',
-			status,
-		);
-	}
-	if (status === 429) {
-		return new CopilotClientError(
-			'M365 Copilot está limitando las peticiones (429 Too Many Requests). Espera unos segundos e inténtalo de nuevo.',
-		);
-	}
-	return new CopilotClientError(
-		`M365 Copilot rechazó la conexión WebSocket (HTTP ${status}${statusMessage ? ` ${statusMessage}` : ''}).`,
-	);
+	if (status === 401) return new CopilotAuthError(t('client.error.401'), status);
+	if (status === 403) return new CopilotAuthError(t('client.error.403'), status);
+	if (status === 429) return new CopilotClientError(t('client.error.429'));
+	return new CopilotClientError(t('client.error.upgrade', `${status}${statusMessage ? ` ${statusMessage}` : ''}`));
 }
 
 /**
@@ -108,7 +90,7 @@ export async function streamCopilotTurn(options: {
 	const invocationId = '0';
 	const invocationType = profile.invocationType || 4;
 
-	log(`--- nuevo turno ---`);
+	log(t('log.newTurn'));
 	log(`endpoint: ${redactUrl(url)}`);
 	log(`invocationType=${invocationType}, tone=${tone ?? 'magic'}`);
 	log(`origin=${profile.origin}`);
@@ -167,8 +149,8 @@ export async function streamCopilotTurn(options: {
 		const fail = (error: Error) => {
 			if (settled) return;
 			settled = true;
-			if (error.message !== '__CANCELLED__') log(`turno FALLIDO: ${error.message}`);
-			else log('turno cancelado por el usuario');
+			if (error.message !== '__CANCELLED__') log(t('log.turnFailed', error.message));
+			else log(t('log.turnCancelled'));
 			cleanup();
 			reject(error);
 		};
@@ -177,12 +159,7 @@ export async function streamCopilotTurn(options: {
 		// keeps receiving *something* (so IDLE_TIMEOUT_MS never fires) without
 		// ever actually finishing.
 		const turnTimer = setTimeout(() => {
-			fail(
-				new CopilotClientError(
-					'El turno llevaba más de 5 minutos sin completarse y se ha cancelado. Puede que el modelo se haya ' +
-						'atascado con una respuesta muy larga — prueba a pedir menos de una vez (por ejemplo, un archivo cada vez).',
-				),
-			);
+			fail(new CopilotClientError(t('client.error.turnTimeout')));
 		}, MAX_TURN_MS);
 
 		/** Every character the model emits passes through here — the one place
@@ -191,12 +168,7 @@ export async function streamCopilotTurn(options: {
 		 * be recognized as prose or as part of a tool call. */
 		const emit = (text: string) => {
 			if (repetitionGuard.push(text)) {
-				fail(
-					new CopilotClientError(
-						'M365 Copilot se ha quedado repitiendo el mismo fragmento sin avanzar (bucle del modelo) y el turno ' +
-							'se ha cancelado. Vuelve a intentarlo; si vuelve a pasar, prueba a pedir algo más concreto o en menos pasos.',
-					),
-				);
+				fail(new CopilotClientError(t('client.error.repetition')));
 				return;
 			}
 			callbacks.onText(text);
@@ -205,10 +177,8 @@ export async function streamCopilotTurn(options: {
 		const succeed = () => {
 			if (settled) return;
 			settled = true;
-			log(`turno completado, ${totalEmittedChars} chars emitidos`);
-			if (totalEmittedChars === 0) {
-				log('AVISO: se completó sin texto — el parser no reconoció ningún frame de contenido.');
-			}
+			log(t('log.turnCompleted', totalEmittedChars));
+			if (totalEmittedChars === 0) log(t('log.turnEmpty'));
 			cleanup();
 			callbacks.onDone?.();
 			resolve();
@@ -217,7 +187,7 @@ export async function streamCopilotTurn(options: {
 		const bumpIdle = () => {
 			if (idleTimer) clearTimeout(idleTimer);
 			idleTimer = setTimeout(
-				() => fail(new CopilotClientError('Sin respuesta de M365 Copilot (timeout).')),
+				() => fail(new CopilotClientError(t('client.error.idle'))),
 				IDLE_TIMEOUT_MS,
 			);
 		};
@@ -230,14 +200,14 @@ export async function streamCopilotTurn(options: {
 		signal.addEventListener('abort', onAbort, { once: true });
 
 		const handshakeTimer = setTimeout(
-			() => fail(new CopilotClientError('El WebSocket de Copilot no completó el handshake.')),
+			() => fail(new CopilotClientError(t('client.error.handshake'))),
 			HANDSHAKE_TIMEOUT_MS,
 		);
 
 		let handshakeDone = false;
 
 		ws.on('open', () => {
-			log('WebSocket abierto; enviando handshake SignalR');
+			log(t('log.wsOpen'));
 			// SignalR JSON handshake.
 			ws.send(JSON.stringify({ protocol: 'json', version: 1 }) + RS);
 		});
@@ -246,7 +216,7 @@ export async function streamCopilotTurn(options: {
 			clearTimeout(handshakeTimer);
 			const status = res.statusCode ?? 0;
 			const statusMessage = res.statusMessage ?? '';
-			log(`respuesta HTTP inesperada al abrir el WS: ${status} ${statusMessage}`.trimEnd());
+			log(t('log.unexpectedResponse', `${status} ${statusMessage}`.trimEnd()));
 
 			// Azure AD / Substrate usually explain a 401/403 in a `WWW-Authenticate`
 			// header and a JSON body (`error`, `error_description`, correlation id).
@@ -254,14 +224,14 @@ export async function streamCopilotTurn(options: {
 			// actual root cause (wrong audience, Conditional Access, expired token).
 			for (const h of ['www-authenticate', 'x-ms-diagnostics', 'x-ms-request-id', 'client-request-id']) {
 				const v = res.headers[h];
-				if (v) log(`  cabecera ${h}: ${v}`);
+				if (v) log(t('log.header', h, String(v)));
 			}
 
 			const bodyChunks: Buffer[] = [];
 			res.on('data', (chunk: Buffer) => bodyChunks.push(chunk));
 			res.on('end', () => {
 				const body = Buffer.concat(bodyChunks).toString('utf8').trim();
-				if (body) log(`  cuerpo de la respuesta: ${truncate(body, 500)}`);
+				if (body) log(t('log.body', truncate(body, 500)));
 				// A non-101 upgrade response means the socket will never open, so fail
 				// now with an accurate message instead of waiting out the generic
 				// handshake timeout — that 15 s stall misled users into thinking the
@@ -272,17 +242,17 @@ export async function streamCopilotTurn(options: {
 
 		ws.on('error', (err: Error) => {
 			clearTimeout(handshakeTimer);
-			fail(new CopilotClientError(`Fallo de conexión con Copilot: ${err.message}`));
+			fail(new CopilotClientError(t('client.error.connection', err.message)));
 		});
 
 		ws.on('close', (code: number, reason: Buffer) => {
 			clearTimeout(handshakeTimer);
-			log(`WebSocket cerrado (código ${code}${reason?.length ? `, ${reason.toString()}` : ''})`);
+			log(t('log.wsClosed', code, reason?.length ? `, ${reason.toString()}` : ''));
 			if (!settled) {
 				// A clean close after we have some text is a normal end for a few
 				// rings; treat any accumulated content as a completed turn.
 				if (totalEmittedChars > 0) succeed();
-				else fail(new CopilotClientError(`Copilot cerró la conexión (código ${code}).`));
+				else fail(new CopilotClientError(t('client.error.closed', code)));
 			}
 		});
 
@@ -305,10 +275,10 @@ export async function streamCopilotTurn(options: {
 					clearTimeout(handshakeTimer);
 					log(`<< handshake ack: ${truncate(chunk, 300)}`);
 					if (frame.error) {
-						fail(new CopilotClientError(`Handshake rechazado: ${String(frame.error)}`));
+						fail(new CopilotClientError(t('client.error.handshakeRejected', String(frame.error))));
 						return;
 					}
-					log('>> enviando invocación chat + Metrics');
+					log(t('log.sendingInvocation'));
 					sendInvocation(ws, profile, prompt, tone, invocationType, invocationId, conversationId, log);
 					bumpIdle();
 					// The `{}` ack frame carries no chat data; done with it.
@@ -416,10 +386,7 @@ function handleFrame(
 		const result = payload.result as { value?: string; message?: string } | undefined;
 		if (result && typeof result.value === 'string' && result.value !== 'Success') {
 			h.onError(
-				new CopilotClientError(
-					`El servicio rechazó la petición (${result.value})` +
-						(result.message ? `: ${result.message}` : ''),
-				),
+				new CopilotClientError(t('client.error.rejected', result.value, result.message ? `: ${result.message}` : '')),
 			);
 			return;
 		}
@@ -439,10 +406,7 @@ function handleFrame(
 					return;
 				}
 				if (outcome === 'filtered') {
-					h.emitText(
-						'\n\n_(Microsoft 365 Copilot no generó respuesta para esta petición.)_',
-						false,
-					);
+					h.emitText(t('client.filtered'), false);
 					h.onComplete();
 					return;
 				}
@@ -515,7 +479,7 @@ function sendInvocation(
 
 	// Full frame (untruncated) so the temp-file dump captures exactly what we
 	// sent — invaluable when a tenant returns InvalidRequest.
-	log(`>> chat frame (completo): ${JSON.stringify(chatFrame)}`);
+	log(t('log.chatFrame', JSON.stringify(chatFrame)));
 	ws.send(JSON.stringify(chatFrame) + RS + JSON.stringify(metricsFrame) + RS);
 }
 
@@ -562,7 +526,7 @@ function defaultInvocationArgs(): Record<string, unknown> {
 		isStartOfSession: true,
 		allowedMessageTypes: ['Chat', 'Suggestion', 'Progress', 'EndOfRequest'],
 		clientInfo: { clientPlatform: 'mcmcopilot-web', clientAppName: 'Office' },
-		message: { author: 'user', messageType: 'Chat', locale: 'es-ES' },
+		message: { author: 'user', messageType: 'Chat', locale: bizChatLocale() },
 	};
 }
 
@@ -624,9 +588,7 @@ export async function streamCopilotTurnWithRetry(
 		await streamCopilotTurn({ ...options, callbacks });
 	} catch (error) {
 		if (emittedAny || options.signal.aborted || !isRetryableClientError(error)) throw error;
-		log(
-			`turno falló sin emitir texto (${error instanceof Error ? error.message : String(error)}); reintentando una vez...`,
-		);
+		log(t('log.retrying', error instanceof Error ? error.message : String(error)));
 		await delay(options.retryDelayMs ?? 1200, options.signal);
 		if (options.signal.aborted) throw error;
 		await streamCopilotTurn({ ...options, callbacks });

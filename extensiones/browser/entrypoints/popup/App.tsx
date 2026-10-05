@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { sendMessage } from '@/utils/messaging';
+import { getLocale, t, type MessageKey } from '@/utils/i18n';
 import { Pill, type Tone } from './components/Pill';
 import { StatusRow } from './components/StatusRow';
 
@@ -27,14 +28,14 @@ const EMPTY: ProfileState = {
 };
 
 /** Qué está haciendo el auto-renovador, en un par de palabras. */
-const REFRESH_LABEL: Record<string, string> = {
-  none: 'Automática',
-  captured: 'Token renovado',
-  rescan: 'Buscando token nuevo…',
-  reload: 'Recargando M365…',
-  open: 'Abriendo M365…',
-  wait: 'Reintentando en breve',
-  needsUser: 'Inicia sesión en M365',
+const REFRESH_LABEL: Record<string, MessageKey> = {
+  none: 'refresh.none',
+  captured: 'refresh.captured',
+  rescan: 'refresh.rescan',
+  reload: 'refresh.reload',
+  open: 'refresh.open',
+  wait: 'refresh.wait',
+  needsUser: 'refresh.needsUser',
 };
 
 type VSCode = 'unknown' | 'connected' | 'disconnected';
@@ -128,12 +129,12 @@ export default function App() {
   const expired = profile.minutesLeft !== null && profile.minutesLeft <= 0;
   const hero = deriveHero(profile.hasToken, expired, vscode, profile.refreshAction);
   const tokenValue = !profile.hasToken
-    ? 'Sin capturar'
+    ? t('token.none')
     : expired
-      ? 'Caducado'
+      ? t('token.expired')
       : profile.minutesLeft !== null
-        ? `Caduca en ${profile.minutesLeft} min`
-        : 'Activo';
+        ? t('token.expiresIn', profile.minutesLeft)
+        : t('token.active');
 
   const vsc = vscodePill(vscode);
 
@@ -151,21 +152,21 @@ export default function App() {
       </section>
 
       <div className="card">
-        <StatusRow label="Token" ok={profile.hasToken && !expired} value={tokenValue} />
+        <StatusRow label={t('row.token')} ok={profile.hasToken && !expired} value={tokenValue} />
         <StatusRow
-          label="Endpoint"
+          label={t('row.endpoint')}
           ok={profile.hasEndpoint}
-          value={profile.hasEndpoint ? 'Capturado' : 'Pendiente'}
+          value={t(profile.hasEndpoint ? 'endpoint.captured' : 'endpoint.pending')}
         />
         <StatusRow
-          label="VS Code"
+          label={t('row.vscode')}
           ok={vscode === 'connected'}
           value={vsc.label}
         />
         <StatusRow
-          label="Renovación"
+          label={t('row.renewal')}
           ok={profile.refreshAction !== 'needsUser'}
-          value={REFRESH_LABEL[profile.refreshAction ?? 'none'] ?? 'Automática'}
+          value={t(REFRESH_LABEL[profile.refreshAction ?? 'none'] ?? 'refresh.none')}
         />
       </div>
 
@@ -181,7 +182,7 @@ export default function App() {
           disabled={!profile.hasToken || busy}
           onClick={send}
         >
-          {sent ? '✓ Enviado a VS Code' : 'Enviar a VS Code'}
+          {t(sent ? 'button.sent' : 'button.send')}
         </button>
         <div className="actions">
           <button
@@ -189,10 +190,10 @@ export default function App() {
             disabled={!profile.hasToken || busy}
             onClick={copyToken}
           >
-            {copied === 'token' ? '✓ Copiado' : 'Copiar token'}
+            {t(copied === 'token' ? 'button.copied' : 'button.copyToken')}
           </button>
           <button className="btn btn-ghost" disabled={busy} onClick={renew}>
-            Renovar ahora
+            {t('button.renew')}
           </button>
         </div>
       </div>
@@ -200,9 +201,7 @@ export default function App() {
       {error && <div className="alert">⚠️ {error}</div>}
 
       <footer className="footer">
-        {profile.capturedAt
-          ? `Capturado ${relativeTime(profile.capturedAt)}`
-          : 'Abre M365 Copilot y envía un mensaje para capturar.'}
+        {profile.capturedAt ? t('footer.captured', relativeTime(profile.capturedAt)) : t('footer.hint')}
       </footer>
     </div>
   );
@@ -218,49 +217,24 @@ function deriveHero(
 ): { tone: Tone; icon: string; title: string; sub: string } {
   // El auto-renovador agotó sus intentos: esto sí necesita al usuario.
   if (refreshAction === 'needsUser') {
-    return {
-      tone: 'bad',
-      icon: '!',
-      title: 'Hace falta iniciar sesión',
-      sub: 'Abre M365 Copilot y entra con tu cuenta.',
-    };
+    return { tone: 'bad', icon: '!', title: t('hero.needsUser.title'), sub: t('hero.needsUser.sub') };
   }
   if (!hasToken) {
-    return {
-      tone: 'neutral',
-      icon: '…',
-      title: 'Esperando token',
-      sub: 'Abre M365 Copilot y escribe un mensaje.',
-    };
+    return { tone: 'neutral', icon: '…', title: t('hero.noToken.title'), sub: t('hero.noToken.sub') };
   }
   if (expired) {
-    return {
-      tone: 'warn',
-      icon: '↻',
-      title: 'Renovando token',
-      sub: 'La extensión lo está renovando sola.',
-    };
+    return { tone: 'warn', icon: '↻', title: t('hero.expired.title'), sub: t('hero.expired.sub') };
   }
   if (vscode !== 'connected') {
-    return {
-      tone: 'warn',
-      icon: '!',
-      title: 'Token listo',
-      sub: 'VS Code no responde. Ábrelo con la extensión activa.',
-    };
+    return { tone: 'warn', icon: '!', title: t('hero.noVSCode.title'), sub: t('hero.noVSCode.sub') };
   }
-  return {
-    tone: 'ok',
-    icon: '✓',
-    title: 'Todo listo',
-    sub: 'El token se sincroniza automáticamente.',
-  };
+  return { tone: 'ok', icon: '✓', title: t('hero.ok.title'), sub: t('hero.ok.sub') };
 }
 
 function vscodePill(vscode: VSCode): { tone: Tone; label: string } {
-  if (vscode === 'connected') return { tone: 'ok', label: 'VS Code' };
-  if (vscode === 'disconnected') return { tone: 'bad', label: 'Sin conexión' };
-  return { tone: 'neutral', label: 'Comprobando…' };
+  if (vscode === 'connected') return { tone: 'ok', label: t('vscode.connected') };
+  if (vscode === 'disconnected') return { tone: 'bad', label: t('vscode.disconnected') };
+  return { tone: 'neutral', label: t('vscode.checking') };
 }
 
 function initials(upn: string): string {
@@ -273,11 +247,11 @@ function initials(upn: string): string {
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
-  if (!Number.isFinite(diff) || diff < 0) return 'hace un momento';
+  if (!Number.isFinite(diff) || diff < 0) return t('time.justNow');
   const min = Math.floor(diff / 60000);
-  if (min < 1) return 'hace un momento';
-  if (min < 60) return `hace ${min} min`;
+  if (min < 1) return t('time.justNow');
+  if (min < 60) return t('time.minutesAgo', min);
   const h = Math.floor(min / 60);
-  if (h < 24) return `hace ${h} h`;
-  return new Date(iso).toLocaleDateString();
+  if (h < 24) return t('time.hoursAgo', h);
+  return new Date(iso).toLocaleDateString(getLocale());
 }

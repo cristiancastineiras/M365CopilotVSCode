@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { t } from '../src/i18n';
 import { ensureNotCancelled, relativePathForUri, resolveWorkspacePath } from './common';
 import { matchesSeverity, normalizeSeverityFilter, severityLabel } from './diagnosticsFormat';
 
@@ -42,17 +43,19 @@ export async function getWorkspaceDiagnostics(
 	}
 
 	if (lines.length === 0) {
-		return target.relativePath ? `Sin diagnósticos en ${target.relativePath}.` : 'Sin diagnósticos en el workspace.';
+		return target.relativePath ? t('diag.noneFile', target.relativePath) : t('diag.noneWorkspace');
 	}
 
 	const limited = lines.length > MAX_DIAGNOSTIC_ENTRIES;
 	const visible = lines.slice(0, MAX_DIAGNOSTIC_ENTRIES);
 	return [
-		`Diagnósticos${target.relativePath ? ` en ${target.relativePath}` : ' del workspace'} (${lines.length} en total):`,
+		target.relativePath
+			? t('diag.headerFile', target.relativePath, lines.length)
+			: t('diag.headerWorkspace', lines.length),
 		'```text',
 		...visible,
 		'```',
-		limited ? `Resultado limitado a ${MAX_DIAGNOSTIC_ENTRIES}. Acota path o severity antes de seguir.` : '',
+		limited ? t('diag.limited', MAX_DIAGNOSTIC_ENTRIES) : '',
 	]
 		.filter(Boolean)
 		.join('\n');

@@ -63,16 +63,31 @@ export async function sendMessage<T extends MessageType>(
   tabId?: number,
 ): Promise<ResponseOf<T>> {
   const envelope: Envelope<T> = { type, payload };
+  let response: unknown;
   try {
-    if (tabId !== undefined) {
-      return (await chrome.tabs.sendMessage(tabId, envelope)) as ResponseOf<T>;
-    }
-    return (await chrome.runtime.sendMessage(envelope)) as ResponseOf<T>;
+    response =
+      tabId !== undefined
+        ? await chrome.tabs.sendMessage(tabId, envelope)
+        : await chrome.runtime.sendMessage(envelope);
   } catch (error) {
     throw new Error(
       `[messaging] Failed to send "${type}": ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+  // A handler that threw answers `{ error }` (see registerHandlers). Before,
+  // that object was returned as if it were the real response — a failed
+  // "Send to VS Code" showed "✓ Sent" and its error message never appeared.
+  if (isErrorResponse(response)) throw new Error(response.error);
+  return response as ResponseOf<T>;
+}
+
+function isErrorResponse(value: unknown): value is { error: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Object.keys(value).length === 1 &&
+    typeof (value as { error?: unknown }).error === 'string'
+  );
 }
 
 type Handler<T extends MessageType> = (

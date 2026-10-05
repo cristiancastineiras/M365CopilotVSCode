@@ -5,6 +5,7 @@ import { log } from './logger';
 import { findModel } from './models';
 import { isTokenUsable } from './profile';
 import type { ProfileStore } from './secrets';
+import { t } from './i18n';
 
 const CONFIG_SECTION = 'ms365copilot.inlineCompletions';
 
@@ -15,6 +16,20 @@ const MAX_PREFIX_CHARS = 2500;
 const MAX_SUFFIX_CHARS = 800;
 /** Enough of the document after the cursor to spot duplicated tails. */
 const OVERLAP_LOOKAHEAD = 200;
+
+/**
+ * Schemes whose documents are never worth a (paid, 1-3 s) suggestion: output
+ * panes, read-only diff sides and our own preview documents.
+ */
+const SKIPPED_SCHEMES: ReadonlySet<string> = new Set([
+	'output',
+	'git',
+	'gitfs',
+	'vscode-scm',
+	'debug',
+	'ms365copilot-edit-preview',
+	'vscode-chat-code-block',
+]);
 
 const CACHE_MAX_ENTRIES = 40;
 /** How much of the prefix identifies a cache entry. */
@@ -32,6 +47,7 @@ interface Settings {
 	readonly maxLines: number;
 	readonly timeoutMs: number;
 	readonly modelId: string;
+	readonly disabledLanguages: ReadonlySet<string>;
 }
 
 function readSettings(): Settings {
@@ -43,6 +59,11 @@ function readSettings(): Settings {
 		maxLines: clamp(config.get<number>('maxLines', 6), 1, 30),
 		timeoutMs: clamp(config.get<number>('timeoutMs', 6000), 1000, 30_000),
 		modelId: config.get<string>('model', 'ms365-copilot-auto'),
+		disabledLanguages: new Set(
+			(config.get<unknown[]>('disabledLanguages', ['scminput', 'plaintext']) ?? []).filter(
+				(value): value is string => typeof value === 'string',
+			),
+		),
 	};
 }
 
@@ -64,13 +85,18 @@ function clamp(value: number, min: number, max: number): number {
  *  - aborting the stream as soon as enough lines have arrived, instead of
  *    waiting out the model's closing pleasantries.
  */
+/** Whatever shows that a suggestion is on its way (the status bar hub). */
+export interface CompletionBusySink {
+	setBusy(busy: boolean): void;
+}
+
 export class Ms365InlineCompletionProvider implements vscode.InlineCompletionItemProvider {
 	private readonly cache = new Map<string, CacheEntry>();
 	private inFlight: AbortController | undefined;
 
 	constructor(
 		private readonly store: ProfileStore,
-		private readonly status: CompletionStatus,
+		private readonly status: CompletionBusySink,
 	) {}
 
 	async provideInlineCompletionItems(
@@ -83,6 +109,9 @@ export class Ms365InlineCompletionProvider implements vscode.InlineCompletionIte
 		if (!settings.enabled) return undefined;
 		const invokedByHand = context.triggerKind === vscode.InlineCompletionTriggerKind.Invoke;
 		if (settings.manualOnly && !invokedByHand) return undefined;
+		if (SKIPPED_SCHEMES.has(document.uri.scheme)) return undefined;
+		// A language turned off by hand still answers an explicit Alt+\ request.
+		if (settings.disabledLanguages.has(document.languageId) && !invokedByHand) return undefined;
 
 		const prefix = textBefore(document, position);
 		const suffix = textAfter(document, position);
@@ -124,16 +153,14 @@ export class Ms365InlineCompletionProvider implements vscode.InlineCompletionIte
 				maxLines: settings.maxLines,
 				languageId: document.languageId,
 			});
-			log(
-				`autocompletado: ${Date.now() - started} ms, ${raw.length} chars crudos → ${completion.length} usables`,
-			);
+			log(t('log.completion', Date.now() - started, raw.length, completion.length));
 			if (!completion) return undefined;
 
 			this.remember(document, prefix, completion);
 			return [toItem(completion, position)];
 		} catch (error) {
 			if (error instanceof CopilotClientError && error.message === '__CANCELLED__') return undefined;
-			log(`autocompletado falló: ${error instanceof Error ? error.message : String(error)}`);
+			log(t('log.completionFailed', error instanceof Error ? error.message : String(error)));
 			return undefined;
 		} finally {
 			if (this.inFlight === controller) this.inFlight = undefined;
@@ -233,17 +260,17 @@ function buildCompletionPrompt(
 ): string {
 	const relativePath = vscode.workspace.asRelativePath(document.uri, false).replace(/\\/g, '/');
 	return [
-		'Actúas como un motor de autocompletado de código, no como un asistente conversacional.',
-		`Continúa el código EXACTAMENTE en la posición marcada con ⟦CURSOR⟧, en ${document.languageId}.`,
-		'Reglas estrictas:',
-		'- Responde SÓLO con el texto que va en ⟦CURSOR⟧. Nada de explicaciones, saludos ni comentarios sobre lo que haces.',
-		'- No repitas el código que ya está antes del cursor ni el que va después.',
-		'- No uses vallas de código ni Markdown.',
-		`- Como mucho ${maxLines} líneas. Si no hay nada útil que añadir, responde con una línea vacía.`,
-		`Archivo: ${relativePath}`,
-		'--- código ---',
+		t('completion.prompt.role'),
+		t('completion.prompt.continue', document.languageId),
+		t('completion.prompt.rules'),
+		t('completion.prompt.rule.only'),
+		t('completion.prompt.rule.noRepeat'),
+		t('completion.prompt.rule.noFences'),
+		t('completion.prompt.rule.maxLines', maxLines),
+		t('completion.prompt.file', relativePath),
+		t('completion.prompt.codeStart'),
 		`${prefix}⟦CURSOR⟧${suffix}`,
-		'--- fin ---',
+		t('completion.prompt.codeEnd'),
 	].join('\n');
 }
 
@@ -274,44 +301,4 @@ function delay(ms: number, token: vscode.CancellationToken): Promise<void> {
 			resolve();
 		});
 	});
-}
-
-/** Status-bar affordance: without it a 1–3 s suggestion just looks broken. */
-export class CompletionStatus implements vscode.Disposable {
-	private readonly item: vscode.StatusBarItem;
-	private busy = false;
-
-	constructor() {
-		this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
-		this.item.command = 'ms365copilot.toggleInlineCompletions';
-		this.render();
-		this.item.show();
-	}
-
-	setBusy(busy: boolean): void {
-		if (this.busy === busy) return;
-		this.busy = busy;
-		this.render();
-	}
-
-	refresh(): void {
-		this.render();
-	}
-
-	private render(): void {
-		const enabled = vscode.workspace.getConfiguration(CONFIG_SECTION).get<boolean>('enabled', true);
-		if (!enabled) {
-			this.item.text = '$(circle-slash) M365';
-			this.item.tooltip = 'Autocompletado de M365 Copilot desactivado. Clic para activarlo.';
-			return;
-		}
-		this.item.text = this.busy ? '$(loading~spin) M365' : '$(sparkle) M365';
-		this.item.tooltip = this.busy
-			? 'M365 Copilot está pensando una sugerencia...'
-			: 'Autocompletado de M365 Copilot activo. Clic para desactivarlo.';
-	}
-
-	dispose(): void {
-		this.item.dispose();
-	}
 }

@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import * as vscode from 'vscode';
+import { t } from '../src/i18n';
 import { ensureNotCancelled, resolveWorkspacePath } from './common';
 import { buildGitArgs, normalizeGitAction, type GitAction } from './gitArgs';
 
@@ -26,12 +27,12 @@ export async function getGitInfo(input: GitInfoInput, token: vscode.Cancellation
 
 	const args = buildGitArgs(action, input, scoped?.relativePath);
 	const output = await execGit(args, root.uri.fsPath, token);
-	const label = scoped ? `${action} de ${scoped.relativePath}` : action;
-	if (!output.trim()) return `git ${label}: sin salida.`;
+	const label = scoped ? t('git.scoped', action, scoped.relativePath) : action;
+	if (!output.trim()) return t('git.noOutput', label);
 
 	const trimmed = output.trimEnd();
 	const truncated =
-		trimmed.length > MAX_OUTPUT_CHARS ? `${trimmed.slice(0, MAX_OUTPUT_CHARS)}\n... (salida truncada)` : trimmed;
+		trimmed.length > MAX_OUTPUT_CHARS ? `${trimmed.slice(0, MAX_OUTPUT_CHARS)}\n${t('git.truncated')}` : trimmed;
 	return [`git ${label}:`, '```text', truncated, '```'].join('\n');
 }
 
@@ -50,15 +51,15 @@ export function execGit(args: string[], cwd: string, token: vscode.CancellationT
 				if (error) {
 					const err = error as NodeJS.ErrnoException;
 					if (err.code === 'ENOENT') {
-						reject(new Error('git no está instalado o no está en el PATH.'));
+						reject(new Error(t('git.notInstalled')));
 						return;
 					}
 					const message = stderr.trim() || err.message;
 					if (/not a git repository/i.test(message)) {
-						reject(new Error('Esta carpeta no es un repositorio git.'));
+						reject(new Error(t('git.notARepo')));
 						return;
 					}
-					reject(new Error(`git falló: ${message}`));
+					reject(new Error(t('git.failed', message)));
 					return;
 				}
 				resolve(stdout);

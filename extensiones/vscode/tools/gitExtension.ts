@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { t } from '../src/i18n';
 
 /**
  * Rebanada mínima de la API pública de la extensión Git integrada
@@ -14,6 +15,19 @@ interface GitExtensionExports {
 interface GitApi {
 	readonly repositories: readonly GitRepository[];
 	getRepository(uri: vscode.Uri): GitRepository | null;
+}
+
+/** La API de la extensión Git integrada, activándola si hace falta. */
+async function getGitApi(): Promise<GitApi> {
+	const extension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
+	if (!extension) throw new Error(t('git.extensionMissing'));
+	const exports = extension.isActive ? extension.exports : await extension.activate();
+	return exports.getAPI(1);
+}
+
+/** Todos los repositorios que la extensión Git tiene abiertos ahora mismo. */
+export async function listGitRepositories(): Promise<readonly GitRepository[]> {
+	return (await getGitApi()).repositories;
 }
 
 export interface GitRepository {
@@ -42,13 +56,7 @@ const REPOSITORY_DISCOVERY_DELAY_MS = 200;
  * depende de que la extensión Git esté activa.
  */
 export async function getGitRepository(root: vscode.Uri): Promise<GitRepository> {
-	const extension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
-	if (!extension) {
-		throw new Error('La extensión Git integrada de VS Code no está instalada o está deshabilitada.');
-	}
-
-	const exports = extension.isActive ? extension.exports : await extension.activate();
-	const api = exports.getAPI(1);
+	const api = await getGitApi();
 
 	// Justo tras el arranque de VS Code, los repositorios pueden tardar un
 	// instante en aparecer; un reintento corto evita un falso "no es un repo"
@@ -60,5 +68,5 @@ export async function getGitRepository(root: vscode.Uri): Promise<GitRepository>
 			await new Promise((resolve) => setTimeout(resolve, REPOSITORY_DISCOVERY_DELAY_MS));
 		}
 	}
-	throw new Error('No se encontró un repositorio git para esta carpeta (¿está inicializado?).');
+	throw new Error(t('git.noRepository'));
 }

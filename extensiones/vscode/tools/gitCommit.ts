@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ensureNotCancelled, type ResolvedWorkspacePath, resolveWorkspacePath } from './common';
 import { validateConventionalCommitMessage } from './commitMessage';
 import { execGit } from './git';
+import { t } from '../src/i18n';
 
 export interface GitCommitInput {
 	readonly message?: string;
@@ -34,7 +35,7 @@ export async function commitWorkspace(input: GitCommitInput, token: vscode.Cance
 	const stagedDescription: string[] = [];
 	if (input.stageAll) {
 		await execGit(['add', '-A'], root.uri.fsPath, token);
-		stagedDescription.push('todos los cambios (`git add -A`)');
+		stagedDescription.push(t('commit.stagedAll'));
 	} else if (paths.length > 0) {
 		await execGit(['add', '--', ...paths], root.uri.fsPath, token);
 		stagedDescription.push(...paths.map((p) => `\`${p}\``));
@@ -43,10 +44,7 @@ export async function commitWorkspace(input: GitCommitInput, token: vscode.Cance
 	ensureNotCancelled(token);
 	const staged = (await execGit(['diff', '--cached', '--name-status'], root.uri.fsPath, token)).trim();
 	if (!staged) {
-		throw new Error(
-			'No hay nada en stage para commitear. Pasa stageAll o paths, o haz `git add` primero ' +
-				'(por ejemplo con ms365_run_command).',
-		);
+		throw new Error(t('commit.nothingStaged', 'ms365_run_command'));
 	}
 
 	await execGit(['commit', '-m', message], root.uri.fsPath, token);
@@ -54,9 +52,9 @@ export async function commitWorkspace(input: GitCommitInput, token: vscode.Cance
 
 	return [
 		stagedDescription.length > 0
-			? `Stage añadido antes de commitear: ${stagedDescription.join(', ')}.`
-			: 'Se ha commiteado lo que ya estaba en stage (no se ha añadido nada nuevo).',
-		'Commit creado:',
+			? t('commit.stagedBefore', stagedDescription.join(', '))
+			: t('commit.stagedExisting'),
+		t('commit.created'),
 		'```text',
 		summary,
 		'```',
@@ -65,7 +63,7 @@ export async function commitWorkspace(input: GitCommitInput, token: vscode.Cance
 
 function normalizePaths(raw: unknown, root: ResolvedWorkspacePath): string[] {
 	if (raw === undefined) return [];
-	if (!Array.isArray(raw)) throw new Error('paths debe ser un array de rutas relativas al workspace.');
-	if (raw.length > MAX_PATHS) throw new Error(`paths no puede tener más de ${MAX_PATHS} elementos.`);
+	if (!Array.isArray(raw)) throw new Error(t('commit.pathsNotArray'));
+	if (raw.length > MAX_PATHS) throw new Error(t('commit.tooManyPaths', MAX_PATHS));
 	return raw.map((value) => resolveWorkspacePath(value, root.workspaceFolder.name).relativePath);
 }

@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { t, type MessageKey } from '../src/i18n';
 
 export const MAX_FILE_BYTES = 512 * 1024;
 
@@ -15,7 +16,7 @@ export function resolveWorkspacePath(
 	options: { readonly allowEmpty?: boolean } = {},
 ): ResolvedWorkspacePath {
 	if (!vscode.workspace.isTrusted) {
-		throw new Error('Las herramientas de M365 Copilot requieren un workspace de confianza.');
+		throw new Error(t('ws.untrusted'));
 	}
 
 	const workspaceFolder = resolveWorkspaceFolder(workspaceFolderName);
@@ -43,10 +44,10 @@ export async function readWorkspaceText(
 		throw error;
 	}
 	if (!(stat.type & vscode.FileType.File)) {
-		throw new Error(`La ruta no es un archivo: ${uri.path}`);
+		throw new Error(t('ws.notAFile', uri.path));
 	}
 	if (stat.size > maxBytes) {
-		throw new Error(`El archivo supera el límite de ${Math.floor(maxBytes / 1024)} KB.`);
+		throw new Error(t('ws.tooLarge', Math.floor(maxBytes / 1024)));
 	}
 
 	const bytes = await vscode.workspace.fs.readFile(uri);
@@ -91,8 +92,21 @@ export function inferLanguage(relativePath: string): string {
 	);
 }
 
+/**
+ * Lanzado cuando el usuario cancela una herramienta a medias. Es una clase
+ * propia (y no un `Error` con un texto concreto) para que quien necesite
+ * distinguir «cancelado» de «falló» lo haga con `instanceof`: comparar el
+ * mensaje dejaba de funcionar en cuanto el mensaje se traducía.
+ */
+export class CancelledError extends Error {
+	constructor() {
+		super(t('ws.cancelled'));
+		this.name = 'CancelledError';
+	}
+}
+
 export function ensureNotCancelled(token: vscode.CancellationToken): void {
-	if (token.isCancellationRequested) throw new Error('La operación fue cancelada.');
+	if (token.isCancellationRequested) throw new CancelledError();
 }
 
 export function errorMessage(error: unknown): string {
@@ -101,43 +115,41 @@ export function errorMessage(error: unknown): string {
 
 function resolveWorkspaceFolder(workspaceFolderName: unknown): vscode.WorkspaceFolder {
 	const folders = vscode.workspace.workspaceFolders ?? [];
-	if (folders.length === 0) throw new Error('Abre una carpeta o workspace antes de usar herramientas.');
+	if (folders.length === 0) throw new Error(t('ws.noFolder'));
 
 	const requested = typeof workspaceFolderName === 'string' ? workspaceFolderName.trim() : '';
 	if (!requested && folders.length === 1) return folders[0];
 	if (requested) {
 		const folder = folders.find((candidate) => candidate.name === requested);
 		if (folder) return folder;
-		throw new Error(`No existe el workspaceFolder «${requested}».`);
+		throw new Error(t('ws.folderNotFound', requested));
 	}
 
-	throw new Error(
-		`Hay varios workspaces abiertos (${folders.map((folder) => folder.name).join(', ')}). Especifica workspaceFolder.`,
-	);
+	throw new Error(t('ws.multipleFolders', folders.map((folder) => folder.name).join(', ')));
 }
 
 function normalizeRelativePath(value: unknown, allowEmpty: boolean): string {
-	if (typeof value !== 'string') throw new Error('path debe ser una ruta relativa al workspace.');
+	if (typeof value !== 'string') throw new Error(t('ws.path.notString'));
 	const raw = value.trim();
 	if (!raw) {
 		if (allowEmpty) return '';
-		throw new Error('path no puede estar vacío.');
+		throw new Error(t('ws.path.empty'));
 	}
 	if (raw.includes('\0') || path.win32.isAbsolute(raw)) {
-		throw new Error('path debe ser una ruta relativa dentro del workspace.');
+		throw new Error(t('ws.path.absolute'));
 	}
 
 	const slashPath = raw.replace(/\\/g, '/');
 	if (path.posix.isAbsolute(slashPath) || slashPath.split('/').some((part) => part === '..')) {
-		throw new Error('path no puede salir del workspace.');
+		throw new Error(t('ws.path.escapes'));
 	}
 	const normalized = path.posix.normalize(slashPath).replace(/^\.\//, '');
 	if (!normalized || normalized === '.') {
 		if (allowEmpty) return '';
-		throw new Error('path no puede apuntar a la raíz del workspace.');
+		throw new Error(t('ws.path.root'));
 	}
 	if (normalized.split('/')[0] === '.git') {
-		throw new Error('No se permite acceder a .git mediante herramientas.');
+		throw new Error(t('ws.path.git'));
 	}
 	return normalized;
 }
@@ -148,19 +160,19 @@ function isFileNotFound(error: unknown): boolean {
 
 /** Extensiones de formatos binarios habituales para los que merece la pena nombrar la causa
  * probable, en vez de un genérico "parece binario" que no orienta al modelo ni al usuario. */
-const KNOWN_BINARY_KINDS: Readonly<Record<string, string>> = {
-	'.pdf': 'un PDF',
-	'.doc': 'un documento de Word antiguo (.doc)',
-	'.docx': 'un documento de Word',
-	'.xls': 'una hoja de Excel antigua (.xls)',
-	'.xlsx': 'una hoja de Excel',
-	'.ppt': 'una presentación de PowerPoint antigua (.ppt)',
-	'.pptx': 'una presentación de PowerPoint',
-	'.png': 'una imagen',
-	'.jpg': 'una imagen',
-	'.jpeg': 'una imagen',
-	'.gif': 'una imagen',
-	'.zip': 'un archivo comprimido',
+const KNOWN_BINARY_KINDS: Readonly<Record<string, MessageKey>> = {
+	'.pdf': 'ws.binary.pdf',
+	'.doc': 'ws.binary.doc',
+	'.docx': 'ws.binary.docx',
+	'.xls': 'ws.binary.xls',
+	'.xlsx': 'ws.binary.xlsx',
+	'.ppt': 'ws.binary.ppt',
+	'.pptx': 'ws.binary.pptx',
+	'.png': 'ws.binary.image',
+	'.jpg': 'ws.binary.image',
+	'.jpeg': 'ws.binary.image',
+	'.gif': 'ws.binary.image',
+	'.zip': 'ws.binary.zip',
 };
 
 /**
@@ -174,12 +186,8 @@ const KNOWN_BINARY_KINDS: Readonly<Record<string, string>> = {
 function binaryFileMessage(uri: vscode.Uri): string {
 	const extension = path.posix.extname(uri.path).toLowerCase();
 	const kind = KNOWN_BINARY_KINDS[extension];
-	const described = kind ? `${kind} (${extension})` : `un archivo binario (${extension || 'sin extensión'})`;
-	return (
-		`Este archivo parece ser ${described} y no se puede leer como texto: esta herramienta sólo lee texto plano, ` +
-		'no extrae el contenido de formatos binarios/ofimáticos. NO intentes leerlo de otra forma ni inventes su ' +
-		'contenido a partir de bytes crudos — dile al usuario que esta herramienta no puede abrir este tipo de ' +
-		'archivo todavía, y pídele que pegue el texto relevante en el chat o lo exporte/guarde como .txt/.md si lo ' +
-		'necesita.'
-	);
+	const described = kind
+		? t('ws.binary.kind', t(kind), extension)
+		: t('ws.binary.generic', extension || t('ws.binary.noExtension'));
+	return t('ws.binary', described);
 }

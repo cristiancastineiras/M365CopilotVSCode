@@ -1,3 +1,5 @@
+import { t } from '../src/i18n';
+
 const VALID_ACTIONS = ['status', 'diff', 'log'] as const;
 export type GitAction = (typeof VALID_ACTIONS)[number];
 
@@ -9,7 +11,7 @@ export interface GitCommandInput {
 export function normalizeGitAction(value: unknown): GitAction {
 	const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
 	if ((VALID_ACTIONS as readonly string[]).includes(normalized)) return normalized as GitAction;
-	throw new Error('action debe ser status, diff o log.');
+	throw new Error(t('git.invalidAction'));
 }
 
 /** Build a `git` argv (never a shell string) for one of the three read-only actions. */

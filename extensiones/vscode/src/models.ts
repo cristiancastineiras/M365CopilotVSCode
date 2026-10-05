@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { t, type MessageKey } from './i18n';
 
 /**
  * M365 Copilot / BizChat selects a model through the `tone` field of the chat
@@ -13,7 +14,8 @@ export interface CopilotModel {
 	readonly family: string;
 	/** `tone` to send, or null to reuse the captured template's tone. */
 	readonly tone: string | null;
-	readonly detail: string;
+	/** Catalog key of the one-line description shown in the picker. */
+	readonly detailKey: MessageKey;
 }
 
 export const MODELS: readonly CopilotModel[] = [
@@ -22,42 +24,42 @@ export const MODELS: readonly CopilotModel[] = [
 		name: 'M365 Copilot (Auto)',
 		family: 'm365-copilot',
 		tone: null,
-		detail: 'Enrutado automático de Microsoft 365 Copilot (recomendado).',
+		detailKey: 'model.auto.detail',
 	},
 	{
 		id: 'ms365-copilot-gpt',
 		name: 'M365 Copilot · GPT',
 		family: 'm365-copilot',
 		tone: 'Gpt_5_5_Chat',
-		detail: 'Fuerza el modelo GPT del backend de Copilot.',
+		detailKey: 'model.gpt.detail',
 	},
 	{
 		id: 'ms365-copilot-gpt56',
 		name: 'M365 Copilot · GPT 5.6',
 		family: 'm365-copilot',
 		tone: 'Gpt_5_6_Chat',
-		detail: 'GPT 5.6 (respuestas rápidas) — el modelo preferido de M365 Copilot desde julio de 2026.',
+		detailKey: 'model.gpt56.detail',
 	},
 	{
 		id: 'ms365-copilot-gpt56-reasoning',
 		name: 'M365 Copilot · GPT 5.6 Reasoning',
 		family: 'm365-copilot',
 		tone: 'Gpt_5_6_Reasoning',
-		detail: 'GPT 5.6 en modo razonamiento («Think deeper»): respuestas más elaboradas para trabajo difícil.',
+		detailKey: 'model.gpt56Reasoning.detail',
 	},
 	{
 		id: 'ms365-copilot-claude',
 		name: 'M365 Copilot · Claude Sonnet',
 		family: 'm365-copilot',
 		tone: 'Claude_Sonnet',
-		detail: 'Fuerza Claude Sonnet en el backend de Copilot.',
+		detailKey: 'model.claude.detail',
 	},
 	{
 		id: 'ms365-copilot-reasoning',
 		name: 'M365 Copilot · Reasoning',
 		family: 'm365-copilot',
 		tone: 'Gpt_5_5_Reasoning',
-		detail: 'Modo de razonamiento (más lento, respuestas más elaboradas).',
+		detailKey: 'model.reasoning.detail',
 	},
 ];
 
@@ -87,11 +89,12 @@ type PickerChatInformation = vscode.LanguageModelChatInformation & {
 	readonly statusIcon?: vscode.ThemeIcon;
 };
 
+/** Whether the stored token can be used right now — drives the picker's warning state. */
+export type TokenState = 'ok' | 'missing' | 'expired';
+
 /** Build the model information VS Code renders in the picker. */
-export function toChatInformation(
-	model: CopilotModel,
-	hasProfile: boolean,
-): vscode.LanguageModelChatInformation {
+export function toChatInformation(model: CopilotModel, tokenState: TokenState): vscode.LanguageModelChatInformation {
+	const detail = t(model.detailKey);
 	const info: PickerChatInformation = {
 		id: model.id,
 		name: model.name,
@@ -99,13 +102,14 @@ export function toChatInformation(
 		version: '1.0.0',
 		maxInputTokens: MAX_INPUT_TOKENS,
 		maxOutputTokens: MAX_OUTPUT_TOKENS,
-		detail: hasProfile ? model.detail : 'Pega tu token de M365 Copilot para activarlo.',
-		tooltip: model.detail,
+		detail:
+			tokenState === 'ok' ? detail : t(tokenState === 'missing' ? 'model.needsToken' : 'model.tokenExpired'),
+		tooltip: detail,
 		// This is what surfaces the model in the in-chat picker (not just in
 		// "Manage Models").
 		isUserSelectable: true,
 		isBYOK: true,
-		statusIcon: hasProfile ? undefined : new vscode.ThemeIcon('warning'),
+		statusIcon: tokenState === 'ok' ? undefined : new vscode.ThemeIcon('warning'),
 		capabilities: {
 			// We advertise tool calling so the models also appear in the default
 			// Agent/Edit chat mode (which filters out models without it). BizChat

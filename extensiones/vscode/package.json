@@ -1,7 +1,7 @@
 {
   "name": "ms365-copilot-vscode",
-  "displayName": "M365 Copilot for VS Code",
-  "description": "Usa tu suscripción de Microsoft 365 Copilot como proveedor de modelos en el chat de VS Code. Pega el token capturado con el userscript y listo.",
+  "displayName": "%displayName%",
+  "description": "%description%",
   "version": "1.3.0",
   "publisher": "ms365-copilot-vscode",
   "license": "MIT",
@@ -34,9 +34,9 @@
     "languageModelTools": [
       {
         "name": "ms365_list_files",
-        "displayName": "M365: List workspace files",
+        "displayName": "%tool.ms365ListFiles.displayName%",
         "modelDescription": "List files below a workspace-relative directory without reading their contents. Use it first to discover the project layout before reading or editing files.",
-        "userDescription": "Deja que M365 Copilot liste archivos del workspace.",
+        "userDescription": "%tool.ms365ListFiles.userDescription%",
         "toolReferenceName": "ms365ListFiles",
         "canBeReferencedInPrompt": true,
         "icon": "$(list-tree)",
@@ -65,9 +65,9 @@
       },
       {
         "name": "ms365_search_text",
-        "displayName": "M365: Search workspace text",
+        "displayName": "%tool.ms365SearchText.displayName%",
         "modelDescription": "Search for literal text across a bounded set of workspace files and return concise file:line matches. Use it to locate code before reading or editing it.",
-        "userDescription": "Deja que M365 Copilot busque texto en el workspace.",
+        "userDescription": "%tool.ms365SearchText.userDescription%",
         "toolReferenceName": "ms365SearchText",
         "canBeReferencedInPrompt": true,
         "icon": "$(search)",
@@ -107,9 +107,9 @@
       },
       {
         "name": "ms365_read_file",
-        "displayName": "M365: Read workspace file",
+        "displayName": "%tool.ms365ReadFile.displayName%",
         "modelDescription": "Read a small, line-numbered range from a workspace-relative text file. Always read the relevant range with this tool before proposing edits to a file.",
-        "userDescription": "Deja que M365 Copilot lea archivos del workspace.",
+        "userDescription": "%tool.ms365ReadFile.userDescription%",
         "toolReferenceName": "ms365ReadFile",
         "canBeReferencedInPrompt": true,
         "icon": "$(file-code)",
@@ -144,9 +144,9 @@
       },
       {
         "name": "ms365_apply_edits",
-        "displayName": "M365: Propose workspace edits",
+        "displayName": "%tool.ms365ApplyEdits.displayName%",
         "modelDescription": "Apply a reversible batch of exact workspace edits. Changes land in the editor immediately (unsaved), highlighted, with Keep/Undo actions on the change for the user to accept or revert — so never assume they are final. Fields per operation: replace needs oldText (exact and unique in the file) plus newText; create needs content (NOT newText); delete needs only path. Prefer several small calls over one huge batch when creating many files.",
-        "userDescription": "Deja que M365 Copilot proponga cambios en el workspace (con revisión y diff).",
+        "userDescription": "%tool.ms365ApplyEdits.userDescription%",
         "toolReferenceName": "ms365ApplyEdits",
         "canBeReferencedInPrompt": true,
         "icon": "$(edit)",
@@ -207,9 +207,9 @@
       },
       {
         "name": "ms365_get_diagnostics",
-        "displayName": "M365: Get diagnostics",
+        "displayName": "%tool.ms365GetDiagnostics.displayName%",
         "modelDescription": "Read the errors and warnings VS Code's language server already computed for a file or the whole workspace. Read-only; does not compile or run anything. Use it after proposing edits to check they didn't introduce new errors.",
-        "userDescription": "Deja que M365 Copilot lea los errores/avisos que ya muestra VS Code.",
+        "userDescription": "%tool.ms365GetDiagnostics.userDescription%",
         "toolReferenceName": "ms365GetDiagnostics",
         "canBeReferencedInPrompt": true,
         "icon": "$(warning)",
@@ -242,9 +242,9 @@
       },
       {
         "name": "ms365_git_info",
-        "displayName": "M365: Git info (read-only)",
+        "displayName": "%tool.ms365GitInfo.displayName%",
         "modelDescription": "Read-only git status, diff or log for the workspace or a path. Never commits, pushes or otherwise modifies the repository.",
-        "userDescription": "Deja que M365 Copilot consulte git (status/diff/log) sin modificar nada.",
+        "userDescription": "%tool.ms365GitInfo.userDescription%",
         "toolReferenceName": "ms365GitInfo",
         "canBeReferencedInPrompt": true,
         "icon": "$(git-branch)",
@@ -289,9 +289,9 @@
       },
       {
         "name": "ms365_generate_commit_message",
-        "displayName": "M365: Generate commit message",
+        "displayName": "%tool.ms365GenerateCommitMessage.displayName%",
         "modelDescription": "Trigger VS Code's native Source Control 'Generate Commit Message' feature for the workspace repository and return what it produced, together with the staged (or working tree) diff. Does not modify the repository. Review/fix the result so its first line follows Conventional Commits before passing it to ms365_git_commit.",
-        "userDescription": "Deja que M365 Copilot dispare la función nativa de VS Code para generar el mensaje de commit.",
+        "userDescription": "%tool.ms365GenerateCommitMessage.userDescription%",
         "toolReferenceName": "ms365GenerateCommitMessage",
         "canBeReferencedInPrompt": true,
         "icon": "$(sparkle)",
@@ -311,9 +311,9 @@
       },
       {
         "name": "ms365_git_commit",
-        "displayName": "M365: Git commit",
+        "displayName": "%tool.ms365GitCommit.displayName%",
         "modelDescription": "Create a real commit with the given message, validated as Conventional Commits ('type(scope): summary'). Only commits what is already staged unless stageAll (git add -A) or paths (git add of those paths) is given. Requires explicit user confirmation showing the exact message before it runs.",
-        "userDescription": "Deja que M365 Copilot cree un commit (con tu confirmación del mensaje exacto).",
+        "userDescription": "%tool.ms365GitCommit.userDescription%",
         "toolReferenceName": "ms365GitCommit",
         "canBeReferencedInPrompt": true,
         "icon": "$(git-commit)",
@@ -352,9 +352,9 @@
       },
       {
         "name": "ms365_run_command",
-        "displayName": "M365: Run terminal command",
+        "displayName": "%tool.ms365RunCommand.displayName%",
         "modelDescription": "Run a shell command in the workspace and return its output (stdout/stderr, exit code). Requires explicit user confirmation before it executes. Use for builds, tests and other checks — not for destructive or irreversible actions unless the user explicitly asked for them.",
-        "userDescription": "Deja que M365 Copilot ejecute un comando de terminal (con tu confirmación).",
+        "userDescription": "%tool.ms365RunCommand.userDescription%",
         "toolReferenceName": "ms365RunCommand",
         "canBeReferencedInPrompt": true,
         "icon": "$(terminal)",
@@ -391,9 +391,9 @@
       },
       {
         "name": "ms365_spawn_agents",
-        "displayName": "M365: Delegate to sub-agents",
+        "displayName": "%tool.ms365SpawnAgents.displayName%",
         "modelDescription": "Delegate one or more concrete, independent tasks (exploration, analysis, or even scoped edits/commands) to autonomous M365 Copilot sub-agents that run their own tool loop — in parallel when there are several — with the same workspace tools as the main agent (list/search/read/diagnostics/read-only git, and also proposing edits, running commands or committing if the task needs it, with the same Keep/Undo review and confirmation as always). Each sub-agent only sees the task it is given, not the rest of the conversation, and returns a concise summary — so exploring broadly does not fill up your own context. Use it for independent questions that can be investigated in parallel, broad exploration before deciding a change, or scoped tasks that do not need step-by-step supervision. Describe each task self-contained: the sub-agent has no access to the conversation history.",
-        "userDescription": "Deja que M365 Copilot delegue tareas en sub-agentes (en paralelo) para explorar o modificar el workspace.",
+        "userDescription": "%tool.ms365SpawnAgents.userDescription%",
         "toolReferenceName": "ms365SpawnAgents",
         "canBeReferencedInPrompt": true,
         "icon": "$(run-all)",
@@ -435,10 +435,36 @@
     "configuration": {
       "title": "M365 Copilot",
       "properties": {
+        "ms365copilot.language": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "en",
+            "es"
+          ],
+          "enumDescriptions": [
+            "%config.language.auto%",
+            "%config.language.en%",
+            "%config.language.es%"
+          ],
+          "default": "auto",
+          "scope": "application",
+          "markdownDescription": "%config.language%"
+        },
+        "ms365copilot.notifications.tokenExpiry": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.notifications.tokenExpiry%"
+        },
+        "ms365copilot.editor.codeActions": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.editor.codeActions%"
+        },
         "ms365copilot.tools.includeEditorTools": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Describe al modelo también las herramientas del propio VS Code (modo agente, MCP y otras extensiones), no sólo las de esta extensión. Es lo que permite que el agente lea, edite o ejecute con las herramientas nativas del editor. Desactívalo para volver al comportamiento anterior (sólo herramientas `ms365_*`)."
+          "markdownDescription": "%config.tools.includeEditorTools%"
         },
         "ms365copilot.tools.duplicates": {
           "type": "string",
@@ -448,38 +474,38 @@
             "both"
           ],
           "enumDescriptions": [
-            "Cuando una herramienta nativa hace lo mismo que una nuestra, se le indica al modelo que use la nativa.",
-            "Al revés: se prefieren las de esta extensión (rutas relativas al workspace y revisión Keep/Undo propia).",
-            "No se marca ninguna preferencia; el modelo elige."
+            "%config.tools.duplicates.preferEditor%",
+            "%config.tools.duplicates.preferM365%",
+            "%config.tools.duplicates.both%"
           ],
           "default": "preferEditor",
-          "markdownDescription": "Qué herramienta preferir cuando una nuestra y una nativa de VS Code hacen lo mismo (leer, buscar, editar, terminal…). Ninguna se oculta: la otra queda como alternativa si la preferida falla."
+          "markdownDescription": "%config.tools.duplicates%"
         },
         "ms365copilot.tools.maxAdvertised": {
           "type": "number",
           "default": 48,
           "minimum": 4,
           "maximum": 200,
-          "markdownDescription": "Máximo de herramientas descritas en el prompt. BizChat no tiene function-calling nativo: el catálogo viaja como texto, así que con muchas herramientas activas (MCP incluido) conviene acotarlo. Las que no se describen siguen siendo ejecutables si el modelo las nombra."
+          "markdownDescription": "%config.tools.maxAdvertised%"
         },
         "ms365copilot.subagents.enabled": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Permite que el modelo delegue tareas en sub-agentes (`ms365_spawn_agents`): cada uno corre su propio ciclo de herramientas — incluidas ediciones y comandos, con la misma revisión Keep/Undo y confirmación de siempre — y sólo devuelve un resumen. Desactívalo para que la herramienta no haga nada (explica por qué en vez de ejecutar)."
+          "markdownDescription": "%config.subagents.enabled%"
         },
         "ms365copilot.subagents.maxConcurrent": {
           "type": "number",
           "default": 3,
           "minimum": 1,
           "maximum": 6,
-          "markdownDescription": "Cuántos sub-agentes pueden correr a la vez cuando se delegan varias tareas. El resto espera su turno; las llamadas que editan archivos o ejecutan comandos siempre se serializan entre sí (máx. 1 a la vez) para evitar que se pisen."
+          "markdownDescription": "%config.subagents.maxConcurrent%"
         },
         "ms365copilot.subagents.maxSteps": {
           "type": "number",
           "default": 6,
           "minimum": 1,
           "maximum": 12,
-          "markdownDescription": "Máximo de llamadas a herramientas que puede hacer un sub-agente antes de devolver un resumen parcial con aviso de límite alcanzado."
+          "markdownDescription": "%config.subagents.maxSteps%"
         },
         "ms365copilot.subagents.model": {
           "type": "string",
@@ -492,12 +518,12 @@
             "ms365-copilot-reasoning"
           ],
           "default": "ms365-copilot-auto",
-          "description": "Modelo (tone) que usan los sub-agentes, independiente del que tengas elegido en el chat principal."
+          "description": "%config.subagents.model%"
         },
         "ms365copilot.inlineCompletions.enabled": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Sugerencias de código en línea (texto fantasma) con M365 Copilot. **Ojo:** cada sugerencia es una petición a tu plan de M365, y la latencia es de ~1-3 s (BizChat abre un WebSocket nuevo por petición y no es un modelo de autocompletado). Si te resulta lento o gasta demasiado, usa `triggerMode: manual`."
+          "markdownDescription": "%config.inlineCompletions.enabled%"
         },
         "ms365copilot.inlineCompletions.triggerMode": {
           "type": "string",
@@ -506,32 +532,32 @@
             "manual"
           ],
           "enumDescriptions": [
-            "Sugiere solo al dejar de teclear (con el retardo de debounceMs).",
-            "Sugiere únicamente cuando lo pides a mano (Alt+\\ por defecto en VS Code)."
+            "%config.inlineCompletions.triggerMode.automatic%",
+            "%config.inlineCompletions.triggerMode.manual%"
           ],
           "default": "automatic",
-          "description": "Cuándo pedir sugerencias. «manual» reduce muchísimo el consumo de cuota."
+          "description": "%config.inlineCompletions.triggerMode%"
         },
         "ms365copilot.inlineCompletions.debounceMs": {
           "type": "number",
           "default": 500,
           "minimum": 0,
           "maximum": 5000,
-          "description": "Milisegundos sin teclear antes de pedir una sugerencia. Subirlo gasta menos cuota; bajarlo responde antes pero dispara más peticiones."
+          "description": "%config.inlineCompletions.debounceMs%"
         },
         "ms365copilot.inlineCompletions.maxLines": {
           "type": "number",
           "default": 6,
           "minimum": 1,
           "maximum": 30,
-          "description": "Máximo de líneas por sugerencia. Menos líneas = menos latencia."
+          "description": "%config.inlineCompletions.maxLines%"
         },
         "ms365copilot.inlineCompletions.timeoutMs": {
           "type": "number",
           "default": 6000,
           "minimum": 1000,
           "maximum": 30000,
-          "description": "Tiempo máximo de espera por sugerencia. Pasado ese punto se descarta: una sugerencia tardía estorba más que ayuda."
+          "description": "%config.inlineCompletions.timeoutMs%"
         },
         "ms365copilot.inlineCompletions.model": {
           "type": "string",
@@ -544,65 +570,329 @@
             "ms365-copilot-reasoning"
           ],
           "default": "ms365-copilot-auto",
-          "description": "Modelo usado para el autocompletado. «reasoning» es notablemente más lento; no se recomienda aquí."
+          "description": "%config.inlineCompletions.model%"
+        },
+        "ms365copilot.inlineCompletions.disabledLanguages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "scminput",
+            "plaintext"
+          ],
+          "markdownDescription": "%config.inlineCompletions.disabledLanguages%"
         }
       }
     },
     "commands": [
       {
+        "command": "ms365copilot.showMenu",
+        "title": "%command.showMenu%",
+        "category": "M365 Copilot",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "ms365copilot.openChat",
+        "title": "%command.openChat%",
+        "category": "M365 Copilot",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "ms365copilot.explainCode",
+        "title": "%command.explainCode%",
+        "category": "M365 Copilot"
+      },
+      {
+        "command": "ms365copilot.askAboutCode",
+        "title": "%command.askAboutCode%",
+        "category": "M365 Copilot"
+      },
+      {
+        "command": "ms365copilot.fixCode",
+        "title": "%command.fixCode%",
+        "category": "M365 Copilot"
+      },
+      {
+        "command": "ms365copilot.documentCode",
+        "title": "%command.documentCode%",
+        "category": "M365 Copilot"
+      },
+      {
+        "command": "ms365copilot.generateTests",
+        "title": "%command.generateTests%",
+        "category": "M365 Copilot"
+      },
+      {
+        "command": "ms365copilot.generateCommitMessage",
+        "title": "%command.generateCommitMessage%",
+        "icon": "$(sparkle-filled)"
+      },
+      {
         "command": "ms365copilot.toggleInlineCompletions",
-        "title": "Activar/desactivar autocompletado en línea",
+        "title": "%command.toggleInlineCompletions%",
         "category": "M365 Copilot"
       },
       {
         "command": "ms365copilot.pasteProfile",
-        "title": "Pegar perfil o token",
-        "category": "M365 Copilot"
+        "title": "%command.pasteProfile%",
+        "category": "M365 Copilot",
+        "icon": "$(key)"
       },
       {
         "command": "ms365copilot.clearProfile",
-        "title": "Borrar credenciales",
+        "title": "%command.clearProfile%",
         "category": "M365 Copilot"
       },
       {
         "command": "ms365copilot.showStatus",
-        "title": "Estado / información del token",
+        "title": "%command.showStatus%",
         "category": "M365 Copilot"
       },
       {
+        "command": "ms365copilot.selectLanguage",
+        "title": "%command.selectLanguage%",
+        "category": "M365 Copilot",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "ms365copilot.openWalkthrough",
+        "title": "%command.openWalkthrough%",
+        "category": "M365 Copilot",
+        "icon": "$(book)"
+      },
+      {
         "command": "ms365copilot.showLog",
-        "title": "Mostrar registro (diagnóstico)",
+        "title": "%command.showLog%",
         "category": "M365 Copilot"
       },
       {
         "command": "ms365copilot.reviewPendingEdits",
-        "title": "Revisar cambios de agente pendientes",
+        "title": "%command.reviewPendingEdits%",
         "category": "M365 Copilot"
       },
       {
         "command": "ms365copilot.keepEdits",
-        "title": "Aceptar (Keep) los cambios del agente",
-        "category": "M365 Copilot"
+        "title": "%command.keepEdits%",
+        "category": "M365 Copilot",
+        "icon": "$(check)"
       },
       {
         "command": "ms365copilot.undoEdits",
-        "title": "Revertir (Undo) los cambios del agente",
-        "category": "M365 Copilot"
+        "title": "%command.undoEdits%",
+        "category": "M365 Copilot",
+        "icon": "$(discard)"
       },
       {
         "command": "ms365copilot.showEditDiff",
-        "title": "Ver diff de los cambios del agente",
-        "category": "M365 Copilot"
+        "title": "%command.showEditDiff%",
+        "category": "M365 Copilot",
+        "icon": "$(diff)"
       },
       {
         "command": "ms365copilot.discardPendingEdits",
-        "title": "Descartar cambios de agente pendientes",
+        "title": "%command.discardPendingEdits%",
         "category": "M365 Copilot"
       },
       {
         "command": "ms365copilot.undoLastAgentEdit",
-        "title": "Deshacer último lote de cambios del agente",
+        "title": "%command.undoLastAgentEdit%",
         "category": "M365 Copilot"
+      }
+    ],
+    "chatParticipants": [
+      {
+        "id": "ms365copilot.m365",
+        "name": "m365",
+        "fullName": "M365 Copilot",
+        "description": "%participant.description%",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "explain",
+            "description": "%participant.command.explain%"
+          },
+          {
+            "name": "fix",
+            "description": "%participant.command.fix%"
+          },
+          {
+            "name": "doc",
+            "description": "%participant.command.doc%"
+          },
+          {
+            "name": "tests",
+            "description": "%participant.command.tests%"
+          }
+        ]
+      }
+    ],
+    "submenus": [
+      {
+        "id": "ms365copilot.editor",
+        "label": "M365 Copilot"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "submenu": "ms365copilot.editor",
+          "group": "ms365copilot@1",
+          "when": "editorTextFocus"
+        }
+      ],
+      "ms365copilot.editor": [
+        {
+          "command": "ms365copilot.explainCode",
+          "group": "1_ask@1"
+        },
+        {
+          "command": "ms365copilot.askAboutCode",
+          "group": "1_ask@2"
+        },
+        {
+          "command": "ms365copilot.fixCode",
+          "group": "2_change@1",
+          "when": "!editorReadonly"
+        },
+        {
+          "command": "ms365copilot.documentCode",
+          "group": "2_change@2",
+          "when": "!editorReadonly"
+        },
+        {
+          "command": "ms365copilot.generateTests",
+          "group": "2_change@3"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "ms365copilot.keepEdits",
+          "group": "navigation@1",
+          "when": "ms365copilot.activeEditorHasPendingEdits"
+        },
+        {
+          "command": "ms365copilot.undoEdits",
+          "group": "navigation@2",
+          "when": "ms365copilot.activeEditorHasPendingEdits"
+        },
+        {
+          "command": "ms365copilot.showEditDiff",
+          "group": "navigation@3",
+          "when": "ms365copilot.activeEditorHasPendingEdits"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "ms365copilot.generateCommitMessage",
+          "group": "navigation@10",
+          "when": "scmProvider == git"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "ms365copilot.explainCode",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ms365copilot.askAboutCode",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ms365copilot.fixCode",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ms365copilot.documentCode",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ms365copilot.generateTests",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ms365copilot.keepEdits",
+          "when": "ms365copilot.hasPendingEdits"
+        },
+        {
+          "command": "ms365copilot.undoEdits",
+          "when": "ms365copilot.hasPendingEdits"
+        },
+        {
+          "command": "ms365copilot.showEditDiff",
+          "when": "ms365copilot.hasPendingEdits"
+        },
+        {
+          "command": "ms365copilot.discardPendingEdits",
+          "when": "ms365copilot.hasPendingEdits"
+        }
+      ]
+    },
+    "walkthroughs": [
+      {
+        "id": "ms365copilot.gettingStarted",
+        "title": "%walkthrough.title%",
+        "description": "%walkthrough.description%",
+        "steps": [
+          {
+            "id": "ms365copilot.capture",
+            "title": "%walkthrough.capture.title%",
+            "description": "%walkthrough.capture.description%",
+            "media": {
+              "image": "imgs/ui-extension-navegador.png",
+              "altText": "%walkthrough.capture.alt%"
+            }
+          },
+          {
+            "id": "ms365copilot.paste",
+            "title": "%walkthrough.paste.title%",
+            "description": "%walkthrough.paste.description%",
+            "media": {
+              "image": "imgs/pegar-token-perfil.png",
+              "altText": "%walkthrough.paste.alt%"
+            },
+            "completionEvents": [
+              "onCommand:ms365copilot.pasteProfile"
+            ]
+          },
+          {
+            "id": "ms365copilot.chat",
+            "title": "%walkthrough.chat.title%",
+            "description": "%walkthrough.chat.description%",
+            "media": {
+              "image": "imgs/modelos-opciones.png",
+              "altText": "%walkthrough.chat.alt%"
+            },
+            "completionEvents": [
+              "onCommand:ms365copilot.openChat"
+            ]
+          },
+          {
+            "id": "ms365copilot.editor",
+            "title": "%walkthrough.editor.title%",
+            "description": "%walkthrough.editor.description%",
+            "media": {
+              "image": "imgs/ejemplo-edicion-codigo.png",
+              "altText": "%walkthrough.editor.alt%"
+            },
+            "completionEvents": [
+              "onCommand:ms365copilot.explainCode",
+              "onCommand:ms365copilot.fixCode"
+            ]
+          },
+          {
+            "id": "ms365copilot.language",
+            "title": "%walkthrough.language.title%",
+            "description": "%walkthrough.language.description%",
+            "media": {
+              "image": "logo/ms365-vscode.png",
+              "altText": "%walkthrough.language.alt%"
+            },
+            "completionEvents": [
+              "onCommand:ms365copilot.selectLanguage"
+            ]
+          }
+        ]
       }
     ]
   },

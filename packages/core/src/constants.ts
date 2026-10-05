@@ -16,6 +16,13 @@ export const TOKEN_ENDPOINT_PATH = '/token';
 /** Ruta de health-check para saber si VS Code está escuchando (GET). */
 export const HEALTH_ENDPOINT_PATH = '/health';
 
+/**
+ * Web de M365 Copilot: donde se captura el token. La extensión de navegador
+ * abre aquí una pestaña en segundo plano para renovarlo, y la de VS Code la
+ * ofrece cuando el token falta o caduca.
+ */
+export const M365_CHAT_URL = 'https://m365.cloud.microsoft/chat/';
+
 /** Clave de localStorage donde el interceptor del navegador acumula la captura. */
 export const CAPTURE_STORE_KEY = 'ms365copilot.capture.v1';
 

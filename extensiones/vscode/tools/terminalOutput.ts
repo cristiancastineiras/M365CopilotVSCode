@@ -7,6 +7,7 @@
  *
  * Kept free of the `vscode` import so it can be exercised directly.
  */
+import { t } from '../src/i18n';
 
 // Matching control characters is the entire job of an ANSI stripper, so the
 // no-control-regex rule is deliberately off for these three patterns.
@@ -72,5 +73,5 @@ export function truncateOutput(text: string, maxChars: number): string {
 	const head = Math.floor(maxChars * 0.4);
 	const tail = Math.max(maxChars - head - 40, 0);
 	const omitted = text.length - head - tail;
-	return `${text.slice(0, head)}\n… (${omitted} caracteres omitidos) …\n${text.slice(-tail)}`;
+	return `${text.slice(0, head)}\n${t('run.charsOmitted', omitted)}\n${text.slice(-tail)}`;
 }

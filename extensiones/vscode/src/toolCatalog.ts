@@ -20,6 +20,7 @@
  *
  * A propósito NO importa `vscode`: así se puede probar fuera del host.
  */
+import { t } from './i18n';
 
 export const M365_TOOL_NAMES = {
 	listFiles: 'ms365_list_files',
@@ -71,87 +72,70 @@ interface M365Hint {
 	readonly example: Record<string, unknown>;
 }
 
-const M365_HINTS: Readonly<Record<M365ToolName, M365Hint>> = {
-	[M365_TOOL_NAMES.listFiles]: {
-		description: 'Lista archivos del workspace sin cargar su contenido. Rutas relativas al workspace.',
-		example: { path: 'src', maxEntries: 100 },
-	},
-	[M365_TOOL_NAMES.searchText]: {
-		description: 'Busca texto literal y devuelve coincidencias breves con archivo y línea.',
-		example: { query: 'registerCommand', path: 'src', maxResults: 30 },
-	},
-	[M365_TOOL_NAMES.readFile]: {
-		description: 'Lee un rango pequeño y numerado de un archivo del workspace (ruta relativa).',
-		example: { path: 'src/extension.ts', startLine: 1, endLine: 180 },
-	},
-	[M365_TOOL_NAMES.applyWorkspaceEdits]: {
-		description:
-			'Propone un lote atómico de reemplazos, archivos nuevos o borrados. Campos por operación: ' +
-			'replace → oldText (exacto y único) + newText; create → content; delete → sólo path. ' +
-			'oldText/newText/content NUNCA van como texto literal: van como "@@block:ID@@" y el texto real va después, ' +
-			'en un <ms365_block id="ID"> (ver el formato de bloques más abajo).',
-		example: {
-			edits: [
-				{
-					operation: 'replace',
-					path: 'src/example.ts',
-					oldText: '@@block:1@@',
-					newText: '@@block:2@@',
-				},
-				{ operation: 'create', path: 'src/nuevo.ts', content: '@@block:3@@' },
-			],
+/**
+ * Se construye en cada llamada (no es una constante de módulo) para que salga
+ * en el idioma activo: el usuario puede cambiar `ms365copilot.language` sin
+ * recargar la ventana.
+ */
+function m365Hints(): Readonly<Record<M365ToolName, M365Hint>> {
+	return {
+		[M365_TOOL_NAMES.listFiles]: {
+			description: t('hint.listFiles'),
+			example: { path: 'src', maxEntries: 100 },
 		},
-	},
-	[M365_TOOL_NAMES.getDiagnostics]: {
-		description:
-			'Lee errores y avisos que el language server de VS Code ya calculó, para un archivo o todo el workspace. ' +
-			'No compila ni ejecuta nada. Úsala después de proponer una edición para comprobar que no rompiste nada.',
-		example: { path: 'src/extension.ts', severity: 'error' },
-	},
-	[M365_TOOL_NAMES.gitInfo]: {
-		description:
-			'Consulta git en modo solo lectura: status, diff o log. Nunca hace commit, push ni modifica el repositorio.',
-		example: { action: 'status' },
-	},
-	[M365_TOOL_NAMES.generateCommitMessage]: {
-		description:
-			'Dispara la función NATIVA de VS Code «Generate Commit Message» (✨ del panel Source Control) sobre el ' +
-			'repositorio del workspace y devuelve lo que generó, junto con el diff en stage (o del árbol de trabajo si ' +
-			'no hay nada en stage). No modifica el repositorio. Revisa/corrige el resultado para que la primera línea ' +
-			'siga Conventional Commits antes de pasarlo a ' +
-			`${M365_TOOL_NAMES.gitCommit}.`,
-		example: {},
-	},
-	[M365_TOOL_NAMES.gitCommit]: {
-		description:
-			'Crea un commit real con el mensaje dado (validado como Conventional Commits: "tipo(ámbito): resumen"). ' +
-			'Sólo commitea lo que ya está en stage salvo que pases stageAll (git add -A) o paths (git add de esas rutas). ' +
-			'El usuario confirma el mensaje exacto antes de que se ejecute nada.',
-		example: { message: 'fix(auth): evitar token nulo en refresh', stageAll: true },
-	},
-	[M365_TOOL_NAMES.runCommand]: {
-		description:
-			'Ejecuta un comando de terminal en el workspace (build, tests, etc.) y devuelve su salida. ' +
-			'El usuario ve el comando exacto y debe confirmarlo antes de que se ejecute.',
-		example: { command: 'npm test' },
-	},
-	[M365_TOOL_NAMES.spawnAgents]: {
-		description:
-			'Delega 1-6 tareas independientes a sub-agentes autónomos (en paralelo si son varias), cada uno con su ' +
-			'propio ciclo de herramientas de workspace (listar/buscar/leer/diagnósticos/git de solo lectura, y también ' +
-			'editar o ejecutar comandos si la tarea lo requiere, con la misma revisión Keep/Undo y confirmación de ' +
-			'terminal de siempre). Cada sub-agente NO ve el resto de esta conversación: describe cada tarea de forma ' +
-			'autocontenida (qué debe hacer y qué debe devolver). Devuelve un resumen por tarea, no el detalle completo ' +
-			'de la exploración — úsala para investigar varias cosas independientes a la vez, o para explorar mucho sin ' +
-			'gastar tu propio contexto en el proceso.',
-		example: {
-			tasks: [
-				{ task: 'Busca todos los usos de WorkspaceEditManager y resume para qué se usa cada uno.', label: 'usos de WorkspaceEditManager' },
-				{ task: 'Lee src/client.ts y explica cómo se reconecta tras un fallo.', label: 'reconexión de client.ts' },
-			],
+		[M365_TOOL_NAMES.searchText]: {
+			description: t('hint.searchText'),
+			example: { query: 'registerCommand', path: 'src', maxResults: 30 },
 		},
-	},
-};
+		[M365_TOOL_NAMES.readFile]: {
+			description: t('hint.readFile'),
+			example: { path: 'src/extension.ts', startLine: 1, endLine: 180 },
+		},
+		[M365_TOOL_NAMES.applyWorkspaceEdits]: {
+			description: t('hint.applyEdits'),
+			example: {
+				edits: [
+					{
+						operation: 'replace',
+						path: 'src/example.ts',
+						oldText: '@@block:1@@',
+						newText: '@@block:2@@',
+					},
+					{ operation: 'create', path: t('hint.applyEdits.newFile'), content: '@@block:3@@' },
+				],
+			},
+		},
+		[M365_TOOL_NAMES.getDiagnostics]: {
+			description: t('hint.diagnostics'),
+			example: { path: 'src/extension.ts', severity: 'error' },
+		},
+		[M365_TOOL_NAMES.gitInfo]: {
+			description: t('hint.gitInfo'),
+			example: { action: 'status' },
+		},
+		[M365_TOOL_NAMES.generateCommitMessage]: {
+			description: t('hint.generateCommitMessage', M365_TOOL_NAMES.gitCommit),
+			example: {},
+		},
+		[M365_TOOL_NAMES.gitCommit]: {
+			description: t('hint.gitCommit'),
+			example: { message: t('hint.gitCommit.example'), stageAll: true },
+		},
+		[M365_TOOL_NAMES.runCommand]: {
+			description: t('hint.runCommand'),
+			example: { command: 'npm test' },
+		},
+		[M365_TOOL_NAMES.spawnAgents]: {
+			description: t('hint.spawnAgents'),
+			example: {
+				tasks: [
+					{ task: t('hint.spawnAgents.task1'), label: t('hint.spawnAgents.label1') },
+					{ task: t('hint.spawnAgents.task2'), label: t('hint.spawnAgents.label2') },
+				],
+			},
+		},
+	};
+}
 
 /** Reflejo estructural de `vscode.LanguageModelChatTool` (sin depender de `vscode`). */
 export interface OfferedTool {
@@ -310,6 +294,7 @@ export function buildToolCatalog(
 	const maxTools = options.maxTools ?? DEFAULT_MAX_TOOLS;
 	const maxChars = options.maxChars ?? DEFAULT_MAX_CHARS;
 
+	const hints = m365Hints();
 	const callable = new Set<string>();
 	const candidates: CatalogEntry[] = [];
 	const order = new Map<string, number>();
@@ -322,7 +307,7 @@ export function buildToolCatalog(
 		const origin: ToolOrigin = isM365Tool(tool.name) ? 'ms365' : 'editor';
 		if (origin === 'editor' && !includeEditorTools) continue;
 
-		const hint = origin === 'ms365' ? M365_HINTS[tool.name as M365ToolName] : undefined;
+		const hint = origin === 'ms365' ? hints[tool.name as M365ToolName] : undefined;
 		const description = hint?.description ?? shortText(tool.description ?? '', MAX_TOOL_DESC_CHARS);
 		order.set(tool.name, order.size);
 		candidates.push({

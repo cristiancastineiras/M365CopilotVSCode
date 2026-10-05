@@ -20,9 +20,9 @@ if (!version) {
 }
 
 const COMPONENTS = [
-  { file: 'extensiones/vscode/CHANGELOG.md', title: '🧩 Extensión de VS Code' },
-  { file: 'extensiones/browser/CHANGELOG.md', title: '🌐 Extensión de navegador' },
-  { file: 'packages/core/CHANGELOG.md', title: '⚙️ Núcleo compartido (@ms365copilot/core)' },
+  { file: 'extensiones/vscode/CHANGELOG.md', title: '🧩 VS Code extension · Extensión de VS Code' },
+  { file: 'extensiones/browser/CHANGELOG.md', title: '🌐 Browser extension · Extensión de navegador' },
+  { file: 'packages/core/CHANGELOG.md', title: '⚙️ Shared core · Núcleo compartido (@ms365copilot/core)' },
 ];
 
 /** Extrae el contenido bajo `## <version>` hasta el siguiente `## ` (o el final del archivo). */
@@ -50,5 +50,5 @@ const parts = COMPONENTS.map(({ file, title }) => {
 console.log(
   parts.length > 0
     ? parts.join('\n\n')
-    : `_No se encontraron notas de cambios para la versión ${version}._`,
+    : `_No release notes found for version ${version} · No se encontraron notas de cambios para la versión ${version}._`,
 );

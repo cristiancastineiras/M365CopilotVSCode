@@ -24,6 +24,7 @@ import { isTokenUsable } from './profile';
 import type { ProfileStore } from './secrets';
 import { ConcurrencyLimiter, clip, runSubagentTask, type SubagentStepInfo, type SubagentTaskResult } from './subagentCore';
 import { M365_TOOL_NAMES, M365_WORKSPACE_TOOL_NAMES, type OfferedTool } from './toolProtocol';
+import { t } from './i18n';
 
 const MAX_TASKS = 6;
 const MAX_REPORT_CHARS = 20_000;
@@ -70,9 +71,7 @@ export function registerM365SubagentTools(store: ProfileStore, log: (message: st
 					// más que una respuesta normal — sin el aviso, un turno de varios
 					// minutos con la única señal de progreso en una notificación aparte se
 					// lee como que el chat se ha quedado colgado.
-					invocationMessage:
-						`Delegando ${count || 'varias'} sub-tarea(s) a sub-agentes de M365 Copilot ` +
-						'(puede tardar varios minutos; el progreso se ve en las notificaciones)...',
+					invocationMessage: t('subagent.invocation', count || t('subagent.invocation.several')),
 				};
 			},
 			invoke: (options, token) => spawnAgents(store, options, token, log),
@@ -88,23 +87,18 @@ async function spawnAgents(
 ): Promise<vscode.LanguageModelToolResult> {
 	const settings = readSubagentSettings();
 	if (!settings.enabled) {
-		return textResult(
-			'La delegación en sub-agentes está desactivada (ajuste ms365copilot.subagents.enabled). ' +
-				'Actívala si quieres poder usar esta herramienta, o resuelve la tarea directamente.',
-		);
+		return textResult(t('subagent.disabled'));
 	}
 
 	const normalized = normalizeTasks(options.input.tasks);
-	if (typeof normalized === 'string') return textResult(`Error: ${normalized}`);
+	if (typeof normalized === 'string') return textResult(t('subagent.errorPrefix', normalized));
 
 	const profile = await store.get();
 	if (!profile) {
-		return textResult(
-			'No hay token de M365 Copilot guardado. Pide al usuario que ejecute «M365 Copilot: Pegar perfil o token» antes de delegar tareas.',
-		);
+		return textResult(t('subagent.noToken'));
 	}
 	if (!isTokenUsable(profile)) {
-		return textResult('El token de M365 Copilot ha caducado. Pide al usuario que lo vuelva a capturar y pegar.');
+		return textResult(t('subagent.tokenExpired'));
 	}
 
 	const offeredTools = collectSubagentOfferedTools();
@@ -114,7 +108,7 @@ async function spawnAgents(
 	return vscode.window.withProgress(
 		{
 			location: vscode.ProgressLocation.Notification,
-			title: `M365 Copilot: ${normalized.length} sub-agente(s)`,
+			title: t('subagent.progressTitle', normalized.length),
 			cancellable: true,
 		},
 		async (progress, progressToken) => {
@@ -138,7 +132,7 @@ async function spawnAgents(
 								log,
 								onStep: (info) => {
 									progress.report({ message: `${entry.label}: ${stepMessage(info)}` });
-									log(`[sub-agente ${entry.label}] paso ${info.step} (${info.kind}): ${clip(info.detail, 200)}`);
+									log(t('log.subagentStep', entry.label, info.step, info.kind, clip(info.detail, 200)));
 								},
 							}),
 						),
@@ -167,18 +161,19 @@ function makeExecutor(
 			const result = MUTATING_TOOLS.has(name) ? await mutateLimiter.run(invoke) : await invoke();
 			return toolResultToText(result);
 		} catch (error) {
-			return `Error de herramienta: ${errorMessage(error)}`;
+			return t('tool.error', errorMessage(error));
 		}
 	};
 }
 
-function toolResultToText(result: vscode.LanguageModelToolResult): string {
+/** Flattens a tool result to the text the model reads (shared with participant.ts). */
+export function toolResultToText(result: vscode.LanguageModelToolResult): string {
 	const parts: string[] = [];
 	for (const part of result.content) {
-		parts.push(part instanceof vscode.LanguageModelTextPart ? part.value : '[contenido no textual omitido]');
+		parts.push(part instanceof vscode.LanguageModelTextPart ? part.value : t('subagent.nonText'));
 	}
 	const text = parts.join('\n').trim();
-	return text || '(sin contenido)';
+	return text || t('subagent.noContent');
 }
 
 function collectSubagentOfferedTools(): OfferedTool[] {
@@ -187,17 +182,19 @@ function collectSubagentOfferedTools(): OfferedTool[] {
 }
 
 function normalizeTasks(raw: unknown): NormalizedTask[] | string {
-	if (!Array.isArray(raw) || raw.length === 0) return 'tasks debe ser un array con al menos una tarea.';
-	if (raw.length > MAX_TASKS) return `tasks no puede tener más de ${MAX_TASKS} tareas.`;
+	if (!Array.isArray(raw) || raw.length === 0) return t('subagent.tasks.notArray');
+	if (raw.length > MAX_TASKS) return t('subagent.tasks.tooMany', MAX_TASKS);
 
 	const out: NormalizedTask[] = [];
 	for (const [index, item] of raw.entries()) {
-		if (!item || typeof item !== 'object') return `La tarea #${index + 1} debe ser un objeto.`;
+		if (!item || typeof item !== 'object') return t('subagent.tasks.notObject', index + 1);
 		const record = item as Record<string, unknown>;
 		const task = typeof record.task === 'string' ? record.task.trim() : '';
-		if (!task) return `La tarea #${index + 1} necesita un campo "task" con la descripción de lo que debe hacer.`;
+		if (!task) return t('subagent.tasks.noTask', index + 1);
 		const label =
-			typeof record.label === 'string' && record.label.trim() ? record.label.trim() : `Tarea ${index + 1}`;
+			typeof record.label === 'string' && record.label.trim()
+				? record.label.trim()
+				: t('subagent.tasks.defaultLabel', index + 1);
 		out.push({ task, label });
 	}
 	return out;
@@ -217,22 +214,22 @@ function readSubagentSettings(): SubagentSettings {
 function stepMessage(info: SubagentStepInfo): string {
 	switch (info.kind) {
 		case 'call':
-			return `paso ${info.step} — ${info.detail}`;
+			return t('subagent.step.call', info.step, info.detail);
 		case 'done':
-			return 'completado';
+			return t('subagent.step.done');
 		case 'limit':
 			// Cubre tanto el límite de pasos como el de tiempo total (ver
 			// MAX_TASK_WALL_CLOCK_MS en subagentCore.ts) — el motivo exacto ya va en
 			// info.detail, así que aquí basta con un rótulo genérico.
-			return 'límite alcanzado';
+			return t('subagent.step.limit');
 		case 'error':
-			return `error: ${info.detail}`;
+			return t('subagent.step.error', info.detail);
 	}
 }
 
 function formatReport(results: readonly SubagentTaskResult[]): string {
 	const sections = results.map((result) => {
-		const header = result.ok ? `### ${result.label}` : `### ⚠️ ${result.label} (incompleto)`;
+		const header = result.ok ? `### ${result.label}` : t('subagent.report.incomplete', result.label);
 		return `${header}\n${clip(result.summary, MAX_TASK_SUMMARY_CHARS)}`;
 	});
 	const incomplete = results.filter((result) => !result.ok);
@@ -241,14 +238,8 @@ function formatReport(results: readonly SubagentTaskResult[]): string {
 	// en vez de responder con una única respuesta coherente — que es exactamente
 	// el "resultado confuso" que se ve desde el chat cuando hay 2+ tareas.
 	const guidance = [
-		`Resultado de ${results.length} sub-tarea(s) delegada(s). Sintetiza esto en UNA respuesta coherente para el ` +
-			'usuario — no pegues las secciones ### tal cual ni menciones que venían de sub-agentes salvo que aporte algo.',
-		...(incomplete.length > 0
-			? [
-					`${incomplete.length} de ellas quedó(ron) incompleta(s) (⚠️): dilo brevemente y decide si merece la ` +
-						'pena reintentarla con menos alcance o informar al usuario del límite alcanzado.',
-				]
-			: []),
+		t('subagent.report.guidance', results.length),
+		...(incomplete.length > 0 ? [t('subagent.report.guidanceIncomplete', incomplete.length)] : []),
 	].join(' ');
 	return clip([guidance, sections.join('\n\n---\n\n')].join('\n\n'), MAX_REPORT_CHARS);
 }

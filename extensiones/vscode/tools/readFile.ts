@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { t } from '../src/i18n';
 import {
 	boundedInteger,
 	ensureNotCancelled,
@@ -25,7 +26,7 @@ export async function readWorkspaceFile(
 	const target = resolveWorkspacePath(input.path, input.workspaceFolder);
 	const text = await readWorkspaceText(target.uri);
 	ensureNotCancelled(token);
-	if (text === undefined) throw new Error(`No existe el archivo ${target.relativePath}.`);
+	if (text === undefined) throw new Error(t('read.notFound', target.relativePath));
 
 	const lines = text.split(/\r\n|\r|\n/);
 	const startLine = boundedInteger(input.startLine, 1, 1, Math.max(lines.length, 1));
@@ -54,11 +55,11 @@ export async function readWorkspaceFile(
 
 	const wasLimited = lastLine < endLine || endLine < requestedEnd;
 	return [
-		`${target.relativePath}, líneas ${startLine}-${Math.max(lastLine, startLine)} de ${lines.length}:`,
+		t('read.header', target.relativePath, startLine, Math.max(lastLine, startLine), lines.length),
 		`\`\`\`${inferLanguage(target.relativePath)}`,
 		...numberedLines,
 		'```',
-		wasLimited ? 'Lectura limitada; solicita un rango más pequeño o posterior.' : '',
+		wasLimited ? t('read.limited') : '',
 	]
 		.filter(Boolean)
 		.join('\n');
