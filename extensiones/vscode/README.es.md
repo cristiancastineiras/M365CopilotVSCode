@@ -140,7 +140,7 @@ tooltip muestra la cuenta, los minutos restantes y los cambios del agente
 pendientes de revisar. Al pulsarlo se abre el **menú de M365 Copilot**: pegar
 token, estado del token, abrir M365 Copilot, abrir el chat, activar/desactivar
 el autocompletado, revisar cambios pendientes, generar mensaje de commit,
-idioma, ajustes, primeros pasos, registro y borrar credenciales.
+autocommit, idioma, ajustes, primeros pasos, registro y borrar credenciales.
 
 Cuando el token está a punto de caducar **sin haberse renovado** (quedan 5
 minutos) o caduca durante la sesión, una notificación ofrece **Pegar token** /
@@ -167,6 +167,46 @@ stage — o del árbol de trabajo si no hay nada en stage — y lo escribe
 directamente en el cuadro de commit, en el idioma de la extensión. Nunca
 commitea: lo revisas y commiteas tú. A su lado, ☑ revisa esos cambios antes del
 commit (ver [Revisión de código como comentarios](#revisión-de-código-como-comentarios)).
+
+### Autocommit
+
+Actívalo por workspace (**M365 Copilot: Activar/desactivar el autocommit**, el
+menú rápido o el menú `…` de Source Control) y sigue trabajando. Cuando haces una
+pausa, M365 Copilot mira tus cambios sin commitear y decide, como un desarrollador
+sénior cuidadoso, si son **una unidad terminada que merece un commit** — un
+arreglo completo, aunque sea de una línea, un paso terminado de una
+funcionalidad, un refactor, documentación — o trabajo a medias. Si lo son, hace
+commit con un asunto Conventional Commits y un **cuerpo que explica qué cambió y
+por qué**; los cambios terminados sin relación entre sí van en commits separados
+(como mucho 3 a la vez) y los archivos que siguen en curso se quedan fuera. Si
+no, espera, y no se le vuelve a preguntar hasta que cambie algo.
+
+Está pensado para darte un historial útil, no una avalancha de commits
+diminutos:
+
+- solo mira tras `idleSeconds` sin ediciones, guardados ni cambios de git, y no
+  antes de `minIntervalMinutes` desde el último commit (tuyo o automático);
+- nunca hace commit con archivos sin guardar, ediciones del agente esperando
+  Keep/Undo, errores en los archivos cambiados (**Problemas**), conflictos, HEAD
+  desacoplado o un merge/rebase en curso — ni de más de 150 archivos a la vez;
+- commitea exactamente los archivos que eligió (archivos completos); lo que
+  tuvieras en stage de otros archivos sigue en stage, los hooks de pre-commit se
+  ejecutan como siempre y **nunca hace push**.
+
+Cada autocommit muestra una notificación con **Deshacer** (un reset suave: los
+cambios vuelven a tu árbol de trabajo, sin commitear) y **Ver** (mensajes
+completos y estadísticas en el registro). El elemento **Auto** de la barra de
+estado muestra qué hace en cada repositorio — vigilando, decidiendo o por qué
+espera — y su menú tiene **Comprobar ahora** (pregunta ya, sin esperar la pausa
+ni el intervalo), **Deshacer el último autocommit**, ajustes y desactivar. Los
+submódulos no se tocan.
+
+| Ajuste | Por defecto | Para qué |
+|--------|-------------|----------|
+| `m365copilot.autoCommit.mode` | `auto` | `auto` hace commit por su cuenta (con **Deshacer**); `confirm` propone los commits y espera a **Hacer commit**. |
+| `m365copilot.autoCommit.idleSeconds` | `120` | Segundos sin cambios antes de mirar (20–3600). |
+| `m365copilot.autoCommit.minIntervalMinutes` | `5` | Minutos mínimos desde el último commit (0 = sin mínimo). |
+| `m365copilot.autoCommit.waitForErrors` | `true` | Esperar mientras los archivos cambiados tengan errores. |
 
 ## Entiende tu proyecto (índice local)
 
@@ -430,6 +470,9 @@ paleta de comandos bajo **M365 Copilot**.
 | `Revisar cambios con M365 Copilot` | Revisa los cambios sin commitear (barra de título de Source Control). |
 | `Borrar todos los comentarios de revisión` | Quita los comentarios de la revisión. |
 | `Generar mensaje de commit con M365 Copilot` | Redacta el mensaje de commit en Source Control. |
+| `Activar/desactivar el autocommit` | Arranca o para el [autocommit](#autocommit) en este workspace. |
+| `Autocommit: comprobar ahora` | Pregunta ya si los cambios actuales merecen un commit. |
+| `Deshacer el último autocommit` | Saca del historial el último autocommit, conservando sus cambios. |
 | `Pegar perfil o token` | Guarda el token en SecretStorage (cifrado). |
 | `Estado / información del token` | Usuario, caducidad y hora de captura. |
 | `Borrar credenciales` | Borra el token guardado. |

@@ -164,6 +164,11 @@ Desde el propio editor:
   varios.
 - **Source Control**: el botón ✨ de la barra de título redacta el mensaje de
   commit con M365 Copilot, y ☑ revisa como comentarios tus cambios sin commitear.
+- **Autocommit** (menú rápido → *Activar el autocommit*, o el menú `…` de Source
+  Control): mientras trabajas, M365 Copilot hace commit de tus cambios cuando
+  forman una unidad terminada — con un mensaje que explica qué y por qué — y
+  espera mientras están a medias. Nunca hace push; cada autocommit tiene
+  **Deshacer**.
 - **Menú Cuentas** (icono de persona, abajo a la izquierda): muestra tu cuenta de
   M365 Copilot, cierra la sesión (borra el token) y la inicia cuando no hay token.
 

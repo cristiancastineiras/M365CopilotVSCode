@@ -12,13 +12,15 @@ interface GitExtensionExports {
 	getAPI(version: 1): GitApi;
 }
 
-interface GitApi {
+export interface GitApi {
 	readonly repositories: readonly GitRepository[];
 	getRepository(uri: vscode.Uri): GitRepository | null;
+	readonly onDidOpenRepository: vscode.Event<GitRepository>;
+	readonly onDidCloseRepository: vscode.Event<GitRepository>;
 }
 
 /** La API de la extensión Git integrada, activándola si hace falta. */
-async function getGitApi(): Promise<GitApi> {
+export async function getGitApi(): Promise<GitApi> {
 	const extension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
 	if (!extension) throw new Error(t('git.extensionMissing'));
 	const exports = extension.isActive ? extension.exports : await extension.activate();
@@ -39,6 +41,8 @@ export interface GitRepository {
 		readonly indexChanges: readonly unknown[];
 		/** Cambios en el árbol de trabajo todavía sin stage. */
 		readonly workingTreeChanges: readonly unknown[];
+		/** Cada vez que la extensión Git refresca el estado (guardados, commits, checkouts…). */
+		readonly onDidChange: vscode.Event<void>;
 	};
 }
 

@@ -4,7 +4,8 @@
 
 Monorepo (pnpm workspaces + Turborepo) of the pieces that bring your
 **Microsoft 365 Copilot** subscription into VS Code — as chat models, the
-`@m365` chat participant, editor and Source Control actions, code review as
+`@m365` chat participant, editor and Source Control actions, an auto-commit
+that commits finished work with documented messages, code review as
 comments on the lines, an account in VS Code's Accounts menu, agent tools, a
 local project index (RAG) that gives it the context of your code, web search and
 inline completions — and keep its token in sync. Everything is available in

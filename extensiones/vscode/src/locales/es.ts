@@ -77,6 +77,9 @@ export const es: Record<keyof typeof en, string> = {
 	'menu.completionsOn': 'Activar el autocompletado en línea',
 	'menu.reviewEdits': 'Revisar cambios del agente pendientes ({0})',
 	'menu.commitMessage': 'Generar mensaje de commit',
+	'menu.autoCommit.on': 'Autocommit: activado',
+	'menu.autoCommit.off': 'Activar el autocommit',
+	'menu.autoCommit.detail': 'Hace commit de tus cambios cuando tiene sentido, con mensajes documentados',
 	'menu.language': 'Idioma: {0}',
 	'menu.settings': 'Ajustes',
 	'menu.log': 'Mostrar registro (diagnóstico)',
@@ -191,6 +194,7 @@ export const es: Record<keyof typeof en, string> = {
 	'log.participantRequest': 'petición a @m365: comando={0}, tone={1}, contexto={2}',
 	'log.participantNoToken': 'petición a @m365 (comando={0}) sin un token utilizable',
 	'log.commitMessage': 'mensaje de commit generado: {0} chars a partir de un diff de {1} chars',
+	'log.autoCommit': 'autocommit {0}: {1}',
 	'log.server.listening': '✅ Servidor de auto-renovación escuchando en http://localhost:{0}',
 	'log.server.portInUse': '⚠️ Puerto {0} ya en uso. El servidor de auto-renovación no está disponible.',
 	'log.server.error': '❌ Error en servidor de auto-renovación: {0}',
@@ -715,6 +719,109 @@ export const es: Record<keyof typeof en, string> = {
 	'scm.prompt.diffEnd': '--- fin del diff ---',
 	'scm.prompt.truncated': '[diff recortado: {0} caracteres más]',
 	'scm.prompt.unstaged': 'No hay nada en stage: estos son los cambios del árbol de trabajo que probablemente incluirá el commit.',
+
+	// ------------------------------------------------------------ autocommit
+	'autoCommit.enabled':
+		'Autocommit de M365 Copilot activado en este workspace: cuando hagas una pausa, mirará tus cambios y hará commit de los que tengan sentido, con un mensaje documentado ({0}). Nunca hace push.',
+	'autoCommit.disabled': 'Autocommit de M365 Copilot desactivado en este workspace.',
+	'autoCommit.turnOn': 'Activar',
+	'autoCommit.mode.auto': 'automáticamente',
+	'autoCommit.mode.confirm': 'preguntándote antes',
+	'autoCommit.failed': 'Autocommit de M365 Copilot: {0}',
+	'autoCommit.committed': 'M365 Copilot hizo commit en {0}: {1}',
+	'autoCommit.committedMany': 'M365 Copilot hizo {0} commits en {1}: {2}',
+	'autoCommit.undo': 'Deshacer',
+	'autoCommit.show': 'Ver',
+	'autoCommit.undone': 'M365 Copilot: autocommit deshecho — los cambios vuelven a estar en tu árbol de trabajo, sin commitear.',
+	'autoCommit.undoNothing': 'M365 Copilot: no hay ningún autocommit que deshacer.',
+	'autoCommit.undoMoved':
+		'M365 Copilot: el autocommit ya no se puede deshacer desde aquí — hay commits más nuevos encima.',
+	'autoCommit.confirm': 'M365 Copilot propone un commit en {0}: {1}',
+	'autoCommit.confirmMany': 'M365 Copilot propone {0} commits en {1}: {2}',
+	'autoCommit.confirm.commit': 'Hacer commit',
+	'autoCommit.confirm.choose': 'Elegir…',
+	'autoCommit.confirm.skip': 'Ahora no',
+	'autoCommit.confirm.pickTitle': 'M365 Copilot — commits a hacer',
+	'autoCommit.confirm.files': '{0} archivo(s): {1}',
+	'autoCommit.checking': 'M365 Copilot está mirando tus cambios…',
+	'autoCommit.nothing': 'M365 Copilot: no hay nada que commitear en {0}.',
+	'autoCommit.waitNotice': 'M365 Copilot todavía no hace commit en {0}: {1}',
+	'autoCommit.busy': 'M365 Copilot ya está mirando los cambios de {0}.',
+	'autoCommit.noWatchedRepo': 'El autocommit de M365 Copilot no está vigilando ningún repositorio git de este workspace.',
+	'autoCommit.reason.noToken': 'no hay un token de M365 válido — pega uno para continuar',
+	'autoCommit.reason.pendingEdits': '{0} edición(es) del agente esperando Keep/Undo',
+	'autoCommit.reason.unsaved': 'archivos sin guardar: {0}',
+	'autoCommit.reason.noHead': 'el repositorio aún no tiene commits — haz tú el primero',
+	'autoCommit.reason.detached': 'HEAD está desacoplado (no estás en una rama)',
+	'autoCommit.reason.inProgress': 'hay una operación de git en curso: {0}',
+	'autoCommit.reason.conflicts': 'hay conflictos sin resolver',
+	'autoCommit.reason.tooMany': '{0} archivos cambiados — demasiados para un commit automático, haz tú el commit',
+	'autoCommit.reason.errors': '{0} error(es) en los archivos cambiados',
+	'autoCommit.reason.interval': 'último commit hace {0} min; vuelve a mirar en {1} min',
+	'autoCommit.reason.changedMeanwhile': 'los archivos cambiaron mientras M365 Copilot decidía',
+	'autoCommit.reason.invalid': 'M365 Copilot no dio una respuesta utilizable ({0})',
+	'autoCommit.reason.unfinished': 'los cambios parecen sin terminar',
+	'autoCommit.reason.skipped': 'descartaste el commit propuesto',
+	'autoCommit.reason.undone': 'deshiciste el autocommit',
+	'autoCommit.reason.failed': 'error: {0}',
+	'autoCommit.invalid.noJson': 'la respuesta no era JSON',
+	'autoCommit.invalid.decision': 'decisión desconocida "{0}"',
+	'autoCommit.invalid.noFiles': 'ningún commit nombraba un archivo cambiado',
+	'autoCommit.status.title': 'Autocommit de M365 Copilot',
+	'autoCommit.status.mode': 'Hace commit {0}, tras {1} s sin cambios y al menos {2} min después del commit anterior.',
+	'autoCommit.status.clean': 'sin cambios',
+	'autoCommit.status.watching': 'vigilando tus cambios',
+	'autoCommit.status.evaluating': 'decidiendo si hacer commit…',
+	'autoCommit.status.waiting': 'esperando: {0}',
+	'autoCommit.status.lastCommit': 'último autocommit hace {0} min: {1}',
+	'autoCommit.status.click': 'Haz clic para ver las opciones del autocommit.',
+	'autoCommit.menu.title': 'M365 Copilot — autocommit',
+	'autoCommit.menu.checkNow': 'Comprobar ahora',
+	'autoCommit.menu.checkNow.detail': 'Preguntar ya a M365 Copilot si los cambios actuales merecen un commit',
+	'autoCommit.menu.undo': 'Deshacer el último autocommit',
+	'autoCommit.menu.off': 'Desactivar el autocommit',
+	'autoCommit.menu.settings': 'Ajustes del autocommit',
+	'autoCommit.prompt':
+		'Eres el asistente de autocommit de un desarrollador que programa en VS Code. Él sigue trabajando; tú miras ' +
+		'sus cambios sin commitear y decides si es un buen momento para hacer commit, y cómo.\n' +
+		'Decide como un desarrollador sénior cuidadoso que quiere un historial limpio y útil:\n' +
+		'- COMMIT cuando los cambios son una unidad de trabajo terminada y coherente: un arreglo completo (aunque sea ' +
+		'de una línea), un paso terminado de una funcionalidad, un refactor, documentación, tests, configuración.\n' +
+		'- ESPERAR cuando el trabajo parece a medias: código a medio escribir, código que no compilaría o no ' +
+		'funcionaría, stubs o TODO recién añadidos, salidas de depuración o bloques comentados olvidados, o un cambio ' +
+		'al que claramente le falta su otra mitad (quien lo llama, sus tests, la función que usa).\n' +
+		'- Nada de ruido: no partas un mismo cambio lógico en varios commits ni hagas commit de restos triviales por ' +
+		'sí solos. Ante la duda, ESPERA: el desarrollador sigue trabajando y se te volverá a preguntar.\n' +
+		'- Si hay varios cambios terminados SIN RELACIÓN entre sí, haz un commit para cada uno (como mucho {0}) y deja ' +
+		'fuera de todos los commits los archivos que siguen en curso.\n' +
+		'- Si los cambios llevan mucho tiempo acumulándose, inclínate por commitear las partes que ya están terminadas.\n' +
+		'Cada mensaje de commit documenta el cambio para quien lea el historial dentro de unos meses:\n' +
+		'- subject: Conventional Commits, "tipo(ámbito opcional): resumen", en imperativo, como mucho 72 caracteres y ' +
+		'sin punto final. Tipos válidos: {1}.\n' +
+		'- body: de 1 a 5 puntos breves que digan qué cambió y por qué — el motivo, el efecto, el fallo que arregla. ' +
+		'No repitas el subject ni te limites a listar archivos.\n' +
+		'- Escribe el subject, el body y el motivo en español.\n' +
+		'Responde ÚNICAMENTE con un objeto JSON — sin vallas de código, nada antes ni después. O bien:\n' +
+		'{"decision":"commit","commits":[{"files":["src/parser.ts"],"subject":"fix(parser): manejar la entrada vacía",' +
+		'"body":["Devuelve un árbol vacío en vez de lanzar una excepción cuando el archivo está vacío.","Abrir un ' +
+		'archivo nuevo y vacío ya no rompe el esquema."]}]}\n' +
+		'o bien:\n' +
+		'{"decision":"wait","reason":"una frase breve que diga qué sigue pareciendo sin terminar"}\n' +
+		'En "files", usa las rutas exactamente como aparecen abajo.\n\n' +
+		'{2}',
+	'autoCommit.prompt.state': 'Estado del repositorio:',
+	'autoCommit.prompt.branch': 'Rama: {0}',
+	'autoCommit.prompt.lastCommit': 'Último commit: hace {0} min — "{1}"',
+	'autoCommit.prompt.pendingFor': 'Estos cambios llevan acumulándose unos {0} min.',
+	'autoCommit.prompt.lastWait': 'La última vez decidiste esperar porque: {0}',
+	'autoCommit.prompt.recent': 'Últimos commits (sigue su estilo y sus ámbitos):',
+	'autoCommit.prompt.kind.new': 'archivo nuevo',
+	'autoCommit.prompt.kind.added': 'añadido',
+	'autoCommit.prompt.kind.modified': 'modificado',
+	'autoCommit.prompt.kind.deleted': 'borrado',
+	'autoCommit.prompt.kind.renamed': 'renombrado desde {0}',
+	'autoCommit.prompt.binary': '[archivo binario, {0} bytes]',
+	'autoCommit.prompt.fileTruncated': '[archivo recortado: {0} bytes en total]',
 
 	// ------------------------------------------------------------ migración desde ms365-copilot-vscode
 	'migration.settingsMoved':

@@ -68,6 +68,29 @@ import {
 } from '../tools/commitMessage.ts';
 import { LOCALES, messageKeys, placeholdersOf, resolveLocale, setLocale, t, tIn } from '../src/i18n.ts';
 import {
+	buildAutoCommitPrompt,
+	describeEntry,
+	MAX_COMMITS_PER_ROUND,
+	parseAutoCommitDecision,
+} from '../src/autoCommitPrompt.ts';
+import {
+	commitFiles,
+	cooldownRemaining,
+	hasConflicts,
+	HeadMovedError,
+	parseStatus,
+	pathsToCommit,
+	readChanges,
+	readRepoState,
+	undoCommits,
+	type GitRunner,
+	type StatusEntry,
+} from '../src/autoCommitGit.ts';
+import { execFile } from 'node:child_process';
+import { mkdtempSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
 	asParticipantCommand,
 	buildParticipantFraming,
 	fenceFor,
@@ -1348,6 +1371,265 @@ function testCommitMessageGeneration() {
 	console.log('  ✓ mensaje de commit con M365: prompt en el idioma activo, diff acotado y limpieza de la respuesta');
 }
 
+// ---- auto-commit -------------------------------------------------------------
+
+function testAutoCommitPrompt() {
+	const entries: StatusEntry[] = [
+		{ index: ' ', worktree: 'M', path: 'src/a.ts' },
+		{ index: '?', worktree: '?', path: 'src/new.ts' },
+		{ index: 'R', worktree: ' ', path: 'docs/guide.md', origPath: 'docs/old.md' },
+		{ index: ' ', worktree: 'D', path: 'old.txt' },
+	];
+	setLocale('en');
+	const prompt = buildAutoCommitPrompt({
+		entries,
+		diff: 'diff --git a/src/a.ts b/src/a.ts\n+const x = 1;',
+		untracked: [
+			{ path: 'src/new.ts', size: 12, content: 'export {};\r\n', truncated: false },
+			{ path: 'logo.png', size: 2048, truncated: false },
+		],
+		branch: 'main',
+		lastCommit: { minutesAgo: 12, subject: 'feat: add menu' },
+		pendingMinutes: 25,
+		lastWaitReason: 'the parser is half written',
+		recentSubjects: ['feat: add menu', 'fix(ui): align icons'],
+	});
+	assert.match(prompt, /auto-commit assistant/);
+	assert.match(prompt, /at most 3\)/);
+	assert.match(prompt, /feat, fix, docs/);
+	assert.match(prompt, /Write the subject, the body and the reason in English\./);
+	assert.match(prompt, /- Branch: main\n- Last commit: 12 min ago — "feat: add menu"\n- These changes have been piling up for about 25 min\./);
+	assert.match(prompt, /Last time you decided to wait because: the parser is half written/);
+	assert.match(prompt, /- fix\(ui\): align icons/);
+	assert.match(prompt, /Changed files \(4\):\n- src\/a\.ts \(modified\)\n- src\/new\.ts \(new file\)\n- docs\/guide\.md \(renamed from docs\/old\.md\)\n- old\.txt \(deleted\)/);
+	assert.match(prompt, /\+const x = 1;/);
+	assert.match(prompt, /\+\+\+ b\/src\/new\.ts\n\+export \{\};\n/, 'un archivo nuevo se ve como su diff, sin \\r');
+	assert.match(prompt, /\[binary file, 2048 bytes\]/);
+
+	const big = buildAutoCommitPrompt({ entries, diff: 'x'.repeat(30_000), untracked: [], branch: 'main', recentSubjects: [] });
+	assert.match(big, /\[diff truncated: 6000 more characters\]/);
+	assert.doesNotMatch(big, /Latest commits|Last commit:/, 'sin historial no hay secciones vacías');
+
+	setLocale('es');
+	assert.match(buildAutoCommitPrompt({ entries, diff: '', untracked: [], branch: 'dev', recentSubjects: [] }), /Escribe el subject, el body y el motivo en español\.[\s\S]*- Rama: dev/);
+	assert.equal(describeEntry(entries[1]), '- src/new.ts (archivo nuevo)');
+
+	// ---- decisions
+	setLocale('en');
+	// A raw line break inside a JSON string (invalid JSON, but models do it).
+	const wait = parseAutoCommitDecision('{"decision":"wait","reason":"the new\n function   has no callers yet"}', entries);
+	assert.deepEqual(wait, { kind: 'wait', reason: 'the new function has no callers yet' });
+
+	const fenced = parseAutoCommitDecision(
+		'Here you go:\n```json\n{"decision":"commit","commits":[{"files":["src/a.ts","./src/new.ts"],"subject":"feat(core): add the x constant.","body":["- Adds x so the parser can use a shared default value instead of repeating the literal in every caller of the module.","Exports an empty new module."]}]}\n```',
+		entries,
+	);
+	assert.equal(fenced.kind, 'commit');
+	if (fenced.kind === 'commit') {
+		assert.deepEqual(fenced.commits[0].files, ['src/a.ts', 'src/new.ts']);
+		assert.equal(
+			fenced.commits[0].message,
+			'feat(core): add the x constant\n\n' +
+				'- Adds x so the parser can use a shared default value instead of\n' +
+				'  repeating the literal in every caller of the module.\n' +
+				'- Exports an empty new module.',
+			'punto final del subject quitado y cuerpo en viñetas de 72 columnas',
+		);
+	}
+
+	// Paths: backslashes, the copied "(modified)" note, the old side of a rename,
+	// case; unknown files dropped; a file only in its first commit.
+	const groups = parseAutoCommitDecision(
+		JSON.stringify({
+			decision: 'commit',
+			commits: [
+				{ files: ['SRC\\A.ts (modified)', 'nope.ts'], subject: 'fix: a' },
+				{ files: ['src/a.ts', 'docs/old.md'], message: 'docs: move the guide\n\n- Renamed for clarity.' },
+				{ files: ['old.txt'], subject: 'not conventional' },
+				{ files: ['nope.ts'], subject: 'chore: nothing real' },
+			],
+		}),
+		entries,
+	);
+	assert.equal(groups.kind, 'commit');
+	if (groups.kind === 'commit') {
+		assert.deepEqual(
+			groups.commits.map((group) => [group.files, group.message]),
+			[
+				[['src/a.ts'], 'fix: a'],
+				[['docs/guide.md'], 'docs: move the guide\n\n- Renamed for clarity.'],
+			],
+		);
+	}
+
+	const many = parseAutoCommitDecision(
+		JSON.stringify({
+			decision: 'commit',
+			commits: entries.map((entry, i) => ({ files: [entry.path], subject: `chore: change ${i}` })),
+		}),
+		entries,
+	);
+	assert.equal(many.kind === 'commit' && many.commits.length, MAX_COMMITS_PER_ROUND, 'nunca más de 3 commits por ronda');
+
+	assert.equal(parseAutoCommitDecision('I think you should commit.', entries).kind, 'invalid');
+	assert.equal(parseAutoCommitDecision('{"decision":"maybe"}', entries).kind, 'invalid');
+	const badMessage = parseAutoCommitDecision('{"decision":"commit","commits":[{"files":["src/a.ts"],"subject":"Update stuff"}]}', entries);
+	assert.equal(badMessage.kind, 'invalid', 'sin mensaje válido no hay commit');
+	assert.match(badMessage.kind === 'invalid' ? badMessage.reason : '', /Conventional Commits/);
+	assert.deepEqual(
+		parseAutoCommitDecision('{"decision":"commit","files":["old.txt"],"subject":"chore: drop old.txt",}', entries),
+		{ kind: 'commit', commits: [{ files: ['old.txt'], message: 'chore: drop old.txt' }] },
+		'un único commit sin lista "commits", con coma colgante',
+	);
+
+	// ---- git status parsing and timing
+	assert.deepEqual(
+		parseStatus(' M a.txt\0R  new.txt\0old.txt\0?? nested/\0AD gone.txt\0?? dir with space ñ.txt\0UU c.txt\0'),
+		[
+			{ index: ' ', worktree: 'M', path: 'a.txt' },
+			{ index: 'R', worktree: ' ', path: 'new.txt', origPath: 'old.txt' },
+			{ index: '?', worktree: '?', path: 'dir with space ñ.txt' },
+			{ index: 'U', worktree: 'U', path: 'c.txt' },
+		],
+	);
+	assert.ok(hasConflicts(parseStatus('UU c.txt\0')));
+	assert.ok(!hasConflicts(entries));
+	assert.deepEqual(pathsToCommit(
+		[...entries, { index: 'D', worktree: ' ', path: 'staged-gone.txt' }],
+		['docs/old.md', 'staged-gone.txt', 'old.txt'],
+	), { add: ['docs/guide.md', 'old.txt'], commit: ['docs/guide.md', 'docs/old.md', 'old.txt', 'staged-gone.txt'] });
+	assert.equal(cooldownRemaining(10_000, 4_000, 5_000), 0);
+	assert.equal(cooldownRemaining(10_000, 8_000, 5_000), 3_000);
+	assert.equal(cooldownRemaining(10_000, undefined, 5_000), 0);
+	assert.equal(cooldownRemaining(10_000, 9_999, 0), 0);
+	console.log('  ✓ autocommit: prompt, decisiones del modelo (rutas, mensajes, límite de commits) y git status');
+}
+
+function gitIn(root: string): GitRunner {
+	return (args) =>
+		new Promise((resolve, reject) => {
+			execFile('git', args, { cwd: root, windowsHide: true }, (error, stdout, stderr) =>
+				error ? reject(new Error(stderr.trim() || error.message)) : resolve(stdout),
+			);
+		});
+}
+
+/** commitFiles / undoCommits against a real repository. */
+async function testAutoCommitGit() {
+	const root = mkdtempSync(join(tmpdir(), 'm365-autocommit-'));
+	const git = gitIn(root);
+	const write = (file: string, text: string) => writeFileSync(join(root, file), text);
+	try {
+		await git(['init', '-q', '-b', 'main']);
+		for (const [key, value] of [['user.name', 'Test'], ['user.email', 't@example.com'], ['core.autocrlf', 'false'], ['commit.gpgsign', 'false']]) {
+			await git(['config', key, value]);
+		}
+		assert.equal((await readRepoState(git)).head, undefined, 'repo sin commits: no hay HEAD');
+
+		for (const file of ['a.txt', 'b.txt', 'c.txt', 'd.txt', '[x].txt']) write(file, `${file}\n`);
+		await git(['add', '-A']);
+		await git(['commit', '-q', '-m', 'chore: init']);
+		const initial = await readRepoState(git);
+		assert.equal(initial.branch, 'main');
+		assert.equal(initial.headSubject, 'chore: init');
+		assert.ok(initial.head && initial.headTime && Math.abs(initial.headTime - Date.now()) < 120_000);
+		assert.equal(initial.inProgress, undefined);
+		assert.equal((await readChanges(git, root, initial.head!)).entries.length, 0);
+
+		// Modified, deleted, new (in a folder, with spaces and ñ), a staged rename,
+		// a glob-like name, and c.txt staged by the user for their own commit.
+		write('a.txt', 'a2\n');
+		unlinkSync(join(root, 'b.txt'));
+		mkdirSync(join(root, 'src'));
+		write('src/new file ñ.ts', 'export const n = 1;\n');
+		write('c.txt', 'c2\n');
+		await git(['add', 'c.txt']);
+		await git(['mv', 'd.txt', 'e.txt']);
+		write('[x].txt', 'x2\n');
+		write('x.txt', 'not part of it\n');
+
+		const snapshot = await readChanges(git, root, initial.head!);
+		assert.deepEqual(
+			snapshot.entries.map((entry) => `${entry.index}${entry.worktree} ${entry.path}${entry.origPath ? ` <- ${entry.origPath}` : ''}`).sort(),
+			[' D b.txt', ' M [x].txt', ' M a.txt', 'M  c.txt', 'R  e.txt <- d.txt', '?? src/new file ñ.ts', '?? x.txt'].sort(),
+		);
+		assert.match(snapshot.diff, /\+a2/);
+		assert.equal(snapshot.untracked.find((file) => file.path === 'src/new file ñ.ts')?.content, 'export const n = 1;\n');
+		assert.equal((await readChanges(git, root, initial.head!)).fingerprint, snapshot.fingerprint, 'misma huella si nada cambia');
+		write('a.txt', 'a3\n');
+		const moved = await readChanges(git, root, initial.head!);
+		assert.notEqual(moved.fingerprint, snapshot.fingerprint, 'la huella cambia con el contenido');
+
+		// First commit: a, b (deleted), the new file and the rename — with a
+		// multi-line message, which must survive the argv on every platform.
+		const message = 'refactor(core): reorganise files\n\n- Rename d to e.\n- Drop b, it was unused.';
+		const first = await commitFiles(git, moved.entries, ['a.txt', 'b.txt', 'src/new file ñ.ts', 'd.txt'], message);
+		assert.deepEqual([...first.paths].sort(), ['a.txt', 'b.txt', 'd.txt', 'e.txt', 'src/new file ñ.ts']);
+		assert.equal((await git(['log', '-1', '--format=%B'])).trim(), message);
+		assert.deepEqual(
+			(await git(['-c', 'core.quotePath=false', 'show', '-M', '--name-status', '--format=', 'HEAD'])).trim().split('\n').sort(),
+			['A\tsrc/new file ñ.ts', 'D\tb.txt', 'M\ta.txt', 'R100\td.txt\te.txt'],
+		);
+		const afterFirst = parseStatus(await git(['status', '--porcelain=v1', '-z', '--untracked-files=all']));
+		assert.deepEqual(
+			afterFirst.map((entry) => `${entry.index}${entry.worktree} ${entry.path}`).sort(),
+			[' M [x].txt', 'M  c.txt', '?? x.txt'].sort(),
+			'lo que el usuario tenía en stage (c.txt) sigue en stage, y lo demás sin tocar',
+		);
+
+		// Second commit: the glob-like name must be taken literally ([x] ≠ x).
+		const second = await commitFiles(git, afterFirst, ['[x].txt'], 'fix: update [x]');
+		assert.equal((await git(['show', '--name-only', '--format=', 'HEAD'])).trim(), '[x].txt');
+
+		// Undo both: the changes come back, unstaged; new files untracked again.
+		await undoCommits(git, {
+			before: initial.head!,
+			after: second.sha,
+			subjects: [],
+			paths: [...first.paths, ...second.paths],
+		});
+		assert.equal((await git(['rev-parse', 'HEAD'])).trim(), initial.head);
+		const restored = parseStatus(await git(['-c', 'core.quotePath=false', 'status', '--porcelain=v1', '-z', '--untracked-files=all']));
+		assert.deepEqual(
+			restored.map((entry) => `${entry.index}${entry.worktree} ${entry.path}`).sort(),
+			[' D b.txt', ' D d.txt', ' M [x].txt', ' M a.txt', 'M  c.txt', '?? e.txt', '?? src/new file ñ.ts', '?? x.txt'].sort(),
+		);
+
+		// Undo refuses once someone committed on top.
+		const again = await commitFiles(git, restored, ['a.txt'], 'fix: a');
+		await git(['commit', '-q', '-m', 'chore: by hand']);
+		await assert.rejects(
+			undoCommits(git, { before: initial.head!, after: again.sha, subjects: [], paths: again.paths }),
+			HeadMovedError,
+		);
+
+		// A failing pre-commit hook: no commit, and nothing left staged by us.
+		const hooks = join(root, '.git', 'hooks');
+		writeFileSync(join(hooks, 'pre-commit'), '#!/bin/sh\necho "lint failed" >&2\nexit 1\n', { mode: 0o755 });
+		const head = (await git(['rev-parse', 'HEAD'])).trim();
+		const beforeHook = parseStatus(await git(['status', '--porcelain=v1', '-z', '--untracked-files=all']));
+		await assert.rejects(commitFiles(git, beforeHook, ['x.txt'], 'chore: add x'), /lint failed/);
+		assert.equal((await git(['rev-parse', 'HEAD'])).trim(), head);
+		assert.ok(
+			parseStatus(await git(['status', '--porcelain=v1', '-z', '--untracked-files=all'])).some(
+				(entry) => entry.path === 'x.txt' && entry.index === '?',
+			),
+			'x.txt vuelve a estar sin seguimiento',
+		);
+		unlinkSync(join(hooks, 'pre-commit'));
+
+		// An operation in progress is detected.
+		writeFileSync(join(root, '.git', 'MERGE_HEAD'), `${head}\n`);
+		assert.equal((await readRepoState(git)).inProgress, 'merge');
+		unlinkSync(join(root, '.git', 'MERGE_HEAD'));
+		await git(['checkout', '-q', '--detach']);
+		assert.equal((await readRepoState(git)).branch, undefined, 'HEAD desacoplado');
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+	console.log('  ✓ autocommit contra git real: commit por grupo, renombrados, stage del usuario, hooks, deshacer');
+}
+
 // ---- runToolLoop (shared by sub-agents and @m365) ---------------------------
 
 async function testToolLoopStreamsProse() {
@@ -2375,6 +2657,8 @@ async function main() {
 	console.log('participant / editor');
 	testParticipantPrompts();
 	testCommitMessageGeneration();
+	testAutoCommitPrompt();
+	await testAutoCommitGit();
 	testInlineEdit();
 	testTerminalPrompt();
 	testClipboardDetection();
