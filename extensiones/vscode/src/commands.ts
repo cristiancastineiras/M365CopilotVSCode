@@ -19,7 +19,12 @@ interface MenuItem extends vscode.QuickPickItem {
 	readonly run?: () => unknown;
 }
 
-export async function showMenu(store: ProfileStore, edits: WorkspaceEditManager, index?: IndexStatus): Promise<void> {
+export async function showMenu(
+	store: ProfileStore,
+	edits: WorkspaceEditManager,
+	index?: IndexStatus,
+	autoCommitOn = false,
+): Promise<void> {
 	const profile = await store.get();
 	const completionsOn = vscode.workspace
 		.getConfiguration('m365copilot.inlineCompletions')
@@ -50,6 +55,12 @@ export async function showMenu(store: ProfileStore, edits: WorkspaceEditManager,
 				]
 			: []),
 		{ label: `$(git-commit) ${t('menu.commitMessage')}`, run: command('m365copilot.generateCommitMessage') },
+		{
+			label: `$(history) ${t(autoCommitOn ? 'menu.autoCommit.on' : 'menu.autoCommit.off')}`,
+			detail: autoCommitOn ? undefined : t('menu.autoCommit.detail'),
+			// On: its own menu (check now, undo, turn off) — the status bar item opens the same one.
+			run: command(autoCommitOn ? 'm365copilot.autoCommitMenu' : 'm365copilot.toggleAutoCommit'),
+		},
 		{ label: `$(sync) ${t('menu.models')}`, run: command('m365copilot.refreshModels') },
 		{ label: t('menu.section.project'), kind: vscode.QuickPickItemKind.Separator },
 		{

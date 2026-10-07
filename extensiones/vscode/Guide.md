@@ -164,6 +164,10 @@ From the editor itself:
   it in place — and **Fix all problems in this file** when there are several.
 - **Source Control**: the ✨ button in the title bar writes the commit message
   with M365 Copilot, and ☑ reviews your uncommitted changes as comments.
+- **Auto-commit** (quick menu → *Turn on auto-commit*, or the `…` menu of Source
+  Control): while you work, M365 Copilot commits your changes when they make a
+  finished unit — with a message that explains what and why — and waits while
+  they are in progress. It never pushes; every auto-commit has **Undo**.
 - **Accounts menu** (person icon, bottom left): shows your M365 Copilot account,
   signs you out (deletes the token), and signs you in when there is no token.
 

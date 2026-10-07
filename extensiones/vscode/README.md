@@ -136,7 +136,7 @@ spinner while a suggestion is on its way. Its tooltip shows the account, the
 minutes left and the agent changes pending review. Clicking it opens the
 **M365 Copilot menu**: paste token, token status, open M365 Copilot, open the
 chat, toggle inline completions, review pending changes, generate a commit
-message, language, settings, walkthrough, log and delete credentials.
+message, auto-commit, language, settings, walkthrough, log and delete credentials.
 
 When the token is about to expire **without having been renewed** (5 minutes
 left) or expires during the session, a notification offers **Paste token** /
@@ -161,6 +161,43 @@ message from the staged diff — or the working tree's, if nothing is staged —
 straight into the commit box, in the extension's language. It never commits:
 you review and commit yourself. Next to it, ☑ reviews those changes before you
 commit (see [Code review as comments](#code-review-as-comments)).
+
+### Auto-commit
+
+Turn it on per workspace (**M365 Copilot: Turn auto-commit on/off**, the quick
+menu, or the `…` menu of Source Control) and keep working. When you pause, M365
+Copilot looks at your uncommitted changes and decides, like a careful senior
+developer, whether they are a **finished unit worth a commit** — a complete fix,
+even a one-line one, a finished step of a feature, a refactor, docs — or work in
+progress. If they are, it commits them with a Conventional Commits subject and a
+**body that explains what changed and why**; unrelated finished changes become
+separate commits (at most 3 at a time), and files still in progress are left out.
+If not, it waits, and is not asked again until something changes.
+
+It is built to give you a useful history, not a flood of tiny commits:
+
+- it only looks after `idleSeconds` without edits, saves or git changes, and not
+  before `minIntervalMinutes` since the last commit (yours or automatic);
+- it never commits while files are unsaved, agent edits await Keep/Undo, the
+  changed files have errors in **Problems**, there are conflicts, HEAD is
+  detached or a merge/rebase is in progress — nor more than 150 changed files at
+  once;
+- it commits exactly the files it chose (whole files); what you staged for other
+  files stays staged, pre-commit hooks run as usual, and it **never pushes**.
+
+Every auto-commit shows a notification with **Undo** (a soft reset: the changes
+go back to your working tree, uncommitted) and **Show** (full messages and
+stats in the log). The **Auto** status item shows what it is doing per
+repository — watching, deciding, or why it is waiting — and its menu has
+**Check now** (ask right away, ignoring the idle time and interval), **Undo the
+last auto-commit**, settings and turn off. Submodules are left alone.
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `m365copilot.autoCommit.mode` | `auto` | `auto` commits on its own (with **Undo**); `confirm` proposes the commits and waits for **Commit**. |
+| `m365copilot.autoCommit.idleSeconds` | `120` | Seconds without changes before it looks (20–3600). |
+| `m365copilot.autoCommit.minIntervalMinutes` | `5` | Minimum minutes since the last commit (0 = none). |
+| `m365copilot.autoCommit.waitForErrors` | `true` | Wait while the changed files have errors. |
 
 ## Understands your project (local index)
 
@@ -410,6 +447,9 @@ palette under **M365 Copilot**.
 | `Review changes with M365 Copilot` | Reviews the uncommitted changes (Source Control title bar). |
 | `Clear all review comments` | Removes the review comments. |
 | `Generate commit message with M365 Copilot` | Writes the commit message in Source Control. |
+| `Turn auto-commit on/off` | Starts or stops the [auto-commit](#auto-commit) in this workspace. |
+| `Auto-commit: check now` | Asks right away whether the current changes deserve a commit. |
+| `Undo last auto-commit` | Takes the last auto-commit back out of the history, keeping its changes. |
 | `Paste profile or token` | Stores the token in SecretStorage (encrypted). |
 | `Token status` | User, expiry and capture time. |
 | `Delete credentials` | Deletes the stored token. |

@@ -18,6 +18,7 @@ import { TokenWatcher } from './tokenWatcher';
 import { EditorHandoff, registerEditorActions } from './editorActions';
 import { registerChatParticipant } from './participant';
 import { registerScmCommands } from './scmCommit';
+import { AutoCommitter } from './autoCommit';
 import { registerInlineEdit } from './inlineEdit';
 import { TerminalHistory } from './terminalHistory';
 import { M365AuthenticationProvider } from './account';
@@ -60,6 +61,8 @@ export interface TestingApi {
 	readonly provider: M365CopilotProvider;
 	/** Sends every BizChat turn to a local mock (`ws://…/m365Copilot/Chathub`), or back to BizChat. */
 	readonly useEndpoint: (base: string | undefined) => void;
+	/** The auto-commit, to drive a look without waiting for the idle timer. */
+	readonly autoCommit: AutoCommitter;
 }
 
 export function activate(context: vscode.ExtensionContext): TestingApi | undefined {
@@ -111,6 +114,7 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
 	const terminals = new TerminalHistory();
 	const account = new M365AuthenticationProvider(store);
 	const reviewComments = new ReviewComments(context.extensionUri);
+	const autoCommit = new AutoCommitter({ store, edits: workspaceEdits, memento: context.workspaceState, log });
 	const tokenWatcher = new TokenWatcher(
 		store,
 		() => statusBar.refresh(),
@@ -133,6 +137,7 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
 		terminals,
 		account,
 		reviewComments,
+		autoCommit,
 		projectIndex,
 		...projectIndex.registerTools(),
 		...projectIndex.registerCommands(),
@@ -149,6 +154,7 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
 					statusBar.refresh();
 					provider.refresh();
 					workspaceEdits.refreshLocale();
+					autoCommit.render();
 				});
 			}
 		}),
@@ -164,10 +170,13 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
 		...registerEditorActions(handoff, terminals),
 		...registerInlineEdit({ store, edits: workspaceEdits, memento: context.globalState, log }),
 		...registerScmCommands(store, log),
+		...autoCommit.registerCommands(),
 		...registerReview({ store, log }, reviewComments),
 		...registerM365WorkspaceTools(workspaceEdits),
 		...registerM365SubagentTools(store, log),
-		vscode.commands.registerCommand('m365copilot.showMenu', () => showMenu(store, workspaceEdits, projectIndex.status())),
+		vscode.commands.registerCommand('m365copilot.showMenu', () =>
+			showMenu(store, workspaceEdits, projectIndex.status(), autoCommit.enabled),
+		),
 		vscode.commands.registerCommand('m365copilot.toggleInlineCompletions', () => toggleInlineCompletions()),
 		vscode.commands.registerCommand('m365copilot.pasteProfile', () => pasteProfile(store)),
 		vscode.commands.registerCommand('m365copilot.clearProfile', () => clearProfile(store)),
@@ -202,7 +211,16 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
 	// them drive the Keep/Undo review directly, without the chat UI or the
 	// tool-confirmation dialog, which a test host refuses to show.
 	return context.extensionMode === vscode.ExtensionMode.Test
-		? { workspaceEdits, store, account, reviewComments, projectIndex, provider, useEndpoint: setTestEndpointBase }
+		? {
+				workspaceEdits,
+				store,
+				account,
+				reviewComments,
+				projectIndex,
+				provider,
+				useEndpoint: setTestEndpointBase,
+				autoCommit,
+			}
 		: undefined;
 }
 

@@ -560,6 +560,38 @@
           "default": "m365-copilot-auto",
           "markdownDescription": "%config.editor.model%"
         },
+        "m365copilot.autoCommit.mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "confirm"
+          ],
+          "enumDescriptions": [
+            "%config.autoCommit.mode.auto%",
+            "%config.autoCommit.mode.confirm%"
+          ],
+          "default": "auto",
+          "markdownDescription": "%config.autoCommit.mode%"
+        },
+        "m365copilot.autoCommit.idleSeconds": {
+          "type": "number",
+          "default": 120,
+          "minimum": 20,
+          "maximum": 3600,
+          "markdownDescription": "%config.autoCommit.idleSeconds%"
+        },
+        "m365copilot.autoCommit.minIntervalMinutes": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "maximum": 240,
+          "markdownDescription": "%config.autoCommit.minIntervalMinutes%"
+        },
+        "m365copilot.autoCommit.waitForErrors": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.autoCommit.waitForErrors%"
+        },
         "m365copilot.terminal.captureOutput": {
           "type": "boolean",
           "default": true,
@@ -833,6 +865,24 @@
         "icon": "$(sparkle-filled)"
       },
       {
+        "command": "m365copilot.toggleAutoCommit",
+        "title": "%command.toggleAutoCommit%",
+        "category": "M365 Copilot",
+        "icon": "$(history)"
+      },
+      {
+        "command": "m365copilot.autoCommitNow",
+        "title": "%command.autoCommitNow%",
+        "category": "M365 Copilot",
+        "icon": "$(play)"
+      },
+      {
+        "command": "m365copilot.undoAutoCommit",
+        "title": "%command.undoAutoCommit%",
+        "category": "M365 Copilot",
+        "icon": "$(discard)"
+      },
+      {
         "command": "m365copilot.reviewChanges",
         "title": "%command.reviewChanges%",
         "category": "M365 Copilot",
@@ -1102,6 +1152,16 @@
           "command": "m365copilot.reviewChanges",
           "when": "scmProvider == git",
           "group": "navigation@11"
+        },
+        {
+          "command": "m365copilot.toggleAutoCommit",
+          "group": "1_m365copilot@1",
+          "when": "scmProvider == git"
+        },
+        {
+          "command": "m365copilot.autoCommitNow",
+          "group": "1_m365copilot@2",
+          "when": "scmProvider == git"
         }
       ],
       "commandPalette": [
