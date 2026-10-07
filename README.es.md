@@ -4,8 +4,11 @@
 
 Monorepo (pnpm workspaces + Turborepo) de las piezas que llevan tu suscripción
 de **Microsoft 365 Copilot** a VS Code — como modelos del chat, el participante
-`@m365`, acciones del editor y de Source Control, herramientas de agente y
-autocompletado en línea — y mantienen su token sincronizado. Todo está
+`@m365`, acciones del editor y de Source Control, revisión de código como
+comentarios en las líneas, una cuenta en el menú Cuentas de VS Code,
+herramientas de agente, un índice local del proyecto (RAG) que le da el contexto
+de tu código, búsqueda web y autocompletado en línea — y mantienen su token
+sincronizado. Todo está
 disponible en **inglés y español**.
 
 > **Aviso Legal**
@@ -25,7 +28,7 @@ disponible en **inglés y español**.
 │   └── vscode/      Extensión de VS Code. Levanta el servidor local, guarda el
 │                    perfil y expone Copilot en el chat y en el editor.
 ├── packages/
-│   └── core/        @ms365copilot/core — lógica y CONTRATOS compartidos:
+│   └── core/        @m365copilot/core — lógica y CONTRATOS compartidos:
 │                    tipos del perfil, decodificación de JWT, clasificación de
 │                    token y las constantes del servidor local (puerto/ruta).
 ├── turbo.json       Pipeline de tareas (build/dev/typecheck/test…).
@@ -51,7 +54,7 @@ Requiere Node ≥ 22.18 y pnpm 10.
 
 ## Idiomas
 
-- **Extensión de VS Code:** `ms365copilot.language` = `auto` (sigue el idioma de
+- **Extensión de VS Code:** `m365copilot.language` = `auto` (sigue el idioma de
   VS Code) / `en` / `es`. Cambia notificaciones, barra de estado, resultados de
   herramientas y las instrucciones que se envían al modelo. Los textos del
   manifiesto (comandos, ajustes, primeros pasos) salen de `package.nls.json` /

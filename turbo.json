@@ -4,11 +4,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      // dist/** y .output/** cubren los builds que se quedan dentro del
-      // paquete (packages/core, extensiones/vscode). WXT saca el suyo fuera,
-      // a releases/, así que sin ese patrón turbo nunca encontraba nada que
-      // cachear para la extensión de navegador (cache miss siempre).
-      "outputs": ["dist/**", ".output/**", "../../releases/**"]
+      // Sólo lo que genera cada paquete dentro de sí mismo: dist/** (core y
+      // VS Code) y el userscript que genera el build de VS Code. WXT saca el
+      // suyo a releases/chrome, y eso lo declara extensiones/browser/turbo.json.
+      // Antes estaba aquí `../../releases/**` para TODOS los paquetes, y un
+      // build sacado de caché (el del core, p. ej.) restauraba la carpeta
+      // releases/ entera tal como estaba al cachearse: volvían .vsix viejos.
+      "outputs": ["dist/**", ".output/**", "*.user.js"]
     },
     "typecheck": {
       "dependsOn": ["^build"]
@@ -24,14 +26,15 @@
       "cache": false,
       "persistent": true
     },
+    // Empaquetar es el paso de release: siempre de cero, nunca de caché (una
+    // caché de releases/ volvería a traer los artefactos de otra versión).
     "package": {
       "dependsOn": ["build"],
-      // vsce empaqueta con `--out ../../releases`, no en la raíz del paquete.
-      "outputs": ["*.vsix", "../../releases/**"]
+      "cache": false
     },
     "zip": {
       "dependsOn": ["build"],
-      "outputs": [".output/*.zip", "../../releases/**"]
+      "cache": false
     }
   }
 }

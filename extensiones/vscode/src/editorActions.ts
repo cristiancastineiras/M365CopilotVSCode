@@ -38,10 +38,10 @@ export class EditorHandoff {
 }
 
 const ACTION_COMMANDS: readonly (readonly [string, ParticipantCommand])[] = [
-	['ms365copilot.explainCode', 'explain'],
-	['ms365copilot.fixCode', 'fix'],
-	['ms365copilot.documentCode', 'doc'],
-	['ms365copilot.generateTests', 'tests'],
+	['m365copilot.explainCode', 'explain'],
+	['m365copilot.fixCode', 'fix'],
+	['m365copilot.documentCode', 'doc'],
+	['m365copilot.generateTests', 'tests'],
 ];
 
 export function registerEditorActions(handoff: EditorHandoff, terminals: TerminalHistory): vscode.Disposable[] {
@@ -57,9 +57,9 @@ export function registerEditorActions(handoff: EditorHandoff, terminals: Termina
 				runEditorAction(handoff, command, uri, range),
 			),
 		),
-		vscode.commands.registerCommand('ms365copilot.askAboutCode', () => askAboutCode()),
-		vscode.commands.registerCommand('ms365copilot.explainTerminal', () => explainTerminal(terminals)),
-		vscode.commands.registerCommand('ms365copilot.openChat', () => openChat(`@${PARTICIPANT_NAME} `, true)),
+		vscode.commands.registerCommand('m365copilot.askAboutCode', () => askAboutCode()),
+		vscode.commands.registerCommand('m365copilot.explainTerminal', () => explainTerminal(terminals)),
+		vscode.commands.registerCommand('m365copilot.openChat', () => openChat(`@${PARTICIPANT_NAME} `, true)),
 		vscode.languages.registerCodeActionsProvider(selector, new M365CodeActionProvider(), {
 			providedCodeActionKinds: M365CodeActionProvider.kinds,
 		}),
@@ -162,12 +162,19 @@ class M365CodeActionProvider implements vscode.CodeActionProvider {
 		range: vscode.Range | vscode.Selection,
 		context: vscode.CodeActionContext,
 	): vscode.CodeAction[] {
-		if (!vscode.workspace.getConfiguration('ms365copilot.editor').get<boolean>('codeActions', true)) return [];
+		if (!vscode.workspace.getConfiguration('m365copilot.editor').get<boolean>('codeActions', true)) return [];
 		const actions: vscode.CodeAction[] = [];
 
 		const problems = context.diagnostics
 			.filter((diagnostic) => diagnostic.severity <= vscode.DiagnosticSeverity.Warning)
 			.slice(0, 2);
+		// Offered on a problem only: "fix all" is a quick fix like the others.
+		const inFile =
+			problems.length > 0
+				? vscode.languages
+						.getDiagnostics(document.uri)
+						.filter((diagnostic) => diagnostic.severity <= vscode.DiagnosticSeverity.Warning).length
+				: 0;
 		for (const diagnostic of problems) {
 			const action = new vscode.CodeAction(
 				t('actions.codeAction.fixDiagnostic', shorten(diagnostic.message)),
@@ -175,18 +182,23 @@ class M365CodeActionProvider implements vscode.CodeActionProvider {
 			);
 			action.diagnostics = [diagnostic];
 			action.command = {
-				command: 'ms365copilot.editCode',
+				command: 'm365copilot.editCode',
 				title: action.title,
 				arguments: [document.uri, diagnostic.range, t('inlineEdit.fixInstruction', diagnostic.message)],
 			};
 			actions.push(action);
 		}
+		if (inFile >= 2) {
+			const action = new vscode.CodeAction(t('actions.codeAction.fixAll', inFile), vscode.CodeActionKind.QuickFix);
+			action.command = { command: 'm365copilot.fixAllProblems', title: action.title, arguments: [document.uri] };
+			actions.push(action);
+		}
 
 		if (!range.isEmpty) {
 			for (const [command, key] of [
-				['ms365copilot.editCode', 'actions.codeAction.edit'],
-				['ms365copilot.explainCode', 'actions.codeAction.explain'],
-				['ms365copilot.documentCode', 'actions.codeAction.document'],
+				['m365copilot.editCode', 'actions.codeAction.edit'],
+				['m365copilot.explainCode', 'actions.codeAction.explain'],
+				['m365copilot.documentCode', 'actions.codeAction.document'],
 			] as const) {
 				const action = new vscode.CodeAction(t(key), vscode.CodeActionKind.RefactorRewrite);
 				action.command = { command, title: action.title, arguments: [document.uri, range] };

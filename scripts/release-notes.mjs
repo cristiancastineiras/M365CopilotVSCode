@@ -22,7 +22,7 @@ if (!version) {
 const COMPONENTS = [
   { file: 'extensiones/vscode/CHANGELOG.md', title: '🧩 VS Code extension · Extensión de VS Code' },
   { file: 'extensiones/browser/CHANGELOG.md', title: '🌐 Browser extension · Extensión de navegador' },
-  { file: 'packages/core/CHANGELOG.md', title: '⚙️ Shared core · Núcleo compartido (@ms365copilot/core)' },
+  { file: 'packages/core/CHANGELOG.md', title: '⚙️ Shared core · Núcleo compartido (@m365copilot/core)' },
 ];
 
 /** Extrae el contenido bajo `## <version>` hasta el siguiente `## ` (o el final del archivo). */

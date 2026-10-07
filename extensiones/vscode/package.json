@@ -1,16 +1,16 @@
 {
-  "name": "ms365-copilot-vscode",
+  "name": "m365-copilot-vscode",
   "displayName": "%displayName%",
   "description": "%description%",
   "version": "2.0.0",
-  "publisher": "ms365-copilot-vscode",
+  "publisher": "m365-copilot-vscode",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/cristiancastineiras/M365CopilotVSCode.git",
     "directory": "extensiones/vscode"
   },
-  "icon": "logo/ms365-vscode.png",
+  "icon": "logo/m365-vscode.png",
   "engines": {
     "vscode": "^1.104.0"
   },
@@ -22,27 +22,33 @@
   "type": "module",
   "activationEvents": [
     "onStartupFinished",
-    "onLanguageModelChatProvider:ms365copilot"
+    "onLanguageModelChatProvider:m365copilot"
   ],
   "contributes": {
     "languageModelChatProviders": [
       {
-        "vendor": "ms365copilot",
+        "vendor": "m365copilot",
         "displayName": "Microsoft 365 Copilot"
+      }
+    ],
+    "authentication": [
+      {
+        "id": "m365copilot",
+        "label": "M365 Copilot"
       }
     ],
     "languageModelTools": [
       {
-        "name": "ms365_list_files",
-        "displayName": "%tool.ms365ListFiles.displayName%",
+        "name": "m365_list_files",
+        "displayName": "%tool.m365ListFiles.displayName%",
         "modelDescription": "List files below a workspace-relative directory without reading their contents. Use it first to discover the project layout before reading or editing files.",
-        "userDescription": "%tool.ms365ListFiles.userDescription%",
-        "toolReferenceName": "ms365ListFiles",
+        "userDescription": "%tool.m365ListFiles.userDescription%",
+        "toolReferenceName": "m365ListFiles",
         "canBeReferencedInPrompt": true,
         "icon": "$(list-tree)",
         "when": "workspaceFolderCount != 0",
         "tags": [
-          "ms365copilot"
+          "m365copilot"
         ],
         "inputSchema": {
           "type": "object",
@@ -64,16 +70,16 @@
         }
       },
       {
-        "name": "ms365_search_text",
-        "displayName": "%tool.ms365SearchText.displayName%",
+        "name": "m365_search_text",
+        "displayName": "%tool.m365SearchText.displayName%",
         "modelDescription": "Search for literal text across a bounded set of workspace files and return concise file:line matches. Use it to locate code before reading or editing it.",
-        "userDescription": "%tool.ms365SearchText.userDescription%",
-        "toolReferenceName": "ms365SearchText",
+        "userDescription": "%tool.m365SearchText.userDescription%",
+        "toolReferenceName": "m365SearchText",
         "canBeReferencedInPrompt": true,
         "icon": "$(search)",
         "when": "workspaceFolderCount != 0",
         "tags": [
-          "ms365copilot"
+          "m365copilot"
         ],
         "inputSchema": {
           "type": "object",
@@ -106,16 +112,16 @@
         }
       },
       {
-        "name": "ms365_read_file",
-        "displayName": "%tool.ms365ReadFile.displayName%",
+        "name": "m365_read_file",
+        "displayName": "%tool.m365ReadFile.displayName%",
         "modelDescription": "Read a small, line-numbered range from a workspace-relative text file. Always read the relevant range with this tool before proposing edits to a file.",
-        "userDescription": "%tool.ms365ReadFile.userDescription%",
-        "toolReferenceName": "ms365ReadFile",
+        "userDescription": "%tool.m365ReadFile.userDescription%",
+        "toolReferenceName": "m365ReadFile",
         "canBeReferencedInPrompt": true,
         "icon": "$(file-code)",
         "when": "workspaceFolderCount != 0",
         "tags": [
-          "ms365copilot"
+          "m365copilot"
         ],
         "inputSchema": {
           "type": "object",
@@ -143,16 +149,16 @@
         }
       },
       {
-        "name": "ms365_apply_edits",
-        "displayName": "%tool.ms365ApplyEdits.displayName%",
+        "name": "m365_apply_edits",
+        "displayName": "%tool.m365ApplyEdits.displayName%",
         "modelDescription": "Apply a reversible batch of exact workspace edits. Changes land in the editor immediately (unsaved), highlighted, with Keep/Undo actions on the change for the user to accept or revert — so never assume they are final. Fields per operation: replace needs oldText (exact and unique in the file) plus newText; create needs content (NOT newText); delete needs only path. Prefer several small calls over one huge batch when creating many files.",
-        "userDescription": "%tool.ms365ApplyEdits.userDescription%",
-        "toolReferenceName": "ms365ApplyEdits",
+        "userDescription": "%tool.m365ApplyEdits.userDescription%",
+        "toolReferenceName": "m365ApplyEdits",
         "canBeReferencedInPrompt": true,
         "icon": "$(edit)",
         "when": "workspaceFolderCount != 0",
         "tags": [
-          "ms365copilot"
+          "m365copilot"
         ],
         "inputSchema": {
           "type": "object",
@@ -206,16 +212,16 @@
         }
       },
       {
-        "name": "ms365_get_diagnostics",
-        "displayName": "%tool.ms365GetDiagnostics.displayName%",
+        "name": "m365_get_diagnostics",
+        "displayName": "%tool.m365GetDiagnostics.displayName%",
         "modelDescription": "Read the errors and warnings VS Code's language server already computed for a file or the whole workspace. Read-only; does not compile or run anything. Use it after proposing edits to check they didn't introduce new errors.",
-        "userDescription": "%tool.ms365GetDiagnostics.userDescription%",
-        "toolReferenceName": "ms365GetDiagnostics",
+        "userDescription": "%tool.m365GetDiagnostics.userDescription%",
+        "toolReferenceName": "m365GetDiagnostics",
         "canBeReferencedInPrompt": true,
         "icon": "$(warning)",
         "when": "workspaceFolderCount != 0",
         "tags": [
-          "ms365copilot"
+          "m365copilot"
         ],
         "inputSchema": {
           "type": "object",
@@ -241,16 +247,16 @@
         }
       },
       {
-        "name": "ms365_git_info",
-        "displayName": "%tool.ms365GitInfo.displayName%",
+        "name": "m365_git_info",
+        "displayName": "%tool.m365GitInfo.displayName%",
         "modelDescription": "Read-only git status, diff or log for the workspace or a path. Never commits, pushes or otherwise modifies the repository.",
-        "userDescription": "%tool.ms365GitInfo.userDescription%",
-        "toolReferenceName": "ms365GitInfo",
+        "userDescription": "%tool.m365GitInfo.userDescription%",
+        "toolReferenceName": "m365GitInfo",
         "canBeReferencedInPrompt": true,
         "icon": "$(git-branch)",
         "when": "workspaceFolderCount != 0",
         "tags": [
-          "ms365copilot"
+          "m365copilot"
         ],
         "inputSchema": {
           "type": "object",
@@ -288,16 +294,16 @@
         }
       },
       {
-        "name": "ms365_generate_commit_message",
-        "displayName": "%tool.ms365GenerateCommitMessage.displayName%",
-        "modelDescription": "Trigger VS Code's native Source Control 'Generate Commit Message' feature for the workspace repository and return what it produced, together with the staged (or working tree) diff. Does not modify the repository. Review/fix the result so its first line follows Conventional Commits before passing it to ms365_git_commit.",
-        "userDescription": "%tool.ms365GenerateCommitMessage.userDescription%",
-        "toolReferenceName": "ms365GenerateCommitMessage",
+        "name": "m365_generate_commit_message",
+        "displayName": "%tool.m365GenerateCommitMessage.displayName%",
+        "modelDescription": "Trigger VS Code's native Source Control 'Generate Commit Message' feature for the workspace repository and return what it produced, together with the staged (or working tree) diff. Does not modify the repository. Review/fix the result so its first line follows Conventional Commits before passing it to m365_git_commit.",
+        "userDescription": "%tool.m365GenerateCommitMessage.userDescription%",
+        "toolReferenceName": "m365GenerateCommitMessage",
         "canBeReferencedInPrompt": true,
         "icon": "$(sparkle)",
         "when": "workspaceFolderCount != 0",
         "tags": [
-          "ms365copilot"
+          "m365copilot"
         ],
         "inputSchema": {
           "type": "object",
@@ -310,16 +316,16 @@
         }
       },
       {
-        "name": "ms365_git_commit",
-        "displayName": "%tool.ms365GitCommit.displayName%",
+        "name": "m365_git_commit",
+        "displayName": "%tool.m365GitCommit.displayName%",
         "modelDescription": "Create a real commit with the given message, validated as Conventional Commits ('type(scope): summary'). Only commits what is already staged unless stageAll (git add -A) or paths (git add of those paths) is given. Requires explicit user confirmation showing the exact message before it runs.",
-        "userDescription": "%tool.ms365GitCommit.userDescription%",
-        "toolReferenceName": "ms365GitCommit",
+        "userDescription": "%tool.m365GitCommit.userDescription%",
+        "toolReferenceName": "m365GitCommit",
         "canBeReferencedInPrompt": true,
         "icon": "$(git-commit)",
         "when": "workspaceFolderCount != 0",
         "tags": [
-          "ms365copilot"
+          "m365copilot"
         ],
         "inputSchema": {
           "type": "object",
@@ -351,16 +357,16 @@
         }
       },
       {
-        "name": "ms365_run_command",
-        "displayName": "%tool.ms365RunCommand.displayName%",
+        "name": "m365_run_command",
+        "displayName": "%tool.m365RunCommand.displayName%",
         "modelDescription": "Run a shell command in the workspace and return its output (stdout/stderr, exit code). Requires explicit user confirmation before it executes. Use for builds, tests and other checks — not for destructive or irreversible actions unless the user explicitly asked for them.",
-        "userDescription": "%tool.ms365RunCommand.userDescription%",
-        "toolReferenceName": "ms365RunCommand",
+        "userDescription": "%tool.m365RunCommand.userDescription%",
+        "toolReferenceName": "m365RunCommand",
         "canBeReferencedInPrompt": true,
         "icon": "$(terminal)",
         "when": "workspaceFolderCount != 0",
         "tags": [
-          "ms365copilot"
+          "m365copilot"
         ],
         "inputSchema": {
           "type": "object",
@@ -390,16 +396,96 @@
         }
       },
       {
-        "name": "ms365_spawn_agents",
-        "displayName": "%tool.ms365SpawnAgents.displayName%",
+        "name": "m365_search_project",
+        "displayName": "%tool.m365SearchProject.displayName%",
+        "modelDescription": "Search the project index (a local RAG index of the workspace) and get the most relevant code chunks with file paths and line ranges, ranked by relevance. Use it first to find where something is implemented, how a flow works or which files are involved, before reading or editing files.",
+        "userDescription": "%tool.m365SearchProject.userDescription%",
+        "toolReferenceName": "m365SearchProject",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(search-fuzzy)",
+        "when": "workspaceFolderCount != 0",
+        "tags": [
+          "m365copilot"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "query"
+          ],
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "What to look for: words, identifiers or a question about the code."
+            },
+            "path": {
+              "type": "string",
+              "description": "Optional workspace-relative folder to search in."
+            },
+            "maxResults": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            }
+          }
+        }
+      },
+      {
+        "name": "m365_project_map",
+        "displayName": "%tool.m365ProjectMap.displayName%",
+        "modelDescription": "Get the project map from the local index: languages, packages, folder structure, entry points and most imported modules. With a file path: its outline (symbols with lines), what it imports and which files import it. With a folder path: its files and their main symbols.",
+        "userDescription": "%tool.m365ProjectMap.userDescription%",
+        "toolReferenceName": "m365ProjectMap",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(type-hierarchy)",
+        "when": "workspaceFolderCount != 0",
+        "tags": [
+          "m365copilot"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Optional workspace-relative file or folder; omit it for the whole project."
+            }
+          }
+        }
+      },
+      {
+        "name": "m365_web_search",
+        "displayName": "%tool.m365WebSearch.displayName%",
+        "modelDescription": "Search the internet (Bing, through Microsoft 365 Copilot) and get an up-to-date answer with its sources. Use it for current documentation, library versions, APIs, error messages or anything outside the workspace.",
+        "userDescription": "%tool.m365WebSearch.userDescription%",
+        "toolReferenceName": "m365WebSearch",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(globe)",
+        "tags": [
+          "m365copilot"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "query"
+          ],
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "What to search the web for."
+            }
+          }
+        }
+      },
+      {
+        "name": "m365_spawn_agents",
+        "displayName": "%tool.m365SpawnAgents.displayName%",
         "modelDescription": "Delegate one or more concrete, independent tasks (exploration, analysis, or even scoped edits/commands) to autonomous M365 Copilot sub-agents that run their own tool loop — in parallel when there are several — with the same workspace tools as the main agent (list/search/read/diagnostics/read-only git, and also proposing edits, running commands or committing if the task needs it, with the same Keep/Undo review and confirmation as always). Each sub-agent only sees the task it is given, not the rest of the conversation, and returns a concise summary — so exploring broadly does not fill up your own context. Use it for independent questions that can be investigated in parallel, broad exploration before deciding a change, or scoped tasks that do not need step-by-step supervision. Describe each task self-contained: the sub-agent has no access to the conversation history.",
-        "userDescription": "%tool.ms365SpawnAgents.userDescription%",
-        "toolReferenceName": "ms365SpawnAgents",
+        "userDescription": "%tool.m365SpawnAgents.userDescription%",
+        "toolReferenceName": "m365SpawnAgents",
         "canBeReferencedInPrompt": true,
         "icon": "$(run-all)",
         "when": "workspaceFolderCount != 0",
         "tags": [
-          "ms365copilot"
+          "m365copilot"
         ],
         "inputSchema": {
           "type": "object",
@@ -435,7 +521,7 @@
     "configuration": {
       "title": "M365 Copilot",
       "properties": {
-        "ms365copilot.language": {
+        "m365copilot.language": {
           "type": "string",
           "enum": [
             "auto",
@@ -451,40 +537,40 @@
           "scope": "application",
           "markdownDescription": "%config.language%"
         },
-        "ms365copilot.notifications.tokenExpiry": {
+        "m365copilot.notifications.tokenExpiry": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "%config.notifications.tokenExpiry%"
         },
-        "ms365copilot.editor.codeActions": {
+        "m365copilot.editor.codeActions": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "%config.editor.codeActions%"
         },
-        "ms365copilot.editor.model": {
+        "m365copilot.editor.model": {
           "type": "string",
           "enum": [
-            "ms365-copilot-auto",
-            "ms365-copilot-gpt",
-            "ms365-copilot-gpt56",
-            "ms365-copilot-gpt56-reasoning",
-            "ms365-copilot-claude",
-            "ms365-copilot-reasoning"
+            "m365-copilot-auto",
+            "m365-copilot-gpt",
+            "m365-copilot-gpt56",
+            "m365-copilot-gpt56-reasoning",
+            "m365-copilot-claude",
+            "m365-copilot-reasoning"
           ],
-          "default": "ms365-copilot-auto",
+          "default": "m365-copilot-auto",
           "markdownDescription": "%config.editor.model%"
         },
-        "ms365copilot.terminal.captureOutput": {
+        "m365copilot.terminal.captureOutput": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "%config.terminal.captureOutput%"
         },
-        "ms365copilot.tools.includeEditorTools": {
+        "m365copilot.tools.includeEditorTools": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "%config.tools.includeEditorTools%"
         },
-        "ms365copilot.tools.duplicates": {
+        "m365copilot.tools.duplicates": {
           "type": "string",
           "enum": [
             "preferEditor",
@@ -499,24 +585,68 @@
           "default": "preferEditor",
           "markdownDescription": "%config.tools.duplicates%"
         },
-        "ms365copilot.tools.maxAdvertised": {
+        "m365copilot.tools.maxAdvertised": {
           "type": "number",
           "default": 48,
           "minimum": 4,
           "maximum": 200,
           "markdownDescription": "%config.tools.maxAdvertised%"
         },
-        "ms365copilot.models.updateFromCatalog": {
+        "m365copilot.index.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.index.enabled%"
+        },
+        "m365copilot.index.maxFiles": {
+          "type": "number",
+          "default": 5000,
+          "minimum": 50,
+          "maximum": 50000,
+          "markdownDescription": "%config.index.maxFiles%"
+        },
+        "m365copilot.index.maxFileKB": {
+          "type": "number",
+          "default": 256,
+          "minimum": 8,
+          "maximum": 4096,
+          "markdownDescription": "%config.index.maxFileKB%"
+        },
+        "m365copilot.index.exclude": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "markdownDescription": "%config.index.exclude%"
+        },
+        "m365copilot.context.autoRetrieve": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.context.autoRetrieve%"
+        },
+        "m365copilot.context.maxChars": {
+          "type": "number",
+          "default": 8000,
+          "minimum": 1000,
+          "maximum": 40000,
+          "markdownDescription": "%config.context.maxChars%"
+        },
+        "m365copilot.web.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.web.enabled%"
+        },
+        "m365copilot.models.updateFromCatalog": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "%config.models.updateFromCatalog%"
         },
-        "ms365copilot.models.detectFromBrowser": {
+        "m365copilot.models.detectFromBrowser": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "%config.models.detectFromBrowser%"
         },
-        "ms365copilot.models.custom": {
+        "m365copilot.models.custom": {
           "type": "array",
           "default": [],
           "items": {
@@ -544,44 +674,44 @@
           },
           "markdownDescription": "%config.models.custom%"
         },
-        "ms365copilot.subagents.enabled": {
+        "m365copilot.subagents.enabled": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "%config.subagents.enabled%"
         },
-        "ms365copilot.subagents.maxConcurrent": {
+        "m365copilot.subagents.maxConcurrent": {
           "type": "number",
           "default": 3,
           "minimum": 1,
           "maximum": 6,
           "markdownDescription": "%config.subagents.maxConcurrent%"
         },
-        "ms365copilot.subagents.maxSteps": {
+        "m365copilot.subagents.maxSteps": {
           "type": "number",
           "default": 6,
           "minimum": 1,
           "maximum": 12,
           "markdownDescription": "%config.subagents.maxSteps%"
         },
-        "ms365copilot.subagents.model": {
+        "m365copilot.subagents.model": {
           "type": "string",
           "enum": [
-            "ms365-copilot-auto",
-            "ms365-copilot-gpt",
-            "ms365-copilot-gpt56",
-            "ms365-copilot-gpt56-reasoning",
-            "ms365-copilot-claude",
-            "ms365-copilot-reasoning"
+            "m365-copilot-auto",
+            "m365-copilot-gpt",
+            "m365-copilot-gpt56",
+            "m365-copilot-gpt56-reasoning",
+            "m365-copilot-claude",
+            "m365-copilot-reasoning"
           ],
-          "default": "ms365-copilot-auto",
+          "default": "m365-copilot-auto",
           "description": "%config.subagents.model%"
         },
-        "ms365copilot.inlineCompletions.enabled": {
+        "m365copilot.inlineCompletions.enabled": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "%config.inlineCompletions.enabled%"
         },
-        "ms365copilot.inlineCompletions.triggerMode": {
+        "m365copilot.inlineCompletions.triggerMode": {
           "type": "string",
           "enum": [
             "automatic",
@@ -594,41 +724,41 @@
           "default": "automatic",
           "description": "%config.inlineCompletions.triggerMode%"
         },
-        "ms365copilot.inlineCompletions.debounceMs": {
+        "m365copilot.inlineCompletions.debounceMs": {
           "type": "number",
           "default": 500,
           "minimum": 0,
           "maximum": 5000,
           "description": "%config.inlineCompletions.debounceMs%"
         },
-        "ms365copilot.inlineCompletions.maxLines": {
+        "m365copilot.inlineCompletions.maxLines": {
           "type": "number",
           "default": 6,
           "minimum": 1,
           "maximum": 30,
           "description": "%config.inlineCompletions.maxLines%"
         },
-        "ms365copilot.inlineCompletions.timeoutMs": {
+        "m365copilot.inlineCompletions.timeoutMs": {
           "type": "number",
           "default": 6000,
           "minimum": 1000,
           "maximum": 30000,
           "description": "%config.inlineCompletions.timeoutMs%"
         },
-        "ms365copilot.inlineCompletions.model": {
+        "m365copilot.inlineCompletions.model": {
           "type": "string",
           "enum": [
-            "ms365-copilot-auto",
-            "ms365-copilot-gpt",
-            "ms365-copilot-gpt56",
-            "ms365-copilot-gpt56-reasoning",
-            "ms365-copilot-claude",
-            "ms365-copilot-reasoning"
+            "m365-copilot-auto",
+            "m365-copilot-gpt",
+            "m365-copilot-gpt56",
+            "m365-copilot-gpt56-reasoning",
+            "m365-copilot-claude",
+            "m365-copilot-reasoning"
           ],
-          "default": "ms365-copilot-auto",
+          "default": "m365-copilot-auto",
           "description": "%config.inlineCompletions.model%"
         },
-        "ms365copilot.inlineCompletions.disabledLanguages": {
+        "m365copilot.inlineCompletions.disabledLanguages": {
           "type": "array",
           "items": {
             "type": "string"
@@ -643,164 +773,218 @@
     },
     "commands": [
       {
-        "command": "ms365copilot.showMenu",
+        "command": "m365copilot.showMenu",
         "title": "%command.showMenu%",
         "category": "M365 Copilot",
         "icon": "$(sparkle)"
       },
       {
-        "command": "ms365copilot.openChat",
+        "command": "m365copilot.openChat",
         "title": "%command.openChat%",
         "category": "M365 Copilot",
         "icon": "$(comment-discussion)"
       },
       {
-        "command": "ms365copilot.editCode",
+        "command": "m365copilot.editCode",
         "title": "%command.editCode%",
         "category": "M365 Copilot",
         "icon": "$(wand)"
       },
       {
-        "command": "ms365copilot.explainCode",
+        "command": "m365copilot.explainCode",
         "title": "%command.explainCode%",
         "category": "M365 Copilot"
       },
       {
-        "command": "ms365copilot.askAboutCode",
+        "command": "m365copilot.askAboutCode",
         "title": "%command.askAboutCode%",
         "category": "M365 Copilot"
       },
       {
-        "command": "ms365copilot.fixCode",
+        "command": "m365copilot.fixCode",
         "title": "%command.fixCode%",
         "category": "M365 Copilot"
       },
       {
-        "command": "ms365copilot.documentCode",
+        "command": "m365copilot.documentCode",
         "title": "%command.documentCode%",
         "category": "M365 Copilot"
       },
       {
-        "command": "ms365copilot.generateTests",
+        "command": "m365copilot.generateTests",
         "title": "%command.generateTests%",
         "category": "M365 Copilot"
       },
       {
-        "command": "ms365copilot.generateCommitMessage",
+        "command": "m365copilot.reviewCode",
+        "title": "%command.reviewCode%",
+        "category": "M365 Copilot",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "m365copilot.fixAllProblems",
+        "title": "%command.fixAllProblems%",
+        "category": "M365 Copilot",
+        "icon": "$(wand)"
+      },
+      {
+        "command": "m365copilot.generateCommitMessage",
         "title": "%command.generateCommitMessage%",
         "icon": "$(sparkle-filled)"
       },
       {
-        "command": "ms365copilot.explainTerminal",
+        "command": "m365copilot.reviewChanges",
+        "title": "%command.reviewChanges%",
+        "category": "M365 Copilot",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "m365copilot.explainTerminal",
         "title": "%command.explainTerminal%",
         "category": "M365 Copilot",
         "icon": "$(terminal)"
       },
       {
-        "command": "ms365copilot.toggleInlineCompletions",
+        "command": "m365copilot.toggleInlineCompletions",
         "title": "%command.toggleInlineCompletions%",
         "category": "M365 Copilot"
       },
       {
-        "command": "ms365copilot.pasteProfile",
+        "command": "m365copilot.pasteProfile",
         "title": "%command.pasteProfile%",
         "category": "M365 Copilot",
         "icon": "$(key)"
       },
       {
-        "command": "ms365copilot.clearProfile",
+        "command": "m365copilot.clearProfile",
         "title": "%command.clearProfile%",
         "category": "M365 Copilot"
       },
       {
-        "command": "ms365copilot.showStatus",
+        "command": "m365copilot.showStatus",
         "title": "%command.showStatus%",
         "category": "M365 Copilot"
       },
       {
-        "command": "ms365copilot.selectLanguage",
+        "command": "m365copilot.selectLanguage",
         "title": "%command.selectLanguage%",
         "category": "M365 Copilot",
         "icon": "$(globe)"
       },
       {
-        "command": "ms365copilot.refreshModels",
+        "command": "m365copilot.refreshModels",
         "title": "%command.refreshModels%",
         "category": "M365 Copilot",
         "icon": "$(sync)"
       },
       {
-        "command": "ms365copilot.openWalkthrough",
+        "command": "m365copilot.searchProject",
+        "title": "%command.searchProject%",
+        "category": "M365 Copilot",
+        "icon": "$(search-fuzzy)"
+      },
+      {
+        "command": "m365copilot.showProjectMap",
+        "title": "%command.showProjectMap%",
+        "category": "M365 Copilot",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "m365copilot.rebuildIndex",
+        "title": "%command.rebuildIndex%",
+        "category": "M365 Copilot",
+        "icon": "$(database)"
+      },
+      {
+        "command": "m365copilot.openWalkthrough",
         "title": "%command.openWalkthrough%",
         "category": "M365 Copilot",
         "icon": "$(book)"
       },
       {
-        "command": "ms365copilot.showLog",
+        "command": "m365copilot.showLog",
         "title": "%command.showLog%",
         "category": "M365 Copilot"
       },
       {
-        "command": "ms365copilot.reviewPendingEdits",
+        "command": "m365copilot.reviewPendingEdits",
         "title": "%command.reviewPendingEdits%",
         "category": "M365 Copilot"
       },
       {
-        "command": "ms365copilot.keepEdits",
+        "command": "m365copilot.keepEdits",
         "title": "%command.keepEdits%",
         "category": "M365 Copilot",
         "icon": "$(check)"
       },
       {
-        "command": "ms365copilot.undoEdits",
+        "command": "m365copilot.undoEdits",
         "title": "%command.undoEdits%",
         "category": "M365 Copilot",
         "icon": "$(discard)"
       },
       {
-        "command": "ms365copilot.showEditDiff",
+        "command": "m365copilot.showEditDiff",
         "title": "%command.showEditDiff%",
         "category": "M365 Copilot",
         "icon": "$(diff)"
       },
       {
-        "command": "ms365copilot.previousChange",
+        "command": "m365copilot.previousChange",
         "title": "%command.previousChange%",
         "category": "M365 Copilot",
         "icon": "$(arrow-up)"
       },
       {
-        "command": "ms365copilot.nextChange",
+        "command": "m365copilot.nextChange",
         "title": "%command.nextChange%",
         "category": "M365 Copilot",
         "icon": "$(arrow-down)"
       },
       {
-        "command": "ms365copilot.keepHunk",
+        "command": "m365copilot.keepHunk",
         "title": "%command.keepHunk%",
         "category": "M365 Copilot",
         "icon": "$(check)"
       },
       {
-        "command": "ms365copilot.undoHunk",
+        "command": "m365copilot.undoHunk",
         "title": "%command.undoHunk%",
         "category": "M365 Copilot",
         "icon": "$(discard)"
       },
       {
-        "command": "ms365copilot.discardPendingEdits",
+        "command": "m365copilot.discardPendingEdits",
         "title": "%command.discardPendingEdits%",
         "category": "M365 Copilot"
       },
       {
-        "command": "ms365copilot.undoLastAgentEdit",
+        "command": "m365copilot.undoLastAgentEdit",
         "title": "%command.undoLastAgentEdit%",
         "category": "M365 Copilot"
+      },
+      {
+        "command": "m365copilot.review.applyFix",
+        "title": "%command.review.applyFix%",
+        "category": "M365 Copilot",
+        "icon": "$(wand)"
+      },
+      {
+        "command": "m365copilot.review.dismiss",
+        "title": "%command.review.dismiss%",
+        "category": "M365 Copilot",
+        "icon": "$(close)"
+      },
+      {
+        "command": "m365copilot.review.clear",
+        "title": "%command.review.clear%",
+        "category": "M365 Copilot",
+        "icon": "$(clear-all)"
       }
     ],
     "chatParticipants": [
       {
-        "id": "ms365copilot.m365",
+        "id": "m365copilot.m365",
         "name": "m365",
         "fullName": "M365 Copilot",
         "description": "%participant.description%",
@@ -831,154 +1015,217 @@
     ],
     "submenus": [
       {
-        "id": "ms365copilot.editor",
+        "id": "m365copilot.editor",
         "label": "M365 Copilot"
       }
     ],
     "menus": {
       "editor/context": [
         {
-          "submenu": "ms365copilot.editor",
-          "group": "ms365copilot@1",
+          "submenu": "m365copilot.editor",
+          "group": "m365copilot@1",
           "when": "editorTextFocus"
         }
       ],
-      "ms365copilot.editor": [
+      "m365copilot.editor": [
         {
-          "command": "ms365copilot.editCode",
+          "command": "m365copilot.editCode",
           "group": "0_edit@1",
           "when": "!editorReadonly"
         },
         {
-          "command": "ms365copilot.explainCode",
+          "command": "m365copilot.explainCode",
           "group": "1_ask@1"
         },
         {
-          "command": "ms365copilot.askAboutCode",
+          "command": "m365copilot.askAboutCode",
           "group": "1_ask@2"
         },
         {
-          "command": "ms365copilot.fixCode",
+          "command": "m365copilot.reviewCode",
+          "group": "1_ask@3"
+        },
+        {
+          "command": "m365copilot.fixCode",
           "group": "2_change@1",
           "when": "!editorReadonly"
         },
         {
-          "command": "ms365copilot.documentCode",
+          "command": "m365copilot.documentCode",
           "group": "2_change@2",
           "when": "!editorReadonly"
         },
         {
-          "command": "ms365copilot.generateTests",
+          "command": "m365copilot.generateTests",
           "group": "2_change@3"
+        },
+        {
+          "command": "m365copilot.fixAllProblems",
+          "when": "!editorReadonly",
+          "group": "2_change@4"
         }
       ],
       "editor/title": [
         {
-          "command": "ms365copilot.previousChange",
+          "command": "m365copilot.previousChange",
           "group": "navigation@1",
-          "when": "ms365copilot.activeEditorHasPendingEdits"
+          "when": "m365copilot.activeEditorHasPendingEdits"
         },
         {
-          "command": "ms365copilot.nextChange",
+          "command": "m365copilot.nextChange",
           "group": "navigation@2",
-          "when": "ms365copilot.activeEditorHasPendingEdits"
+          "when": "m365copilot.activeEditorHasPendingEdits"
         },
         {
-          "command": "ms365copilot.keepEdits",
+          "command": "m365copilot.keepEdits",
           "group": "navigation@3",
-          "when": "ms365copilot.activeEditorHasPendingEdits"
+          "when": "m365copilot.activeEditorHasPendingEdits"
         },
         {
-          "command": "ms365copilot.undoEdits",
+          "command": "m365copilot.undoEdits",
           "group": "navigation@4",
-          "when": "ms365copilot.activeEditorHasPendingEdits"
+          "when": "m365copilot.activeEditorHasPendingEdits"
         },
         {
-          "command": "ms365copilot.showEditDiff",
+          "command": "m365copilot.showEditDiff",
           "group": "navigation@5",
-          "when": "ms365copilot.activeEditorHasPendingEdits"
+          "when": "m365copilot.activeEditorHasPendingEdits"
         }
       ],
       "scm/title": [
         {
-          "command": "ms365copilot.generateCommitMessage",
+          "command": "m365copilot.generateCommitMessage",
           "group": "navigation@10",
           "when": "scmProvider == git"
+        },
+        {
+          "command": "m365copilot.reviewChanges",
+          "when": "scmProvider == git",
+          "group": "navigation@11"
         }
       ],
       "commandPalette": [
         {
-          "command": "ms365copilot.explainCode",
+          "command": "m365copilot.explainCode",
           "when": "editorIsOpen"
         },
         {
-          "command": "ms365copilot.askAboutCode",
+          "command": "m365copilot.askAboutCode",
           "when": "editorIsOpen"
         },
         {
-          "command": "ms365copilot.fixCode",
+          "command": "m365copilot.fixCode",
           "when": "editorIsOpen"
         },
         {
-          "command": "ms365copilot.documentCode",
+          "command": "m365copilot.documentCode",
           "when": "editorIsOpen"
         },
         {
-          "command": "ms365copilot.generateTests",
+          "command": "m365copilot.generateTests",
           "when": "editorIsOpen"
         },
         {
-          "command": "ms365copilot.keepEdits",
-          "when": "ms365copilot.hasPendingEdits"
+          "command": "m365copilot.keepEdits",
+          "when": "m365copilot.hasPendingEdits"
         },
         {
-          "command": "ms365copilot.undoEdits",
-          "when": "ms365copilot.hasPendingEdits"
+          "command": "m365copilot.undoEdits",
+          "when": "m365copilot.hasPendingEdits"
         },
         {
-          "command": "ms365copilot.showEditDiff",
-          "when": "ms365copilot.hasPendingEdits"
+          "command": "m365copilot.showEditDiff",
+          "when": "m365copilot.hasPendingEdits"
         },
         {
-          "command": "ms365copilot.discardPendingEdits",
-          "when": "ms365copilot.hasPendingEdits"
+          "command": "m365copilot.discardPendingEdits",
+          "when": "m365copilot.hasPendingEdits"
         },
         {
-          "command": "ms365copilot.editCode",
+          "command": "m365copilot.editCode",
           "when": "editorIsOpen"
         },
         {
-          "command": "ms365copilot.previousChange",
-          "when": "ms365copilot.hasPendingEdits"
+          "command": "m365copilot.previousChange",
+          "when": "m365copilot.hasPendingEdits"
         },
         {
-          "command": "ms365copilot.nextChange",
-          "when": "ms365copilot.hasPendingEdits"
+          "command": "m365copilot.nextChange",
+          "when": "m365copilot.hasPendingEdits"
         },
         {
-          "command": "ms365copilot.keepHunk",
+          "command": "m365copilot.keepHunk",
           "when": "false"
         },
         {
-          "command": "ms365copilot.undoHunk",
+          "command": "m365copilot.undoHunk",
           "when": "false"
+        },
+        {
+          "command": "m365copilot.reviewCode",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "m365copilot.fixAllProblems",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "m365copilot.review.applyFix",
+          "when": "false"
+        },
+        {
+          "command": "m365copilot.review.dismiss",
+          "when": "false"
+        },
+        {
+          "command": "m365copilot.review.clear",
+          "when": "m365copilot.hasReviewComments"
+        },
+        {
+          "command": "m365copilot.searchProject",
+          "when": "workspaceFolderCount != 0"
+        },
+        {
+          "command": "m365copilot.showProjectMap",
+          "when": "workspaceFolderCount != 0"
+        },
+        {
+          "command": "m365copilot.rebuildIndex",
+          "when": "workspaceFolderCount != 0"
         }
       ],
       "terminal/context": [
         {
-          "command": "ms365copilot.explainTerminal",
-          "group": "ms365copilot@1"
+          "command": "m365copilot.explainTerminal",
+          "group": "m365copilot@1"
+        }
+      ],
+      "comments/commentThread/title": [
+        {
+          "command": "m365copilot.review.applyFix",
+          "when": "commentController == m365copilot.review && commentThread == m365review",
+          "group": "inline@1"
+        },
+        {
+          "command": "m365copilot.review.dismiss",
+          "when": "commentController == m365copilot.review",
+          "group": "inline@2"
+        },
+        {
+          "command": "m365copilot.review.clear",
+          "when": "commentController == m365copilot.review",
+          "group": "inline@3"
         }
       ]
     },
     "walkthroughs": [
       {
-        "id": "ms365copilot.gettingStarted",
+        "id": "m365copilot.gettingStarted",
         "title": "%walkthrough.title%",
         "description": "%walkthrough.description%",
         "steps": [
           {
-            "id": "ms365copilot.capture",
+            "id": "m365copilot.capture",
             "title": "%walkthrough.capture.title%",
             "description": "%walkthrough.capture.description%",
             "media": {
@@ -987,7 +1234,7 @@
             }
           },
           {
-            "id": "ms365copilot.paste",
+            "id": "m365copilot.paste",
             "title": "%walkthrough.paste.title%",
             "description": "%walkthrough.paste.description%",
             "media": {
@@ -995,11 +1242,11 @@
               "altText": "%walkthrough.paste.alt%"
             },
             "completionEvents": [
-              "onCommand:ms365copilot.pasteProfile"
+              "onCommand:m365copilot.pasteProfile"
             ]
           },
           {
-            "id": "ms365copilot.chat",
+            "id": "m365copilot.chat",
             "title": "%walkthrough.chat.title%",
             "description": "%walkthrough.chat.description%",
             "media": {
@@ -1007,11 +1254,11 @@
               "altText": "%walkthrough.chat.alt%"
             },
             "completionEvents": [
-              "onCommand:ms365copilot.openChat"
+              "onCommand:m365copilot.openChat"
             ]
           },
           {
-            "id": "ms365copilot.editor",
+            "id": "m365copilot.editor",
             "title": "%walkthrough.editor.title%",
             "description": "%walkthrough.editor.description%",
             "media": {
@@ -1019,21 +1266,34 @@
               "altText": "%walkthrough.editor.alt%"
             },
             "completionEvents": [
-              "onCommand:ms365copilot.editCode",
-              "onCommand:ms365copilot.explainCode",
-              "onCommand:ms365copilot.fixCode"
+              "onCommand:m365copilot.editCode",
+              "onCommand:m365copilot.explainCode",
+              "onCommand:m365copilot.fixCode"
             ]
           },
           {
-            "id": "ms365copilot.language",
+            "id": "m365copilot.review",
+            "title": "%walkthrough.review.title%",
+            "description": "%walkthrough.review.description%",
+            "media": {
+              "image": "logo/m365-vscode.png",
+              "altText": "%walkthrough.review.alt%"
+            },
+            "completionEvents": [
+              "onCommand:m365copilot.reviewCode",
+              "onCommand:m365copilot.reviewChanges"
+            ]
+          },
+          {
+            "id": "m365copilot.language",
             "title": "%walkthrough.language.title%",
             "description": "%walkthrough.language.description%",
             "media": {
-              "image": "logo/ms365-vscode.png",
+              "image": "logo/m365-vscode.png",
               "altText": "%walkthrough.language.alt%"
             },
             "completionEvents": [
-              "onCommand:ms365copilot.selectLanguage"
+              "onCommand:m365copilot.selectLanguage"
             ]
           }
         ]
@@ -1041,7 +1301,7 @@
     ],
     "keybindings": [
       {
-        "command": "ms365copilot.editCode",
+        "command": "m365copilot.editCode",
         "key": "ctrl+shift+alt+i",
         "mac": "cmd+shift+alt+i",
         "when": "editorTextFocus && !editorReadonly"
@@ -1062,7 +1322,7 @@
     "release": "pnpm build && changeset publish"
   },
   "dependencies": {
-    "@ms365copilot/core": "workspace:*",
+    "@m365copilot/core": "workspace:*",
     "ws": "^8.21.3"
   },
   "devDependencies": {

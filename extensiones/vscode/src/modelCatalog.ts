@@ -10,11 +10,11 @@
  *  - observed: tones the M365 Copilot web app itself used, captured by the
  *              browser extension / userscript and sent along with the token —
  *              proof that the model exists for THIS tenant;
- *  - custom:   tones the user typed in `ms365copilot.models.custom`.
+ *  - custom:   tones the user typed in `m365copilot.models.custom`.
  *
  * Kept free of the `vscode` import so the merge rules can be tested directly.
  */
-import { TONE_PATTERN } from '@ms365copilot/core';
+import { TONE_PATTERN } from '@m365copilot/core';
 import type { MessageKey } from './i18n';
 
 export type ModelSource = 'builtin' | 'catalog' | 'observed' | 'custom';
@@ -49,17 +49,17 @@ const MAX_NAME_CHARS = 60;
 const MAX_DETAIL_CHARS = 200;
 
 const BUILTIN_SPECS: readonly Omit<CatalogModel, 'family' | 'source'>[] = [
-	{ id: 'ms365-copilot-auto', name: 'M365 Copilot (Auto)', tone: null, detailKey: 'model.auto.detail' },
-	{ id: 'ms365-copilot-gpt', name: `${PREFIX}GPT`, tone: 'Gpt_5_5_Chat', detailKey: 'model.gpt.detail' },
-	{ id: 'ms365-copilot-gpt56', name: `${PREFIX}GPT 5.6`, tone: 'Gpt_5_6_Chat', detailKey: 'model.gpt56.detail' },
+	{ id: 'm365-copilot-auto', name: 'M365 Copilot (Auto)', tone: null, detailKey: 'model.auto.detail' },
+	{ id: 'm365-copilot-gpt', name: `${PREFIX}GPT`, tone: 'Gpt_5_5_Chat', detailKey: 'model.gpt.detail' },
+	{ id: 'm365-copilot-gpt56', name: `${PREFIX}GPT 5.6`, tone: 'Gpt_5_6_Chat', detailKey: 'model.gpt56.detail' },
 	{
-		id: 'ms365-copilot-gpt56-reasoning',
+		id: 'm365-copilot-gpt56-reasoning',
 		name: `${PREFIX}GPT 5.6 Reasoning`,
 		tone: 'Gpt_5_6_Reasoning',
 		detailKey: 'model.gpt56Reasoning.detail',
 	},
-	{ id: 'ms365-copilot-claude', name: `${PREFIX}Claude Sonnet`, tone: 'Claude_Sonnet', detailKey: 'model.claude.detail' },
-	{ id: 'ms365-copilot-reasoning', name: `${PREFIX}Reasoning`, tone: 'Gpt_5_5_Reasoning', detailKey: 'model.reasoning.detail' },
+	{ id: 'm365-copilot-claude', name: `${PREFIX}Claude Sonnet`, tone: 'Claude_Sonnet', detailKey: 'model.claude.detail' },
+	{ id: 'm365-copilot-reasoning', name: `${PREFIX}Reasoning`, tone: 'Gpt_5_5_Reasoning', detailKey: 'model.reasoning.detail' },
 ];
 
 export const BUILTIN_MODELS: readonly CatalogModel[] = BUILTIN_SPECS.map((model) => ({
@@ -94,7 +94,7 @@ export function prettyTone(tone: string): string {
 
 /** Stable picker id for a tone that is not built in. */
 export function modelIdForTone(tone: string): string {
-	return `ms365-copilot-tone-${tone.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
+	return `m365-copilot-tone-${tone.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
 }
 
 function cleanText(value: unknown, max: number): string | undefined {
@@ -138,7 +138,7 @@ export function parseModelCatalog(json: unknown): ModelEntry[] | null {
 	return ((json as { models: unknown[] }).models.map(entryOf).filter(Boolean) as ModelEntry[]).slice(0, MAX_MODELS);
 }
 
-/** The `ms365copilot.models.custom` setting: tones, or `{ tone, name }` objects. */
+/** The `m365copilot.models.custom` setting: tones, or `{ tone, name }` objects. */
 export function parseCustomModels(setting: unknown): ModelEntry[] {
 	if (!Array.isArray(setting)) return [];
 	return (setting.map(entryOf).filter(Boolean) as ModelEntry[]).map((entry) => ({ ...entry, hidden: false }));

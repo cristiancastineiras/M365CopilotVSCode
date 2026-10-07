@@ -128,7 +128,7 @@ export class TokenAutoRefreshServer {
 			// Endpoint de health check para que el userscript verifique si VS Code está activo
 			if (req.method === 'GET' && req.url === '/health') {
 				res.writeHead(200, { 'Content-Type': 'application/json' });
-				res.end(JSON.stringify({ status: 'ok', service: 'ms365-copilot-vscode' }));
+				res.end(JSON.stringify({ status: 'ok', service: 'm365-copilot-vscode' }));
 				return;
 			}
 

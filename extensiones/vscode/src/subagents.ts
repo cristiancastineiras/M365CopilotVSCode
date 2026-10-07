@@ -1,5 +1,5 @@
 /**
- * Wrapper de sub-agentes: registra la herramienta `ms365_spawn_agents`, que
+ * Wrapper de sub-agentes: registra la herramienta `m365_spawn_agents`, que
  * deja que el modelo principal delegue una o varias tareas acotadas en
  * sub-agentes que corren su propio ciclo de herramientas — en paralelo si son
  * varias — y sólo devuelven un resumen, sin gastar el contexto de la
@@ -32,7 +32,7 @@ const MAX_TASK_SUMMARY_CHARS = 5_000;
 
 /**
  * Únicas herramientas que tocan estado compartido — se serializan entre
- * sub-agentes. `ms365_generate_commit_message` entra aquí también: escribe en
+ * sub-agentes. `m365_generate_commit_message` entra aquí también: escribe en
  * el input box del panel Source Control, que es un único recurso compartido
  * por repo — sin serializar, dos sub-agentes generando a la vez podrían
  * pisarse ese mensaje.
@@ -201,8 +201,8 @@ function normalizeTasks(raw: unknown): NormalizedTask[] | string {
 }
 
 function readSubagentSettings(): SubagentSettings {
-	const config = vscode.workspace.getConfiguration('ms365copilot.subagents');
-	const modelId = config.get<string>('model', 'ms365-copilot-auto');
+	const config = vscode.workspace.getConfiguration('m365copilot.subagents');
+	const modelId = config.get<string>('model', 'm365-copilot-auto');
 	return {
 		enabled: config.get<boolean>('enabled', true),
 		maxConcurrent: boundedInteger(config.get<number>('maxConcurrent'), 3, 1, 6),

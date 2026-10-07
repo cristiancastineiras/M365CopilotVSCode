@@ -2,7 +2,7 @@
  * Catálogo de las herramientas disponibles en un turno de chat.
  *
  * VS Code entrega en `ProvideLanguageModelChatResponseOptions.tools` TODAS las
- * herramientas activas para la petición: las nuestras (`ms365_*`, registradas
+ * herramientas activas para la petición: las nuestras (`m365_*`, registradas
  * con `vscode.lm.registerTool`), las nativas del editor y del chat en modo
  * agente, las de servidores MCP y las de otras extensiones. Antes sólo
  * mirábamos las nuestras y descartábamos el resto, así que con un modelo de
@@ -23,25 +23,30 @@
 import { t } from './i18n';
 
 export const M365_TOOL_NAMES = {
-	listFiles: 'ms365_list_files',
-	readFile: 'ms365_read_file',
-	searchText: 'ms365_search_text',
-	applyWorkspaceEdits: 'ms365_apply_edits',
-	getDiagnostics: 'ms365_get_diagnostics',
-	gitInfo: 'ms365_git_info',
-	generateCommitMessage: 'ms365_generate_commit_message',
-	gitCommit: 'ms365_git_commit',
-	runCommand: 'ms365_run_command',
-	spawnAgents: 'ms365_spawn_agents',
+	listFiles: 'm365_list_files',
+	readFile: 'm365_read_file',
+	searchText: 'm365_search_text',
+	applyWorkspaceEdits: 'm365_apply_edits',
+	getDiagnostics: 'm365_get_diagnostics',
+	gitInfo: 'm365_git_info',
+	generateCommitMessage: 'm365_generate_commit_message',
+	gitCommit: 'm365_git_commit',
+	runCommand: 'm365_run_command',
+	searchProject: 'm365_search_project',
+	projectMap: 'm365_project_map',
+	webSearch: 'm365_web_search',
+	spawnAgents: 'm365_spawn_agents',
 } as const;
 
 /**
- * Las 9 herramientas de workspace, sin {@link M365_TOOL_NAMES.spawnAgents} —
+ * Las herramientas de workspace, sin {@link M365_TOOL_NAMES.spawnAgents} —
  * es el catálogo que se le ofrece a un SUB-agente (ver `subagents.ts`): un
  * sub-agente nunca puede delegar a su vez, así que la propia herramienta de
  * delegación queda fuera de su propio catálogo.
  */
 export const M365_WORKSPACE_TOOL_NAMES: readonly M365ToolName[] = [
+	M365_TOOL_NAMES.searchProject,
+	M365_TOOL_NAMES.projectMap,
 	M365_TOOL_NAMES.listFiles,
 	M365_TOOL_NAMES.readFile,
 	M365_TOOL_NAMES.searchText,
@@ -51,6 +56,7 @@ export const M365_WORKSPACE_TOOL_NAMES: readonly M365ToolName[] = [
 	M365_TOOL_NAMES.generateCommitMessage,
 	M365_TOOL_NAMES.gitCommit,
 	M365_TOOL_NAMES.runCommand,
+	M365_TOOL_NAMES.webSearch,
 ];
 
 export type M365ToolName = (typeof M365_TOOL_NAMES)[keyof typeof M365_TOOL_NAMES];
@@ -74,7 +80,7 @@ interface M365Hint {
 
 /**
  * Se construye en cada llamada (no es una constante de módulo) para que salga
- * en el idioma activo: el usuario puede cambiar `ms365copilot.language` sin
+ * en el idioma activo: el usuario puede cambiar `m365copilot.language` sin
  * recargar la ventana.
  */
 function m365Hints(): Readonly<Record<M365ToolName, M365Hint>> {
@@ -125,6 +131,18 @@ function m365Hints(): Readonly<Record<M365ToolName, M365Hint>> {
 			description: t('hint.runCommand'),
 			example: { command: 'npm test' },
 		},
+		[M365_TOOL_NAMES.searchProject]: {
+			description: t('hint.searchProject'),
+			example: { query: t('hint.searchProject.example'), maxResults: 8 },
+		},
+		[M365_TOOL_NAMES.projectMap]: {
+			description: t('hint.projectMap'),
+			example: { path: 'src/extension.ts' },
+		},
+		[M365_TOOL_NAMES.webSearch]: {
+			description: t('hint.webSearch'),
+			example: { query: t('hint.webSearch.example') },
+		},
 		[M365_TOOL_NAMES.spawnAgents]: {
 			description: t('hint.spawnAgents'),
 			example: {
@@ -144,9 +162,10 @@ export interface OfferedTool {
 	readonly inputSchema?: object;
 }
 
-export type ToolOrigin = 'ms365' | 'editor';
+export type ToolOrigin = 'm365' | 'editor';
 
 export type ToolCapability =
+	| 'context'
 	| 'read'
 	| 'search'
 	| 'list'
@@ -194,7 +213,7 @@ export interface ToolCatalog {
 	readonly callable: ReadonlySet<string>;
 	/** Nombres que no cupieron en el presupuesto del prompt. */
 	readonly omitted: readonly string[];
-	readonly ms365Count: number;
+	readonly m365Count: number;
 	readonly editorCount: number;
 	/** Hay alguna herramienta que escribe archivos (nuestra o del editor). */
 	readonly hasEditTools: boolean;
@@ -222,6 +241,9 @@ const MAX_ENUM_VALUES = 8;
  * — nunca decide si una herramienta se puede llamar.
  */
 const CAPABILITY_RULES: readonly (readonly [ToolCapability, RegExp])[] = [
+	// El índice del proyecto (RAG): no es «otra búsqueda de texto» que
+	// deduplicar contra la del editor, sino lo primero que conviene usar.
+	['context', /^m365(?:searchproject|projectmap)$/],
 	['agent', /spawnagent|subagent|delegat/],
 	['terminal', /terminal|runcommand|runinshell|runtask|runscript|shellexec|executeshell/],
 	['tests', /test/],
@@ -238,6 +260,7 @@ const CAPABILITY_RULES: readonly (readonly [ToolCapability, RegExp])[] = [
 ];
 
 const CAPABILITY_ORDER: readonly ToolCapability[] = [
+	'context',
 	'read',
 	'search',
 	'list',
@@ -304,10 +327,10 @@ export function buildToolCatalog(
 		if (callable.has(tool.name)) continue; // el host puede repetir una herramienta
 		callable.add(tool.name);
 
-		const origin: ToolOrigin = isM365Tool(tool.name) ? 'ms365' : 'editor';
+		const origin: ToolOrigin = isM365Tool(tool.name) ? 'm365' : 'editor';
 		if (origin === 'editor' && !includeEditorTools) continue;
 
-		const hint = origin === 'ms365' ? hints[tool.name as M365ToolName] : undefined;
+		const hint = origin === 'm365' ? hints[tool.name as M365ToolName] : undefined;
 		const description = hint?.description ?? shortText(tool.description ?? '', MAX_TOOL_DESC_CHARS);
 		order.set(tool.name, order.size);
 		candidates.push({
@@ -349,7 +372,7 @@ export function buildToolCatalog(
 		entries,
 		callable,
 		omitted,
-		ms365Count: marked.filter((entry) => entry.origin === 'ms365').length,
+		m365Count: marked.filter((entry) => entry.origin === 'm365').length,
 		editorCount: marked.filter((entry) => entry.origin === 'editor').length,
 		hasEditTools: entries.some((entry) => entry.capability === 'edit' || entry.capability === 'create'),
 	};
@@ -362,7 +385,7 @@ export function buildToolCatalog(
  */
 function markDuplicates(entries: readonly CatalogEntry[], policy: DuplicatePolicy): CatalogEntry[] {
 	if (policy === 'both') return [...entries];
-	const winnerOrigin: ToolOrigin = policy === 'preferEditor' ? 'editor' : 'ms365';
+	const winnerOrigin: ToolOrigin = policy === 'preferEditor' ? 'editor' : 'm365';
 
 	const preferredByCapability = new Map<ToolCapability, string>();
 	for (const entry of entries) {
@@ -386,7 +409,7 @@ function capabilityRank(entry: CatalogEntry): number {
 
 /**
  * Orden de recorte: las duplicadas se van antes que cualquier herramienta
- * única. `ms365_spawn_agents` es la excepción: va SIEMPRE la primera, pase lo
+ * única. `m365_spawn_agents` es la excepción: va SIEMPRE la primera, pase lo
  * que pase con su capacidad ('agent', la última de {@link CAPABILITY_ORDER}).
  * Sin esto, una sesión de modo agente con muchas herramientas nativas/MCP
  * (fácil pasar de las 48 por defecto, o del presupuesto de caracteres) la

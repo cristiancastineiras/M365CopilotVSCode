@@ -10,7 +10,7 @@
  *              viaja hasta él una y otra vez.
  * - warning:   token caducado o hace falta iniciar sesión: aviso sobre M365.
  *
- * Los logos son los del proyecto (extensiones/vscode/logo/ms365-vscode.svg y
+ * Los logos son los del proyecto (extensiones/vscode/logo/m365-vscode.svg y
  * vscode.svg), incrustados aquí como <symbol>. Ojo: el icono de VS Code es una
  * marca de Microsoft y sus pautas de uso restringen usarlo en extensiones o
  * en versiones modificadas; su uso aquí es decisión del proyecto.
@@ -47,7 +47,7 @@ export interface ConnectionArtOptions {
   readonly title?: string;
 }
 
-/** Logo de M365 Copilot del proyecto (logo/ms365-vscode.svg): sus gradientes (fuera del
+/** Logo de M365 Copilot del proyecto (logo/m365-vscode.svg): sus gradientes (fuera del
  * <symbol>, por compatibilidad) y el símbolo, con los ids prefijados. */
 function m365Symbol(id: (name: string) => string): string {
   return `<radialGradient id="${id('m0')}" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(59.4363 31.0868) rotate(-130.285) scale(27.6431 26.1575)"><stop offset="0.0955758" stop-color="#00AEFF"/><stop offset="0.773185" stop-color="#2253CE"/><stop offset="1" stop-color="#0736C4"/></radialGradient>

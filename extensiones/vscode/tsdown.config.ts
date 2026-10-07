@@ -16,9 +16,9 @@ export default defineConfig({
 	outDir: 'dist',
 	outExtensions: () => ({ js: '.cjs' }),
 	deps: {
-		// `@ms365copilot/core` es un paquete del workspace (no publicado), así que
+		// `@m365copilot/core` es un paquete del workspace (no publicado), así que
 		// debe quedar embebido en el bundle final en vez de quedar como `require`.
-		alwaysBundle: ['ws', '@ms365copilot/core'],
+		alwaysBundle: ['ws', '@m365copilot/core'],
 		neverBundle: ['vscode', 'bufferutil', 'utf-8-validate'],
 	},
 	dts: false,

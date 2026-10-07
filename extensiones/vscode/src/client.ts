@@ -20,6 +20,17 @@ function truncate(text: string, max = 1200): string {
 const DEFAULT_ENDPOINT_HOST = 'wss://substrate.office.com';
 const DEFAULT_ENDPOINT_PATH = '/m365Copilot/Chathub';
 
+/**
+ * Where every turn connects instead of BizChat while the extension's own
+ * integration tests run: set only through the TestingApi that `activate`
+ * returns in `ExtensionMode.Test`, so they can answer from a local mock.
+ */
+let testEndpointBase: string | undefined;
+
+export function setTestEndpointBase(base: string | undefined): void {
+	testEndpointBase = base;
+}
+
 const HANDSHAKE_TIMEOUT_MS = 15_000;
 const IDLE_TIMEOUT_MS = 90_000;
 /** Hard ceiling on a single turn, independent of activity — IDLE_TIMEOUT_MS
@@ -33,7 +44,24 @@ export interface StreamCallbacks {
 	onText: (delta: string) => void;
 	/** Called once when the turn is fully complete. */
 	onDone?: () => void;
+	/** Web pages the answer cites (web turns, see {@link TurnMode}). */
+	onSources?: (sources: readonly WebSource[]) => void;
 }
+
+export interface WebSource {
+	readonly title: string;
+	readonly url: string;
+}
+
+/**
+ * - `tools` (default): the lean invocation the text tool protocol was built
+ *   on — no BizChat plugins, so no web search (see {@link buildInvocationArgs}).
+ * - `web`: the invocation the M365 Copilot web app itself sent, as captured by
+ *   the browser extension/userscript, with its plugins (web search) and
+ *   endpoint `variants`. For turns that need the internet and no tools: the
+ *   `m365_web_search` tool and chat requests without tools.
+ */
+export type TurnMode = 'tools' | 'web';
 
 export class CopilotClientError extends Error {}
 
@@ -78,21 +106,25 @@ export async function streamCopilotTurn(options: {
 	 * never sets it.
 	 */
 	endpointBase?: string;
+	/** See {@link TurnMode}; `web` needs a profile with the captured invocation. */
+	mode?: TurnMode;
 }): Promise<void> {
 	const { profile, prompt, tone, callbacks, signal } = options;
 	const log = options.log ?? (() => {});
+	const mode = options.mode ?? 'tools';
+	if (mode === 'web' && !profile.invocationTemplate) throw new CopilotClientError(t('client.error.noWebTemplate'));
 
 	// One conversation id per turn, shared between the URL and the invocation
 	// arguments — BizChat rejects the request as `InvalidRequest` when the URL's
 	// `ConversationId` and the message's `conversationId` disagree.
 	const conversationId = randomUUID();
-	const url = buildEndpoint(profile, conversationId, options.endpointBase);
+	const url = buildEndpoint(profile, conversationId, options.endpointBase ?? testEndpointBase, mode);
 	const invocationId = '0';
 	const invocationType = profile.invocationType || 4;
 
 	log(t('log.newTurn'));
 	log(`endpoint: ${redactUrl(url)}`);
-	log(`invocationType=${invocationType}, tone=${tone ?? 'magic'}`);
+	log(`invocationType=${invocationType}, tone=${tone ?? 'magic'}, mode=${mode}`);
 	log(`origin=${profile.origin}`);
 
 	const ws = new WebSocket(url, {
@@ -122,7 +154,7 @@ export async function streamCopilotTurn(options: {
 	// Tracking this with a single turn-wide "have we seen a delta yet?" flag
 	// (the old approach) silently drops the first snapshot chunk of every
 	// message AFTER the first one — exactly the bug that truncated
-	// `<ms365_tool_call>` down to `365_tool_call>` when Claude split its
+	// `<m365_tool_call>` down to `365_tool_call>` when Claude split its
 	// answer into two messages, leaking the tool call as visible text
 	// instead of executing it. Track per messageId instead.
 	const knownMessageText = new Map<string, string>();
@@ -279,7 +311,7 @@ export async function streamCopilotTurn(options: {
 						return;
 					}
 					log(t('log.sendingInvocation'));
-					sendInvocation(ws, profile, prompt, tone, invocationType, invocationId, conversationId, log);
+					sendInvocation(ws, profile, prompt, tone, invocationType, invocationId, conversationId, log, mode);
 					bumpIdle();
 					// The `{}` ack frame carries no chat data; done with it.
 					continue;
@@ -287,7 +319,7 @@ export async function streamCopilotTurn(options: {
 
 				log(`<< ${truncate(chunk)}`);
 				bumpIdle();
-				handleFrame(frame, invocationId, {
+				handleFrame(frame, invocationId, mode, {
 					emitText: (text, isDelta, messageId) => {
 						if (isDelta) {
 							// writeAtCursor: always incremental; extends whatever
@@ -328,6 +360,7 @@ export async function streamCopilotTurn(options: {
 					onComplete: succeed,
 					onError: fail,
 					respondPing: () => ws.send(JSON.stringify({ type: 6 }) + RS),
+					onSources: (sources) => callbacks.onSources?.(sources),
 				});
 			}
 		});
@@ -340,11 +373,13 @@ interface FrameHandlers {
 	onComplete: () => void;
 	onError: (error: Error) => void;
 	respondPing: () => void;
+	onSources: (sources: readonly WebSource[]) => void;
 }
 
 function handleFrame(
 	frame: Record<string, unknown>,
 	invocationId: string,
+	mode: TurnMode,
 	h: FrameHandlers,
 ): void {
 	const type = frame.type;
@@ -400,7 +435,7 @@ function handleFrame(
 		const messages = payload.messages;
 		if (Array.isArray(messages)) {
 			for (const m of messages) {
-				const outcome = consumeBotMessage(m, h);
+				const outcome = consumeBotMessage(m, mode, h);
 				if (outcome === 'end') {
 					h.onComplete();
 					return;
@@ -416,7 +451,7 @@ function handleFrame(
 }
 
 /** Returns 'text' when it emitted content, 'end'/'filtered' when the turn ends. */
-function consumeBotMessage(m: unknown, h: FrameHandlers): 'text' | 'end' | 'filtered' | 'skip' {
+function consumeBotMessage(m: unknown, mode: TurnMode, h: FrameHandlers): 'text' | 'end' | 'filtered' | 'skip' {
 	if (!m || typeof m !== 'object') return 'skip';
 	const msg = m as Record<string, unknown>;
 	if (msg.author !== 'bot') return 'skip';
@@ -426,8 +461,12 @@ function consumeBotMessage(m: unknown, h: FrameHandlers): 'text' | 'end' | 'filt
 	// Content-filter / declined engagement.
 	if (messageType === 'Disengaged') return 'filtered';
 
-	// End marker.
-	if (messageType === 'EndOfRequest' || messageType === 'RenderCardRequest') return 'end';
+	const sources = sourcesOf(msg);
+	if (sources.length > 0) h.onSources(sources);
+
+	// End marker. A web turn sends its search cards (`RenderCardRequest`)
+	// while the answer is still coming, so there only EndOfRequest ends it.
+	if (messageType === 'EndOfRequest' || (messageType === 'RenderCardRequest' && mode === 'tools')) return 'end';
 
 	// Control/meta frames (Progress, InternalSearchQuery, etc.) carry a
 	// messageType and no user-facing prose — skip them.
@@ -441,6 +480,29 @@ function consumeBotMessage(m: unknown, h: FrameHandlers): 'text' | 'end' | 'filt
 	return 'skip';
 }
 
+/**
+ * The pages a bot message cites: `sourceAttributions` (BizChat's own field),
+ * with a title and a URL each.
+ */
+export function sourcesOf(message: Record<string, unknown>): WebSource[] {
+	const list = message.sourceAttributions;
+	if (!Array.isArray(list)) return [];
+	const sources: WebSource[] = [];
+	for (const item of list) {
+		if (!item || typeof item !== 'object') continue;
+		const record = item as Record<string, unknown>;
+		const url = [record.seeMoreUrl, record.url, record.link].find(
+			(value) => typeof value === 'string' && /^https?:\/\//.test(value),
+		);
+		if (typeof url !== 'string') continue;
+		const title = [record.providerDisplayName, record.title, record.name].find(
+			(value) => typeof value === 'string' && value.trim(),
+		);
+		sources.push({ url, title: typeof title === 'string' ? title.trim() : url });
+	}
+	return sources;
+}
+
 function sendInvocation(
 	ws: WebSocket,
 	profile: CopilotProfile,
@@ -450,8 +512,12 @@ function sendInvocation(
 	invocationId: string,
 	conversationId: string,
 	log: (message: string) => void,
+	mode: TurnMode,
 ): void {
-	const args = buildInvocationArgs(prompt, tone, conversationId);
+	const args =
+		mode === 'web' && profile.invocationTemplate
+			? buildWebInvocationArgs(profile.invocationTemplate, prompt, tone, conversationId)
+			: buildInvocationArgs(prompt, tone, conversationId);
 
 	const chatFrame = {
 		arguments: [args],
@@ -490,7 +556,7 @@ function sendInvocation(
  * `BingWebSearch`), its full `optionsSets` and a production `tone` — with
  * those in place BizChat treats the turn as a real Copilot web session with
  * its own native tool/plugin access, and the model has no reason to obey our
- * injected `<ms365_tool_call>` instructions (see toolProtocol.ts) since it
+ * injected `<m365_tool_call>` instructions (see toolProtocol.ts) since it
  * "already" has real tools. The lean default below is what that text-based
  * protocol was actually built and tested against, so we always start from it
  * — a captured profile only ever contributes the access token now.
@@ -516,6 +582,41 @@ function buildInvocationArgs(
 	base.isStartOfSession = true;
 
 	return base;
+}
+
+/**
+ * A web turn's `arguments[0]`: the M365 Copilot web app's own invocation (as
+ * captured), with its plugins — web search — and options intact, but this
+ * turn's text, a fresh conversation (no `previousMessages`), fresh request ids
+ * and the extension's locale. `tone` overrides the captured model when given.
+ */
+export function buildWebInvocationArgs(
+	template: Record<string, unknown>,
+	prompt: string,
+	tone: string | null,
+	conversationId: string,
+): Record<string, unknown> {
+	const args = JSON.parse(JSON.stringify(template)) as Record<string, unknown>;
+	const captured = args.message && typeof args.message === 'object' ? (args.message as Record<string, unknown>) : {};
+	const message: Record<string, unknown> = {
+		...captured,
+		author: 'user',
+		messageType: 'Chat',
+		text: prompt,
+		locale: bizChatLocale(),
+	};
+	for (const key of ['requestId', 'messageId']) if (key in message) message[key] = randomUUID();
+	if ('timestamp' in message) message.timestamp = new Date().toISOString();
+	// What the web page attached to ITS message (files, cards…) is not ours.
+	for (const key of ['attachments', 'contextualInfo', 'adaptiveCards', 'imageUrl', 'originalImageUrl']) delete message[key];
+	args.message = message;
+	for (const key of ['previousMessages', 'conversationSignature', 'gptId']) delete args[key];
+	if ('requestId' in args) args.requestId = randomUUID();
+	if ('traceId' in args) args.traceId = randomUUID().replace(/-/g, '');
+	if (tone) args.tone = tone;
+	args.conversationId = conversationId;
+	args.isStartOfSession = true;
+	return args;
 }
 
 function defaultInvocationArgs(): Record<string, unknown> {
@@ -582,6 +683,7 @@ export async function streamCopilotTurnWithRetry(
 			options.callbacks.onText(delta);
 		},
 		onDone: options.callbacks.onDone,
+		onSources: options.callbacks.onSources,
 	};
 
 	try {
@@ -605,7 +707,7 @@ export async function streamCopilotTurnWithRetry(
  * `officeweb` surface actually expects; if Microsoft ever rotates it (e.g.
  * `Chathub` → `ChatHubV2`) it needs to change here for everyone.
  */
-function buildEndpoint(profile: CopilotProfile, conversationId: string, base?: string): string {
+function buildEndpoint(profile: CopilotProfile, conversationId: string, base?: string, mode: TurnMode = 'tools'): string {
 	const sessionId = randomUUID();
 
 	const oid = profile.claims?.oid ?? '';
@@ -621,5 +723,19 @@ function buildEndpoint(profile: CopilotProfile, conversationId: string, base?: s
 		agentHost: 'Bizchat.FullScreen',
 		scenario: 'OfficeWebIncludedCopilot',
 	});
+	// A web turn carries the web app's feature flags too (see above): they are
+	// what turns its plugins on.
+	const variants = mode === 'web' ? capturedVariants(profile.endpoint) : undefined;
+	if (variants) params.set('variants', variants);
 	return `${base ?? `${DEFAULT_ENDPOINT_HOST}${DEFAULT_ENDPOINT_PATH}`}/${oid}@${tid}?${params.toString()}`;
+}
+
+/** The `variants` query parameter of the captured endpoint, if any. */
+export function capturedVariants(endpoint: string | null | undefined): string | undefined {
+	if (!endpoint) return undefined;
+	try {
+		return new URL(endpoint.replace(/^wss?:/, 'https:')).searchParams.get('variants') || undefined;
+	} catch {
+		return undefined;
+	}
 }

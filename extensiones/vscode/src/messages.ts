@@ -24,6 +24,26 @@ export interface FlattenOptions {
 	readonly catalog?: ToolCatalog;
 	/** `LanguageModelChatToolMode.Required`: hay que llamar a una herramienta sí o sí. */
 	readonly toolsRequired?: boolean;
+	/** Contexto del proyecto recuperado del índice local (projectIndex.ts), si lo hay. */
+	readonly projectContext?: string;
+}
+
+/**
+ * El texto del último mensaje del usuario (no los resultados de
+ * herramientas): lo que se busca en el índice del proyecto.
+ */
+export function latestUserText(messages: readonly vscode.LanguageModelChatRequestMessage[]): string {
+	for (let index = messages.length - 1; index >= 0; index -= 1) {
+		const message = messages[index];
+		if (message.role !== vscode.LanguageModelChatMessageRole.User) continue;
+		const text = message.content
+			.filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
+			.map((part) => part.value)
+			.join('\n')
+			.trim();
+		if (text) return text;
+	}
+	return '';
 }
 
 /**
@@ -78,6 +98,7 @@ export function flattenMessages(
 		t('prompt.tone'),
 		t('prompt.markdown'),
 		catalog ? buildToolProtocolInstructions(catalog) : '',
+		options.projectContext ?? '',
 		transcript,
 		reminder,
 	]

@@ -9,7 +9,7 @@
  * vscode-free modules (client, tool protocol, sub-agent loop, git/commit
  * helpers) use it too, and test/e2e.mts exercises them without a VS Code
  * host. The extension resolves the locale at activation — the
- * `ms365copilot.language` setting, falling back to VS Code's display
+ * `m365copilot.language` setting, falling back to VS Code's display
  * language — and calls {@link setLocale}.
  *
  * Manifest strings (command titles, setting descriptions, walkthrough…) live
@@ -25,7 +25,7 @@ import { es } from './locales/es';
 
 export type Locale = 'en' | 'es';
 export type MessageKey = keyof typeof en;
-/** Value of the `ms365copilot.language` setting. */
+/** Value of the `m365copilot.language` setting. */
 export type LanguageSetting = 'auto' | Locale;
 
 export const LOCALES: readonly Locale[] = ['en', 'es'];

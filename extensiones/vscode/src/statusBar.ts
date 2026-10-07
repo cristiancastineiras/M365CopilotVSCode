@@ -4,14 +4,14 @@ import type { CompletionBusySink } from './completions';
 import type { ProfileStore } from './secrets';
 import { t } from './i18n';
 
-const COMPLETIONS_SECTION = 'ms365copilot.inlineCompletions';
+const COMPLETIONS_SECTION = 'm365copilot.inlineCompletions';
 /** Below this many minutes left, the item shows a countdown instead of the plain icon. */
 const COUNTDOWN_MINUTES = 10;
 
 /**
  * The one M365 Copilot item in the status bar: token state, inline-completion
  * state and "a suggestion is on its way", in that order of priority. Clicking
- * it opens the quick menu (`ms365copilot.showMenu`) — the single entry point
+ * it opens the quick menu (`m365copilot.showMenu`) — the single entry point
  * to everything the extension can do, instead of a command palette search.
  *
  * Replaces the old completion-only item, which toggled completions on click:
@@ -26,9 +26,9 @@ export class M365StatusBar implements CompletionBusySink, vscode.Disposable {
 	private pendingEdits = 0;
 
 	constructor(private readonly store: ProfileStore) {
-		this.item = vscode.window.createStatusBarItem('ms365copilot.status', vscode.StatusBarAlignment.Right, 90);
+		this.item = vscode.window.createStatusBarItem('m365copilot.status', vscode.StatusBarAlignment.Right, 90);
 		this.item.name = 'M365 Copilot';
-		this.item.command = 'ms365copilot.showMenu';
+		this.item.command = 'm365copilot.showMenu';
 		this.disposables.push(
 			store.onDidChange(() => void this.reload()),
 			vscode.workspace.onDidChangeConfiguration((event) => {

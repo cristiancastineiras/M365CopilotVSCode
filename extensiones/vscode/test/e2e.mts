@@ -10,10 +10,46 @@
 import { WebSocketServer } from 'ws';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { streamCopilotTurn, streamCopilotTurnWithRetry, CopilotAuthError } from '../src/client.ts';
+import {
+	streamCopilotTurn,
+	streamCopilotTurnWithRetry,
+	CopilotAuthError,
+	buildWebInvocationArgs,
+	capturedVariants,
+	sourcesOf,
+} from '../src/client.ts';
+import { buildWebSearchPrompt, formatWebResult, sourcesMarkdown } from '../src/webSearchPrompt.ts';
+import {
+	cognates,
+	excludeGlobs,
+	globToRegExp,
+	isExcluded,
+	isSkippedPath,
+	looksGenerated,
+	normalizeTerm,
+	queryTerms,
+	retrievalQuery,
+	splitIdentifier,
+	tokenize,
+} from '../src/rag/text.ts';
+import { chunkLines, extractImports, extractSymbols, languageOf } from '../src/rag/code.ts';
+import { analyzeFile, bestWindow, SearchIndex } from '../src/rag/searchIndex.ts';
+import { formatAutoContext, formatSearchResults, renderFileDetail, renderFolderDetail, renderHits, renderProjectMap, renderSummary } from '../src/rag/projectMap.ts';
 
 import { MarkdownStreamFormatter } from '../src/markdown.ts';
-import { looksLikeProfile, parsePastedProfile } from '../src/profile.ts';
+import { accountOf, looksLikeProfile, parsePastedProfile } from '../src/profile.ts';
+import { LEGACY_EXTENSION_ID, legacySettingKey, migrateLegacyValue, shouldMigrate } from '../src/legacy.ts';
+import {
+	buildReviewPrompt,
+	formatRanges,
+	mergeRanges,
+	numberLines,
+	parseReviewFindings,
+	parseUnifiedDiff,
+	touchesRanges,
+	windowsAround,
+	MAX_FINDINGS,
+} from '../src/reviewPrompt.ts';
 import { buildInlineEditPrompt, extractEditedCode, reindent } from '../src/inlineEditPrompt.ts';
 import {
 	M365_TOOL_NAMES,
@@ -183,8 +219,8 @@ function testToolProtocol() {
 		(chunk) => text.push(chunk),
 		(call) => calls.push(call),
 	);
-	decoder.push(`<ms365_tool_call>{"name":"${M365_TOOL_NAMES.readFile}",`);
-	decoder.push('"input":{"path":"src/extension.ts","startLine":1}}</ms365_tool_call>');
+	decoder.push(`<m365_tool_call>{"name":"${M365_TOOL_NAMES.readFile}",`);
+	decoder.push('"input":{"path":"src/extension.ts","startLine":1}}</m365_tool_call>');
 	decoder.finish();
 	assert.deepEqual(calls, [
 		{ name: M365_TOOL_NAMES.readFile, input: { path: 'src/extension.ts', startLine: 1 } },
@@ -210,7 +246,7 @@ function testToolProtocol() {
 		(call) => pre.calls.push(call),
 	);
 	preDecoder.push('Voy a leer el archivo primero.\n');
-	preDecoder.push(`<ms365_tool_call>{"name":"${M365_TOOL_NAMES.readFile}","input":{"path":"a.ts"}}</ms365_tool_call>`);
+	preDecoder.push(`<m365_tool_call>{"name":"${M365_TOOL_NAMES.readFile}","input":{"path":"a.ts"}}</m365_tool_call>`);
 	preDecoder.push('texto que se descarta tras la llamada');
 	preDecoder.finish();
 	assert.deepEqual(pre.calls, [{ name: M365_TOOL_NAMES.readFile, input: { path: 'a.ts' } }]);
@@ -225,13 +261,13 @@ function testToolProtocol() {
 		(call) => fenced.calls.push(call),
 	);
 	fencedDecoder.push('```json\n');
-	fencedDecoder.push(`<ms365_tool_call>{"name":"${M365_TOOL_NAMES.listFiles}","input":{}}</ms365_tool_call>\n`);
+	fencedDecoder.push(`<m365_tool_call>{"name":"${M365_TOOL_NAMES.listFiles}","input":{}}</m365_tool_call>\n`);
 	fencedDecoder.push('```');
 	fencedDecoder.finish();
 	assert.deepEqual(fenced.calls, [{ name: M365_TOOL_NAMES.listFiles, input: {} }]);
 	assert.equal(fenced.text.join('').trim(), '');
 
-	// The reasoning/Claude rings often omit the closing </ms365_tool_call>. The
+	// The reasoning/Claude rings often omit the closing </m365_tool_call>. The
 	// end of the call must still be found by balancing the JSON braces, and the
 	// raw marker must NOT leak into the chat.
 	const noClose = { text: [] as string[], calls: [] as unknown[] };
@@ -242,7 +278,7 @@ function testToolProtocol() {
 	);
 	// Braces inside a string value (oldText/newText) must not end the object early.
 	noCloseDecoder.push(
-		`<ms365_tool_call>{"name":"${M365_TOOL_NAMES.applyWorkspaceEdits}","input":{"edits":[` +
+		`<m365_tool_call>{"name":"${M365_TOOL_NAMES.applyWorkspaceEdits}","input":{"edits":[` +
 			`{"operation":"replace","path":"a.ts","oldText":"function f() {}","newText":"const f = () => {}"}]}}`,
 	);
 	noCloseDecoder.finish();
@@ -258,7 +294,7 @@ function testToolProtocol() {
 	]);
 	assert.equal(noClose.text.join(''), '');
 
-	// A stray extra `<` (<<ms365_tool_call>) with no closing marker, split across
+	// A stray extra `<` (<<m365_tool_call>) with no closing marker, split across
 	// chunks, still decodes into a single clean call.
 	const doubled = { text: [] as string[], calls: [] as unknown[] };
 	const doubledDecoder = new ToolCallDecoder(
@@ -266,7 +302,7 @@ function testToolProtocol() {
 		(chunk) => doubled.text.push(chunk),
 		(call) => doubled.calls.push(call),
 	);
-	doubledDecoder.push(`<<ms365_tool_call>{"name":"${M365_TOOL_NAMES.readFile}",`);
+	doubledDecoder.push(`<<m365_tool_call>{"name":"${M365_TOOL_NAMES.readFile}",`);
 	doubledDecoder.push('"input":{"path":"test.js","startLine":1,"endLine":30}}');
 	doubledDecoder.finish();
 	assert.deepEqual(doubled.calls, [
@@ -282,10 +318,10 @@ function testToolProtocol() {
 		(chunk) => mention.text.push(chunk),
 		(call) => mention.calls.push(call),
 	);
-	mentionDecoder.push('Para llamar una herramienta escribe <ms365_tool_call> seguido del JSON.');
+	mentionDecoder.push('Para llamar una herramienta escribe <m365_tool_call> seguido del JSON.');
 	mentionDecoder.finish();
 	assert.deepEqual(mention.calls, []);
-	assert.equal(mention.text.join(''), 'Para llamar una herramienta escribe <ms365_tool_call> seguido del JSON.');
+	assert.equal(mention.text.join(''), 'Para llamar una herramienta escribe <m365_tool_call> seguido del JSON.');
 
 	// With tools enabled, a plain answer that contains a fenced code block must
 	// stream through byte-for-byte (holding fences must never corrupt output).
@@ -358,7 +394,7 @@ const EDITOR_TOOLS = [
 	},
 ];
 
-const MS365_TOOLS = Object.values(M365_TOOL_NAMES).map((name) => ({
+const M365_TOOLS = Object.values(M365_TOOL_NAMES).map((name) => ({
 	name,
 	description: `Descripción de package.json para ${name}.`,
 	inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
@@ -371,7 +407,7 @@ function entry(catalog: ToolCatalog, name: string) {
 }
 
 function testToolCatalog() {
-	const offered = [...MS365_TOOLS, ...EDITOR_TOOLS];
+	const offered = [...M365_TOOLS, ...EDITOR_TOOLS];
 	const catalog = buildToolCatalog(offered);
 
 	// Lo esencial: las herramientas del editor y las de MCP se describen igual
@@ -383,7 +419,7 @@ function testToolCatalog() {
 			`${tool.name} debe describirse en el prompt`,
 		);
 	}
-	assert.equal(catalog.ms365Count, MS365_TOOLS.length);
+	assert.equal(catalog.m365Count, M365_TOOLS.length);
 	assert.equal(catalog.editorCount, EDITOR_TOOLS.length);
 
 	// Clasificación por capacidad (ordena y agrupa; nunca decide si se ejecuta).
@@ -416,7 +452,7 @@ function testToolCatalog() {
 
 	// El interruptor de escape: volver a describir sólo las nuestras.
 	const onlyOurs = buildToolCatalog(offered, { includeEditorTools: false });
-	assert.equal(onlyOurs.entries.length, MS365_TOOLS.length);
+	assert.equal(onlyOurs.entries.length, M365_TOOLS.length);
 	assert.equal(onlyOurs.callable.has('read_file'), true, 'sigue siendo ejecutable aunque no se describa');
 
 	// Presupuesto: lo que no cabe se omite del prompt, pero sigue siendo llamable.
@@ -434,7 +470,7 @@ function testToolCatalog() {
 }
 
 /**
- * Regresión: `ms365_spawn_agents` es de capacidad 'agent', la ÚLTIMA de
+ * Regresión: `m365_spawn_agents` es de capacidad 'agent', la ÚLTIMA de
  * `CAPABILITY_ORDER`, así que sin la excepción en `selectionRank` era la
  * primera candidata a quedar fuera del catálogo en cuanto el presupuesto de
  * caracteres se ajustaba (fácil con bastantes herramientas nativas/MCP
@@ -446,7 +482,7 @@ function testSpawnAgentsNeverTrimmed() {
 		name: `read_file_variant_${i}`,
 		description: 'x'.repeat(280),
 	}));
-	const offered = [...filler, ...MS365_TOOLS];
+	const offered = [...filler, ...M365_TOOLS];
 
 	// Sólo los 6 "filler" ya superan este presupuesto, así que en el orden
 	// antiguo (agrupado por capacidad) se comían todo el presupuesto antes de
@@ -455,18 +491,18 @@ function testSpawnAgentsNeverTrimmed() {
 	assert.ok(tight.omitted.length > 0, '(sanity) el presupuesto ajustado sí debería recortar algo');
 	assert.ok(
 		tight.entries.some((e) => e.name === M365_TOOL_NAMES.spawnAgents),
-		'ms365_spawn_agents no debería quedar fuera del catálogo aunque el presupuesto sea ajustado',
+		'm365_spawn_agents no debería quedar fuera del catálogo aunque el presupuesto sea ajustado',
 	);
 	assert.ok(
 		!tight.omitted.includes(M365_TOOL_NAMES.spawnAgents),
-		'ms365_spawn_agents no debería aparecer en la lista de herramientas omitidas',
+		'm365_spawn_agents no debería aparecer en la lista de herramientas omitidas',
 	);
 
-	console.log('  ✓ ms365_spawn_agents nunca se recorta del catálogo por presupuesto/nº de herramientas');
+	console.log('  ✓ m365_spawn_agents nunca se recorta del catálogo por presupuesto/nº de herramientas');
 }
 
 function testToolPromptRendering() {
-	const catalog = buildToolCatalog([...MS365_TOOLS, ...EDITOR_TOOLS]);
+	const catalog = buildToolCatalog([...M365_TOOLS, ...EDITOR_TOOLS]);
 	const prompt = buildToolProtocolInstructions(catalog);
 
 	assert.match(prompt, /read_file \(nativa de VS Code\)/);
@@ -476,11 +512,11 @@ function testToolPromptRendering() {
 	assert.match(prompt, /filePath\*: string — The absolute path of the file to read\./);
 	assert.match(prompt, /run_in_terminal/);
 	assert.match(prompt, /duplicada: usa read_file/);
-	assert.match(prompt, /<ms365_tool_call>/);
+	assert.match(prompt, /<m365_tool_call>/);
 
 	// El ejemplo del formato de bloques tiene que usar los campos DE la
 	// herramienta que nombra: sin las nuestras se sintetiza con los parámetros
-	// de la nativa de edición, no con la forma de `ms365_apply_edits`.
+	// de la nativa de edición, no con la forma de `m365_apply_edits`.
 	const nativeOnly = buildToolProtocolInstructions(buildToolCatalog(EDITOR_TOOLS));
 	assert.match(
 		nativeOnly,
@@ -546,7 +582,7 @@ function testHostToolDecoding() {
 	// el nombre viaja tal cual y es VS Code quien la ejecuta.
 	assert.deepEqual(
 		decodeTurn(allowed, [
-			'<ms365_tool_call>{"name":"replace_string_in_file","input":{"filePath":"/a.ts","oldString":"a","newString":"b"}}</ms365_tool_call>',
+			'<m365_tool_call>{"name":"replace_string_in_file","input":{"filePath":"/a.ts","oldString":"a","newString":"b"}}</m365_tool_call>',
 		]).calls,
 		[
 			{
@@ -561,30 +597,30 @@ function testHostToolDecoding() {
 	// toolReferenceName en camelCase, o los argumentos al mismo nivel.
 	assert.deepEqual(
 		decodeTurn(allowed, [
-			'<ms365_tool_call>{"name":"functions.replace_string_in_file","arguments":"{\\"filePath\\":\\"/a.ts\\"}"}',
+			'<m365_tool_call>{"name":"functions.replace_string_in_file","arguments":"{\\"filePath\\":\\"/a.ts\\"}"}',
 		]).calls,
 		[{ name: 'replace_string_in_file', input: { filePath: '/a.ts' } }],
 	);
 	assert.deepEqual(
 		decodeTurn(allowed, [
-			'<ms365_tool_call>{"tool":"ms365ReadFile","input":{"path":"a.ts"}}</ms365_tool_call>',
+			'<m365_tool_call>{"tool":"m365ReadFile","input":{"path":"a.ts"}}</m365_tool_call>',
 		]).calls,
 		[{ name: M365_TOOL_NAMES.readFile, input: { path: 'a.ts' } }],
 	);
 	assert.deepEqual(
-		decodeTurn(allowed, ['<ms365_tool_call>{"name":"get_changed_files"}</ms365_tool_call>']).calls,
+		decodeTurn(allowed, ['<m365_tool_call>{"name":"get_changed_files"}</m365_tool_call>']).calls,
 		[{ name: 'get_changed_files', input: {} }],
 	);
 	assert.deepEqual(
 		decodeTurn(allowed, [
-			'<ms365_tool_call>{"name":"ms365_read_file","path":"a.ts"}</ms365_tool_call>',
+			'<m365_tool_call>{"name":"m365_read_file","path":"a.ts"}</m365_tool_call>',
 		]).calls,
 		[{ name: M365_TOOL_NAMES.readFile, input: { path: 'a.ts' } }],
 	);
 
 	// Una herramienta que el host NO ofreció nunca se ejecuta.
 	const unknown = decodeTurn(allowed, [
-		'<ms365_tool_call>{"name":"borrar_el_disco","input":{}}</ms365_tool_call>',
+		'<m365_tool_call>{"name":"borrar_el_disco","input":{}}</m365_tool_call>',
 	]);
 	assert.deepEqual(unknown.calls, []);
 	assert.match(unknown.text.join(''), /borrar_el_disco/);
@@ -593,9 +629,9 @@ function testHostToolDecoding() {
 	// las de edición nativas tienen el mismo problema con el código sin escapar.
 	assert.deepEqual(
 		decodeTurn(allowed, [
-			'<ms365_tool_call>{"name":"replace_string_in_file","input":{"filePath":"/a.ts","oldString":"@@block:1@@","newString":"@@block:2@@"}}</ms365_tool_call>\n',
-			'<ms365_block id="1">\nconsole.log("hola");\n</ms365_block>\n',
-			'<ms365_block id="2">\nconsole.log("hola {mundo}");\n</ms365_block>',
+			'<m365_tool_call>{"name":"replace_string_in_file","input":{"filePath":"/a.ts","oldString":"@@block:1@@","newString":"@@block:2@@"}}</m365_tool_call>\n',
+			'<m365_block id="1">\nconsole.log("hola");\n</m365_block>\n',
+			'<m365_block id="2">\nconsole.log("hola {mundo}");\n</m365_block>',
 		]).calls,
 		[
 			{
@@ -612,7 +648,7 @@ function testHostToolDecoding() {
 	// Bloques que se cortan a medias: no se ejecuta nada y el turno no queda en
 	// blanco, que era lo que dejaba al usuario sin saber qué había pasado.
 	const truncated = decodeTurn(allowed, [
-		'<ms365_tool_call>{"name":"replace_string_in_file","input":{"filePath":"/a.ts","oldString":"@@block:1@@"}}</ms365_tool_call>\n<ms365_block id="1">\nconsole',
+		'<m365_tool_call>{"name":"replace_string_in_file","input":{"filePath":"/a.ts","oldString":"@@block:1@@"}}</m365_tool_call>\n<m365_block id="1">\nconsole',
 	]);
 	assert.deepEqual(truncated.calls, []);
 	assert.match(truncated.text.join(''), /incompleta/);
@@ -898,7 +934,7 @@ function startScriptedServer(
 async function testSubagentLoop() {
 	const server = await startScriptedServer((index) =>
 		index === 0
-			? `<ms365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</ms365_tool_call>`
+			? `<m365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</m365_tool_call>`
 			: 'Resumen: encontré 2 coincidencias de foo.',
 	);
 	const calls: { name: string; input: Record<string, unknown> }[] = [];
@@ -929,7 +965,7 @@ async function testSubagentLoop() {
 
 async function testSubagentLoopStepLimit() {
 	const server = await startScriptedServer(
-		() => `<ms365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</ms365_tool_call>`,
+		() => `<m365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</m365_tool_call>`,
 	);
 	const offeredTools: OfferedTool[] = [{ name: M365_TOOL_NAMES.searchText }];
 
@@ -962,7 +998,7 @@ async function testSubagentLoopStepLimit() {
  */
 async function testSubagentLoopWallClock() {
 	const server = await startScriptedServer(
-		() => `<ms365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</ms365_tool_call>`,
+		() => `<m365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</m365_tool_call>`,
 	);
 	const offeredTools: OfferedTool[] = [{ name: M365_TOOL_NAMES.searchText }];
 
@@ -1078,7 +1114,7 @@ async function testEndpointRotation() {
  * deltas that carry no messageId of their own. The first chunk of the SECOND
  * message arrives as a snapshot right after the first message already used
  * deltas; the old turn-wide "have we seen a delta yet?" tracking silently
- * dropped that first chunk (the opening `<ms` of `<ms365_tool_call>`), so the
+ * dropped that first chunk (the opening `<ms` of `<m365_tool_call>`), so the
  * marker never matched and the whole JSON + closing tag leaked into the chat
  * as visible text instead of firing the tool call.
  */
@@ -1115,14 +1151,14 @@ async function testMultiMessageToolCall() {
 						snapshot([{ author: 'bot', text: 'Voy a buscar el archivo.', messageId: 'm1' }]);
 						// Message 2: the tool call — its first chunk is a SNAPSHOT (not a
 						// delta) for a brand-new messageId, right after message 1 used
-						// deltas. This exact shape used to lose the opening `<ms`.
-						snapshot([{ author: 'bot', text: '<ms', messageId: 'm2' }]);
-						delta('365_tool_call>{"name":"ms365_read_file","');
-						delta('input":{"path":"a.ts"}}</ms365_tool_call>');
+						// deltas. This exact shape used to lose the opening `<m`.
+						snapshot([{ author: 'bot', text: '<m', messageId: 'm2' }]);
+						delta('365_tool_call>{"name":"m365_read_file","');
+						delta('input":{"path":"a.ts"}}</m365_tool_call>');
 						snapshot([
 							{
 								author: 'bot',
-								text: '<ms365_tool_call>{"name":"ms365_read_file","input":{"path":"a.ts"}}</ms365_tool_call>',
+								text: '<m365_tool_call>{"name":"m365_read_file","input":{"path":"a.ts"}}</m365_tool_call>',
 								messageId: 'm2',
 							},
 						]);
@@ -1208,7 +1244,7 @@ function testPromptsFollowLocale() {
 	// too — exactly as the provider does on every request.
 	const render = (locale: 'en' | 'es') => {
 		setLocale(locale);
-		return buildToolProtocolInstructions(buildToolCatalog([...MS365_TOOLS, ...EDITOR_TOOLS]));
+		return buildToolProtocolInstructions(buildToolCatalog([...M365_TOOLS, ...EDITOR_TOOLS]));
 	};
 	const english = render('en');
 	const spanish = render('es');
@@ -1221,7 +1257,7 @@ function testPromptsFollowLocale() {
 	assert.match(spanish, /read_file \(nativa de VS Code\)/);
 	// The protocol markers themselves never change with the language.
 	for (const prompt of [english, spanish]) {
-		assert.match(prompt, /<ms365_tool_call>/);
+		assert.match(prompt, /<m365_tool_call>/);
 		assert.match(prompt, /@@block:1@@/);
 	}
 	console.log('  ✓ el prompt de herramientas sale entero en el idioma activo; los marcadores no cambian');
@@ -1317,7 +1353,7 @@ function testCommitMessageGeneration() {
 async function testToolLoopStreamsProse() {
 	const server = await startScriptedServer((index) =>
 		index === 0
-			? `Voy a buscar.\n<ms365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</ms365_tool_call>`
+			? `Voy a buscar.\n<m365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</m365_tool_call>`
 			: 'Está en a.ts.',
 	);
 	const prose: string[] = [];
@@ -1594,6 +1630,611 @@ function testClipboardDetection() {
 	console.log('  ✓ detecta un token o perfil en el portapapeles (y nada más)');
 }
 
+// ---- legacy.ts (coming from ms365-copilot-vscode) --------------------------
+
+function testLegacyNames() {
+	assert.equal(LEGACY_EXTENSION_ID, 'ms365-copilot-vscode.ms365-copilot-vscode');
+	assert.equal(legacySettingKey('m365copilot.editor.model'), 'ms365copilot.editor.model');
+	assert.equal(legacySettingKey('m365copilot.language'), 'ms365copilot.language');
+	assert.equal(legacySettingKey('editor.fontSize'), undefined, 'sólo claves de esta extensión');
+
+	// The model settings stored ids, renamed too; everything else is kept.
+	assert.equal(migrateLegacyValue('ms365-copilot-gpt56'), 'm365-copilot-gpt56');
+	assert.equal(migrateLegacyValue('ms365-copilot-tone-gpt-5-7-chat'), 'm365-copilot-tone-gpt-5-7-chat');
+	assert.equal(migrateLegacyValue('es'), 'es');
+	assert.equal(migrateLegacyValue(48), 48);
+	assert.equal(migrateLegacyValue(false), false);
+	assert.deepEqual(migrateLegacyValue(['scminput', 'plaintext']), ['scminput', 'plaintext']);
+	assert.deepEqual(migrateLegacyValue([{ tone: 'Gpt_5_7_Chat', name: 'GPT 5.7' }]), [{ tone: 'Gpt_5_7_Chat', name: 'GPT 5.7' }]);
+
+	// Only where the user set the old key and not yet the new one.
+	assert.equal(shouldMigrate('es', undefined), true);
+	assert.equal(shouldMigrate(false, undefined), true, 'false también es un valor elegido');
+	assert.equal(shouldMigrate(undefined, undefined), false);
+	assert.equal(shouldMigrate('es', 'en'), false, 'lo elegido en esta versión gana');
+	console.log('  ✓ migración desde ms365-copilot-vscode: claves, ids de modelo y cuándo copiar');
+}
+
+// ---- profile.ts accountOf (Accounts menu) ----------------------------------
+
+function testAccountOf() {
+	const account = accountOf(parsePastedProfile(fakeJwt()));
+	assert.deepEqual(account, { sessionId: 'tenant-tid/user-oid', accountId: 'user-oid', label: 'someone@contoso.com' });
+
+	// A renewed token of the same user is the same session.
+	const renewed = accountOf(parsePastedProfile(fakeJwt({ exp: Math.floor(Date.now() / 1000) + 7200 })));
+	assert.equal(renewed?.sessionId, account?.sessionId);
+
+	// Expired = signed out.
+	assert.equal(accountOf(parsePastedProfile(fakeJwt({ exp: Math.floor(Date.now() / 1000) - 60 }))), undefined);
+	assert.equal(accountOf(null), undefined);
+
+	setLocale('en');
+	assert.equal(accountOf(parsePastedProfile(fakeJwt({ upn: undefined })))?.label, 'M365 Copilot user');
+	setLocale('es');
+	assert.equal(accountOf(parsePastedProfile(fakeJwt({ upn: undefined })))?.label, 'Usuario de M365 Copilot');
+	setLocale('en');
+	console.log('  ✓ la cuenta del menú Cuentas sale del token (y desaparece al caducar)');
+}
+
+// ---- reviewPrompt.ts (code review as comments) ------------------------------
+
+function testReviewPrompt() {
+	setLocale('en');
+	assert.equal(numberLines({ startLine: 9, text: 'a\nb\r\nc' }), ' 9 | a\n10 | b\n11 | c');
+	assert.equal(formatRanges([{ start: 10, end: 14 }, { start: 30, end: 30 }]), '10-14, 30');
+
+	const whole = buildReviewPrompt({
+		relativePath: 'src/a.ts',
+		languageId: 'typescript',
+		segments: [{ startLine: 1, text: 'const a = 1;\nconsole.log(a);' }],
+	});
+	assert.match(whole, /senior code reviewer/);
+	assert.match(whole, /File: src\/a\.ts \(typescript\)/);
+	assert.match(whole, /```typescript\n1 \| const a = 1;\n2 \| console\.log\(a\);\n```/);
+	assert.doesNotMatch(whole, /were just changed/, 'sin cambios no hay sección de cambios');
+
+	const changes = buildReviewPrompt({
+		relativePath: 'src/a.ts',
+		languageId: 'typescript',
+		segments: [{ startLine: 1, text: 'x' }, { startLine: 40, text: 'y' }],
+		changed: [{ start: 41, end: 42 }],
+		diff: '@@ -41 +41,2 @@\n-old\n+new',
+	});
+	assert.match(changes, /These lines were just changed: 41-42\./);
+	assert.match(changes, /```diff\n@@ -41 \+41,2 @@\n-old\n\+new\n```/);
+	assert.match(changes, / 1 \| x\n⋮\n40 \| y/, 'los trozos van separados con ⋮ y numerados con su línea real');
+
+	setLocale('es');
+	assert.match(buildReviewPrompt({ relativePath: 'a.ts', languageId: 'ts', segments: [{ startLine: 1, text: 'x' }] }), /en español/);
+	setLocale('en');
+	console.log('  ✓ prompt de revisión: líneas numeradas, cambios, diff e idioma');
+}
+
+function testReviewFindings() {
+	const bounds = { start: 1, end: 50 };
+
+	const fenced = parseReviewFindings(
+		'Here is the review:\n```json\n[{"line": 12, "endLine": 14, "severity": "warning", "title": "Unhandled rejection", "message": "fetch() can reject.", "suggestion": "Wrap it in try/catch."}]\n```',
+		bounds,
+	);
+	assert.deepEqual(fenced, [
+		{
+			startLine: 12,
+			endLine: 14,
+			severity: 'warning',
+			title: 'Unhandled rejection',
+			message: 'fetch() can reject.',
+			suggestion: 'Wrap it in try/catch.',
+		},
+	]);
+
+	// Nothing to report is an empty list, not an unreadable answer.
+	assert.deepEqual(parseReviewFindings('```json\n[]\n```', bounds), []);
+	assert.deepEqual(parseReviewFindings('[]', bounds), []);
+	assert.equal(parseReviewFindings('The code looks fine to me!', bounds), null);
+	assert.equal(parseReviewFindings('```json\n[{"line": 1,\n```', bounds), null, 'JSON cortado = ilegible');
+
+	// Shapes models like: wrapper object, trailing comma, lines as strings,
+	// other field names and severity words.
+	const loose = parseReviewFindings(
+		'{"findings": [{"line": "L20-22", "level": "critical", "summary": "SQL injection", "description": "The query concatenates user input."},' +
+			'{"startLine": 5, "type": "nit", "message": "Name could be clearer. It says x."},]}',
+		bounds,
+	);
+	assert.deepEqual(
+		loose?.map((f) => [f.startLine, f.endLine, f.severity, f.title]),
+		[
+			[5, 5, 'info', 'Name could be clearer.'],
+			[20, 22, 'error', 'SQL injection'],
+		],
+		'ordenados por línea; el título sale de la primera frase si falta',
+	);
+
+	// Outside the reviewed lines: dropped, or clamped when it straddles them.
+	const clamped = parseReviewFindings(
+		'[{"line": 3, "message": "before"}, {"line": 9, "endLine": 30, "message": "straddles"}, {"line": 99, "message": "after"}, {"message": "no line"}]',
+		{ start: 10, end: 20 },
+	);
+	assert.deepEqual(clamped?.map((f) => [f.startLine, f.endLine, f.message]), [[10, 20, 'straddles']]);
+
+	// Duplicates go, and there is a cap.
+	const many = JSON.stringify(
+		Array.from({ length: 40 }, (_, i) => ({ line: (i % 30) + 1, title: `t${i % 30}`, message: 'm' })),
+	);
+	const capped = parseReviewFindings(many, bounds);
+	assert.equal(capped?.length, MAX_FINDINGS);
+	assert.equal(new Set(capped?.map((f) => f.title)).size, MAX_FINDINGS, 'sin duplicados');
+	console.log('  ✓ lectura de la revisión: JSON en vallas o suelto, campos alternativos, límites, duplicados');
+}
+
+function testUnifiedDiff() {
+	const patch = [
+		'diff --git a/src/a.ts b/src/a.ts',
+		'index 1111111..2222222 100644',
+		'--- a/src/a.ts',
+		'+++ b/src/a.ts',
+		'@@ -3 +3 @@ function a() {',
+		'-  return 1;',
+		'+  return 2;',
+		'@@ -10,2 +10,4 @@',
+		'+added',
+		'+added',
+		'@@ -20,3 +23,0 @@',
+		'-gone',
+		'-gone',
+		'-gone',
+		'diff --git a/new file.ts b/new file.ts',
+		'new file mode 100644',
+		'--- /dev/null',
+		'+++ b/new file.ts\t',
+		'@@ -0,0 +1,3 @@',
+		'+a',
+		'+b',
+		'+c',
+		'diff --git a/old.ts b/old.ts',
+		'deleted file mode 100644',
+		'--- a/old.ts',
+		'+++ /dev/null',
+		'@@ -1,2 +0,0 @@',
+		'-x',
+		'-y',
+		'diff --git a/logo.png b/logo.png',
+		'Binary files a/logo.png and b/logo.png differ',
+		'diff --git "a/caf\\303\\251.ts" "b/caf\\303\\251.ts"',
+		'--- "a/caf\\303\\251.ts"',
+		'+++ "b/caf\\303\\251.ts"',
+		'@@ -1 +1 @@',
+		'-a',
+		'+b',
+		// The same file again (staged + unstaged diffs concatenated).
+		'diff --git a/src/a.ts b/src/a.ts',
+		'--- a/src/a.ts',
+		'+++ b/src/a.ts',
+		'@@ -40 +44,2 @@',
+		'+x',
+		'+y',
+	].join('\n');
+	const files = parseUnifiedDiff(patch);
+	assert.deepEqual(
+		files.map((file) => [file.path, file.ranges]),
+		[
+			['src/a.ts', [{ start: 3, end: 3 }, { start: 10, end: 13 }, { start: 23, end: 23 }, { start: 44, end: 45 }]],
+			['new file.ts', [{ start: 1, end: 3 }]],
+			['café.ts', [{ start: 1, end: 1 }]],
+		],
+		'borrados y binarios fuera; el borrado puro marca la línea donde estaba; mismo archivo fusionado',
+	);
+	assert.match(files[0].patch, /-  return 1;/, 'el parche del archivo conserva lo eliminado');
+	assert.match(files[0].patch, /\+y/);
+
+	// 1-2 and 3 touch; 5-6 does not (line 4 is in between).
+	assert.deepEqual(mergeRanges([{ start: 5, end: 6 }, { start: 1, end: 2 }, { start: 3, end: 3 }, { start: 9, end: 9 }]), [
+		{ start: 1, end: 3 },
+		{ start: 5, end: 6 },
+		{ start: 9, end: 9 },
+	]);
+	assert.deepEqual(windowsAround([{ start: 5, end: 5 }, { start: 30, end: 31 }], 40, 10), [
+		{ start: 1, end: 15 },
+		{ start: 20, end: 40 },
+	]);
+	const finding = { startLine: 12, endLine: 12, severity: 'info' as const, title: 't', message: 'm' };
+	assert.equal(touchesRanges(finding, [{ start: 10, end: 10 }]), true, 'a 2 líneas cuenta');
+	assert.equal(touchesRanges(finding, [{ start: 20, end: 25 }]), false);
+	console.log('  ✓ diff de git -U0: líneas cambiadas por archivo, rutas raras, ventanas y filtro de hallazgos');
+}
+
+// ---- rag/text.ts -------------------------------------------------------------
+
+function testRagText() {
+	assert.deepEqual(splitIdentifier('getHTTPResponse_code'), ['get', 'HTTP', 'Response', 'code']);
+	assert.deepEqual(splitIdentifier('my-kebab-name'), ['my', 'kebab', 'name']);
+	assert.equal(normalizeTerm('Tokens'), 'token');
+	assert.equal(normalizeTerm('Configuración'), 'configuracion');
+	assert.equal(normalizeTerm('class'), 'class', 'no quita la s de ss');
+	assert.equal(normalizeTerm('libraries'), 'library');
+	assert.deepEqual(tokenize('const profileStore = new ProfileStore();'), ['profilestore', 'profile', 'store', 'profilestore', 'profile', 'store']);
+	assert.ok(!tokenize('the a de la que 42 x').length, 'sin palabras vacías, números ni letras sueltas');
+
+	const terms = queryTerms('¿Dónde se guarda el token del usuario?');
+	const byTerm = new Map(terms.map((term) => [term.term, term]));
+	assert.equal(byTerm.get('token')?.weight, 1);
+	assert.equal(byTerm.get('token')?.original, true);
+	for (const english of ['save', 'store', 'storage', 'user']) assert.ok(byTerm.has(english), `expande ${english}`);
+	assert.equal(byTerm.get('store')?.original, false);
+	assert.ok(!byTerm.has('donde') && !byTerm.has('se'), 'palabras vacías fuera');
+	assert.equal(queryTerms('ProfileStore').find((term) => term.term === 'profilestore')?.weight, 1.5, 'el identificador entero pesa más');
+	assert.deepEqual(cognates('migracion'), ['migration', 'migraction']);
+	assert.ok(cognates('funcion').includes('function'));
+	assert.deepEqual(cognates('validar'), ['validate']);
+	assert.deepEqual(cognates('participante'), ['participant']);
+	assert.deepEqual(cognates('normalizar'), ['normalize']);
+	assert.deepEqual(cognates('casa'), []);
+
+	assert.equal(isSkippedPath('node_modules/x/index.js'), true);
+	assert.equal(isSkippedPath('src/app/node_modules/y.ts'), true);
+	assert.equal(isSkippedPath('pnpm-lock.yaml'), true);
+	assert.equal(isSkippedPath('dist/app.min.js'), true);
+	assert.equal(isSkippedPath('assets/logo.png'), true);
+	assert.equal(isSkippedPath('bin/cli.js'), false, 'bin/ de Node se indexa');
+	assert.equal(isSkippedPath('src/index.ts'), false);
+
+	assert.equal(looksGenerated('// @generated by protoc\nexport const x = 1;'), true);
+	assert.equal(looksGenerated(`!function(){${'a=1;'.repeat(600)}}()`), true, 'una línea enorme = minificado');
+	assert.equal(looksGenerated('export function add(a, b) {\n  return a + b;\n}\n'), false);
+
+	const globs = excludeGlobs([{ '**/fixtures': true, '**/keep': false }, undefined], ['docs/old/**', 42]);
+	assert.equal(isExcluded('test/fixtures/a.json', globs), true, 'una carpeta excluida excluye lo de dentro');
+	assert.equal(isExcluded('docs/old/a.md', globs), true);
+	assert.equal(isExcluded('src/keep/a.ts', globs), false, 'false = no excluir');
+	assert.equal(globToRegExp('**/*.{js,ts}').test('a/b/c.ts'), true);
+	assert.equal(globToRegExp('**/*.{js,ts}').test('c.ts'), true);
+	assert.equal(globToRegExp('src/*.ts').test('src/a/b.ts'), false, '* no cruza carpetas');
+	assert.equal(globToRegExp('file?.md').test('file1.md'), true);
+
+	assert.equal(retrievalQuery('<context>lots</context><userRequest>where is the token stored</userRequest>'), 'where is the token stored');
+	assert.equal(retrievalQuery('plain   question\nhere'), 'plain question here');
+	console.log('  ✓ RAG texto: identificadores, normalización, expansión es→en, cognados, exclusiones y generados');
+}
+
+// ---- rag/code.ts -------------------------------------------------------------
+
+function testRagCode() {
+	assert.deepEqual(languageOf('src/a.tsx'), { family: 'js', label: 'TypeScript' });
+	assert.equal(languageOf('Dockerfile')?.label, 'Dockerfile');
+	assert.equal(languageOf('x.unknownext'), undefined);
+
+	const ts = [
+		'import { a } from "./a";',
+		'/** Stores the profile. */',
+		'export class ProfileStore {',
+		'  private cache = 1;',
+		'  constructor(private readonly secrets: Secrets) {',
+		'    if (x) {',
+		'      call(() => {',
+		'      });',
+		'    }',
+		'  }',
+		'  async get(): Promise<Profile | null> {',
+		'    return null;',
+		'  }',
+		'}',
+		'export const MAX_SIZE = 10;',
+		'export const parse = (text: string): number => 1;',
+		'export interface Profile { a: string }',
+		'type Local = { b: number };',
+		'export default function main() {}',
+	];
+	assert.deepEqual(
+		extractSymbols(ts, 'js').map((s) => `${s.line}:${s.kind}:${s.container ? `${s.container}.` : ''}${s.name}${s.exported ? '*' : ''}`),
+		['3:class:ProfileStore*', '5:method:ProfileStore.constructor', '11:method:ProfileStore.get', '15:constant:MAX_SIZE*', '16:function:parse*', '17:interface:Profile*', '18:type:Local', '19:function:main*'],
+		'clases, métodos (sin las llamadas de dentro), constantes, flechas, interfaces y tipos',
+	);
+	assert.deepEqual(
+		extractSymbols(['class Store:', '    def save(self, token):', '        pass', '', 'def _helper():', '    pass'], 'python').map((s) => `${s.kind}:${s.container ?? ''}:${s.name}`),
+		['class::Store', 'method:Store:save', 'function::_helper'],
+	);
+	assert.deepEqual(
+		extractSymbols(['type Server struct {', '}', 'func (s *Server) Start() error {', '}', 'func helper() {}'], 'go').map((s) => `${s.kind}:${s.name}`),
+		['struct:Server', 'method:Start', 'function:helper'],
+	);
+	assert.deepEqual(
+		extractSymbols(['pub struct Cache;', 'impl Cache {', '    pub fn get(&self) {}', '}', 'fn main() {}'], 'rust').map((s) => `${s.kind}:${s.container ?? ''}:${s.name}`),
+		['struct::Cache', 'class::Cache', 'method:Cache:get', 'function::main'],
+	);
+	assert.deepEqual(
+		extractSymbols(['public class UserService {', '    public User find(String id) {', '        return repo.find(id);', '    }', '}'], 'jvm').map((s) => `${s.kind}:${s.name}`),
+		['class:UserService', 'method:find'],
+	);
+	assert.deepEqual(extractSymbols(['# Title', 'text', '## Install', '```', '# not a heading? (yes in md)', '```'], 'markdown').slice(0, 2).map((s) => s.name), ['Title', 'Install']);
+
+	assert.deepEqual(
+		extractImports(['import x from "./x";', "import type { Y } from '../y/index.js';", 'export * from "./z";', 'const w = require("w-lib");', 'await import("./lazy")', 'import {', '  a,', '} from "@scope/pkg/sub";'].join('\n'), 'js'),
+		['./x', '../y/index.js', './z', '@scope/pkg/sub', 'w-lib', './lazy'],
+	);
+	assert.deepEqual(extractImports('from .models import User\nfrom ..core.db import x\nimport os, sys\n', 'python'), ['.models', '..core.db', 'os', 'sys']);
+	assert.deepEqual(extractImports('import (\n  "fmt"\n  "github.com/acme/app/internal/store"\n)\n', 'go'), ['fmt', 'github.com/acme/app/internal/store']);
+	assert.deepEqual(extractImports('mod cache;\nuse crate::net::client;\n', 'rust'), ['cache', 'crate::net::client']);
+	assert.deepEqual(extractImports('#include "util.h"\n#include <stdio.h>\n', 'c'), ['util.h']);
+
+	// Chunks start at declarations (with their doc comment) and stay bounded.
+	const long = Array.from({ length: 300 }, (_, i) => `  line ${i + 1};`);
+	long[99] = '/** doc */';
+	long[100] = 'export function second() {';
+	long[199] = 'export function third() {';
+	const symbols = extractSymbols(long, 'js');
+	const chunks = chunkLines(long, symbols);
+	assert.ok(chunks.some((chunk) => chunk.startLine === 100), 'el comentario va con su declaración');
+	assert.ok(chunks.some((chunk) => chunk.startLine === 200));
+	assert.ok(chunks.every((chunk) => chunk.endLine - chunk.startLine + 1 <= 90), 'ningún fragmento pasa de 90 líneas');
+	assert.equal(chunks[0].startLine, 1);
+	assert.equal(chunks[chunks.length - 1].endLine, 300);
+	for (let i = 1; i < chunks.length; i += 1) assert.equal(chunks[i].startLine, chunks[i - 1].endLine + 1, 'sin huecos ni solapes');
+	assert.deepEqual(chunkLines(['a', 'b'], []), [{ startLine: 1, endLine: 2 }], 'un archivo corto es un solo fragmento');
+	console.log('  ✓ RAG código: lenguajes, símbolos (TS, Python, Go, Rust, Java, Markdown), imports y fragmentos');
+}
+
+// ---- rag/searchIndex.ts + projectMap.ts ---------------------------------------
+
+const RAG_FILES: Record<string, string> = {
+	'package.json': JSON.stringify({ name: 'acme-app', scripts: { build: 'tsc', test: 'node test' }, dependencies: { '@acme/core': 'workspace:*', express: '^4' } }),
+	'packages/core/package.json': JSON.stringify({ name: '@acme/core', main: 'dist/index.js' }),
+	'packages/core/src/index.ts': "export { ProfileStore } from './secrets';\n",
+	'packages/core/src/secrets.ts': [
+		'/** Saves the access token in the secret storage. */',
+		'export class ProfileStore {',
+		'  async save(token: string): Promise<void> {',
+		'    await this.storage.store("token", token);',
+		'  }',
+		'  async load(): Promise<string | undefined> {',
+		'    return this.storage.get("token");',
+		'  }',
+		'}',
+	].join('\n'),
+	'src/server.ts': [
+		"import express from 'express';",
+		"import { ProfileStore } from '@acme/core';",
+		"import { route } from './routes';",
+		'export function startServer(port: number) {',
+		'  const store = new ProfileStore();',
+		'  express().listen(port);',
+		'}',
+	].join('\n'),
+	'src/routes.ts': "import { formatDate } from './utils/date';\nexport function route(path: string) {\n  return formatDate(new Date()) + path;\n}\n",
+	'src/utils/date.ts': 'export function formatDate(date: Date): string {\n  return date.toISOString();\n}\n',
+	'test/secrets.test.ts': "import { ProfileStore } from '../packages/core/src/secrets';\ntest('saves the token', () => new ProfileStore());\n",
+	'README.md': '# Acme\n\nThe token is saved by the core package. Run the server with npm start.\n',
+	'CHANGELOG.md': '# Changelog\n\n## 1.0.0\n\n- Token storage.\n',
+	'py/app/models.py': 'class User:\n    def save(self):\n        pass\n',
+	'py/app/views.py': 'from .models import User\n\ndef show(user_id):\n    return User()\n',
+};
+
+function ragIndex(): SearchIndex {
+	const index = new SearchIndex();
+	for (const [path, text] of Object.entries(RAG_FILES)) {
+		const file = analyzeFile(path, text);
+		if (file) index.upsert(file);
+	}
+	return index;
+}
+
+function testRagSearch() {
+	const index = ragIndex();
+	assert.equal(index.size, Object.keys(RAG_FILES).length);
+
+	assert.equal(index.search('ProfileStore')[0].path, 'packages/core/src/secrets.ts', 'el archivo que declara el símbolo primero');
+	assert.equal(index.search('¿dónde se guarda el token?')[0].path, 'packages/core/src/secrets.ts', 'pregunta en español → código en inglés');
+	assert.equal(index.search('format date')[0].path, 'src/utils/date.ts');
+	assert.equal(index.search('date', { pathPrefix: 'src/utils' }).every((hit) => hit.path.startsWith('src/utils/')), true);
+	assert.notEqual(index.search('ProfileStore token test')[0]?.path, undefined);
+	assert.ok(
+		index.search('saves the token').findIndex((hit) => hit.path === 'test/secrets.test.ts') > index.search('saves the token').findIndex((hit) => hit.path === 'packages/core/src/secrets.ts'),
+		'los tests, por detrás del código (salvo que se pidan)',
+	);
+	assert.equal(index.search('token').find((hit) => hit.path === 'CHANGELOG.md') === undefined || index.search('token')[0].path !== 'CHANGELOG.md', true, 'el changelog no gana');
+	assert.deepEqual(index.search('date', { exclude: { path: 'src/utils/date.ts', startLine: 1, endLine: 3 } }).filter((hit) => hit.path === 'src/utils/date.ts'), [], 'lo que ya está en el prompt no vuelve');
+	assert.ok(index.search('routes').some((hit) => hit.path === 'src/routes.ts'), 'el nombre del archivo cuenta aunque el texto no lo diga');
+	assert.deepEqual(index.search('zzzz qqqq'), []);
+	assert.deepEqual(index.search(''), []);
+
+	// The active file's neighbours rank higher.
+	const plain = index.search('function');
+	const fromRoutes = index.search('function', { activePath: 'src/routes.ts' });
+	assert.ok(fromRoutes.findIndex((hit) => hit.path === 'src/utils/date.ts') <= plain.findIndex((hit) => hit.path === 'src/utils/date.ts'));
+
+	// Dependency graph: relative, workspace package (→ sources), Python relative, externals.
+	const graph = index.dependencyGraph();
+	assert.deepEqual([...(graph.imports.get('src/server.ts') ?? [])].sort(), ['packages/core/src/index.ts', 'src/routes.ts']);
+	assert.deepEqual([...(graph.imports.get('py/app/views.py') ?? [])], ['py/app/models.py']);
+	assert.deepEqual([...(graph.importers.get('packages/core/src/secrets.ts') ?? [])].sort(), ['packages/core/src/index.ts', 'test/secrets.test.ts']);
+	assert.deepEqual([...(graph.external.get('express') ?? [])], ['src/server.ts']);
+
+	// Updates and removals.
+	index.upsert(analyzeFile('src/utils/date.ts', 'export function parseIsoDate(text: string) {}\n')!);
+	assert.equal(index.search('formatDate').some((hit) => hit.path === 'src/utils/date.ts' && hit.symbols.includes('formatDate')), false);
+	assert.equal(index.search('parseIsoDate')[0].path, 'src/utils/date.ts');
+	assert.equal(index.removePrefix('src'), 3);
+	assert.equal(index.search('startServer').some((hit) => hit.path.startsWith('src/')), false, 'nada de lo borrado');
+	assert.equal(index.has('packages/core/src/secrets.ts'), true);
+
+	assert.deepEqual(bestWindow(['a', 'b', 'token here', 'token token', 'c', 'd'], 10, ['token'], 2), { startLine: 12, endLine: 13 });
+	console.log('  ✓ RAG búsqueda: ranking (símbolo, español→inglés, ruta, tests, changelog), alcance, exclusión, grafo e incremental');
+}
+
+async function testRagRendering() {
+	setLocale('en');
+	const index = ragIndex();
+	const map = renderProjectMap(index, { workspaceName: 'acme', maxChars: 20_000 });
+	assert.match(map, /Project map of “acme” — 12 files/);
+	assert.match(map, /@acme\/core \(npm, packages\/core\/\)/);
+	assert.match(map, /acme-app \(npm, \.\/\) — scripts: build, test/);
+	assert.match(map, /packages\/core\/src\/secrets\.ts ← 2/, 'módulos más importados');
+	assert.match(map, /express \(1\)/, 'dependencias externas');
+	assert.match(map, /\n- src\/ \(2\): server\.ts \[startServer\], routes\.ts \[route\]\n- src\/utils\/ \(1\): date\.ts \[formatDate\]\n/);
+	assert.ok(renderProjectMap(index, { workspaceName: 'acme', maxChars: 300 }).length <= 300, 'respeta el presupuesto');
+
+	const detail = renderFileDetail(index, 'packages/core/src/secrets.ts', 5_000)!;
+	assert.match(detail, /2: class ProfileStore \(export\)/);
+	assert.match(detail, /3: method ProfileStore\.save/);
+	assert.match(detail, /Imported by: packages\/core\/src\/index\.ts, test\/secrets\.test\.ts/);
+	assert.equal(renderFileDetail(index, 'nope.ts', 100), undefined);
+	assert.match(renderFolderDetail(index, 'src/', 5_000)!, /Folder src\/ — 3 indexed files[\s\S]*utils\/date\.ts \[formatDate\]/);
+	assert.match(renderSummary(index, 'acme', 2_000), /Workspace “acme”: 12 files indexed \(TypeScript 6/);
+
+	const hits = index.search('¿dónde se guarda el token?', { limit: 3 });
+	const lines = (path: string, start: number, end: number) =>
+		Promise.resolve(RAG_FILES[path]?.split('\n').slice(start - 1, end));
+	const rendered = await renderHits(hits, lines, { maxLines: 30, maxChars: 4_000 });
+	assert.equal(rendered[0].hit.path, 'packages/core/src/secrets.ts');
+	const result = formatSearchResults('token', rendered, [], () => 'typescript');
+	assert.match(result, /1\. packages\/core\/src\/secrets\.ts:1-9 — ProfileStore, save, load\n```typescript\n\/\*\* Saves the access token/);
+	assert.match(result, /m365_read_file/);
+	assert.match(formatSearchResults('zzz', [], [], () => ''), /No results in the project index for “zzz”/);
+	const context = formatAutoContext('SUMMARY', rendered.slice(0, 1), hits.slice(1), () => 'ts');
+	assert.match(context, /^PROJECT CONTEXT — retrieved automatically/);
+	assert.match(context, /SUMMARY[\s\S]*packages\/core\/src\/secrets\.ts:1-9[\s\S]*Also relevant: [^\n]+[\s\S]*END OF PROJECT CONTEXT/);
+	setLocale('es');
+	assert.match(formatAutoContext('S', [], [], () => ''), /^CONTEXTO DEL PROYECTO/);
+	setLocale('en');
+	console.log('  ✓ RAG texto para el modelo: mapa, detalle de archivo/carpeta, resultados y contexto automático');
+}
+
+// ---- web search ----------------------------------------------------------------
+
+function testWebHelpers() {
+	setLocale('en');
+	const template = {
+		source: 'officeweb',
+		tone: 'Gpt_5_5_Chat',
+		plugins: [{ Id: 'BingWebSearch', Category: 'FirstParty' }],
+		optionsSets: ['enterprise_flux_web', 'enable_web_grounding'],
+		allowedMessageTypes: ['Chat', 'InternalSearchQuery', 'RenderCardRequest'],
+		conversationId: 'old-conversation',
+		isStartOfSession: false,
+		previousMessages: [{ text: 'secret earlier turn' }],
+		traceId: 'abc',
+		requestId: 'old-request',
+		message: { author: 'user', text: 'what the user typed on the web', locale: 'fr-FR', market: 'es-ES', requestId: 'r1', messageId: 'm1', timestamp: '2020-01-01', attachments: [{ x: 1 }] },
+	};
+	const args = buildWebInvocationArgs(template, 'PROMPT', 'Claude_Sonnet', 'new-conversation');
+	assert.deepEqual(args.plugins, template.plugins, 'los plugins (búsqueda web) se conservan');
+	assert.deepEqual(args.optionsSets, template.optionsSets);
+	assert.equal(args.conversationId, 'new-conversation');
+	assert.equal(args.isStartOfSession, true);
+	assert.equal(args.tone, 'Claude_Sonnet');
+	assert.equal('previousMessages' in args, false, 'nada de la conversación de la web');
+	assert.notEqual(args.requestId, 'old-request');
+	assert.notEqual(args.traceId, 'abc');
+	const message = args.message as Record<string, unknown>;
+	assert.equal(message.text, 'PROMPT');
+	assert.equal(message.locale, 'en-US');
+	assert.equal(message.market, 'es-ES', 'el resto del mensaje capturado se queda');
+	assert.notEqual(message.requestId, 'r1');
+	assert.equal('attachments' in message, false);
+	assert.equal(template.message.text, 'what the user typed on the web', 'la plantilla no se toca');
+	assert.equal(buildWebInvocationArgs(template, 'P', null, 'c').tone, 'Gpt_5_5_Chat', 'sin tone, el capturado');
+
+	assert.equal(capturedVariants('wss://substrate.office.com/m365Copilot/Chathub/o@t?access_token=x&variants=feature.a,feature.b&source=officeweb'), 'feature.a,feature.b');
+	assert.equal(capturedVariants('wss://x/y?access_token=x'), undefined);
+	assert.equal(capturedVariants(null), undefined);
+	assert.equal(capturedVariants('not a url'), undefined);
+
+	assert.deepEqual(
+		sourcesOf({ sourceAttributions: [{ providerDisplayName: 'MDN', seeMoreUrl: 'https://developer.mozilla.org/x' }, { seeMoreUrl: 'javascript:alert(1)' }, { url: 'https://example.com', title: ' Example ' }, 'junk'] }),
+		[{ title: 'MDN', url: 'https://developer.mozilla.org/x' }, { title: 'Example', url: 'https://example.com' }],
+		'sólo enlaces http(s)',
+	);
+	assert.deepEqual(sourcesOf({}), []);
+
+	assert.match(buildWebSearchPrompt('  latest Node LTS  '), /web search[\s\S]*Query:\nlatest Node LTS$/);
+	const result = formatWebResult('node', 'Node 24 is LTS [^1^].\n\n\n\nIt was released [^2^].', [
+		{ title: 'Node.js', url: 'https://nodejs.org' },
+		{ title: 'Node.js again', url: 'https://nodejs.org' },
+		{ title: 'Blog', url: 'https://blog.example' },
+	]);
+	assert.match(result, /^Web search: “node”\n\nNode 24 is LTS \[1\]\.\n\nIt was released \[2\]\.\n\nSources:\n1\. Node\.js — https:\/\/nodejs\.org\n2\. Blog — https:\/\/blog\.example$/);
+	assert.match(formatWebResult('x', '  ', []), /returned nothing/);
+	assert.equal(sourcesMarkdown([]), '');
+	assert.match(sourcesMarkdown([{ title: 'A [b]', url: 'https://a' }]), /\n\nSources:\n1\. \[A b\]\(https:\/\/a\)/);
+	setLocale('es');
+	assert.match(buildWebSearchPrompt('x'), /Responde en español/);
+	setLocale('en');
+	console.log('  ✓ búsqueda web: petición desde la plantilla capturada, variants, fuentes y resultado');
+}
+
+/** A web turn: the captured plugins and variants go out; cards mid-answer do not end it; sources come back. */
+async function testWebTurn() {
+	let sawUrl = '';
+	let sawArgs: Record<string, unknown> | undefined;
+	const wss = new WebSocketServer({ port: 0 });
+	await new Promise<void>((resolve) => wss.once('listening', () => resolve()));
+	const port = (wss.address() as { port: number }).port;
+	wss.on('connection', (socket, request) => {
+		sawUrl = request.url ?? '';
+		let handshaken = false;
+		socket.on('message', (data) => {
+			for (const chunk of data.toString().split(RS)) {
+				if (!chunk) continue;
+				const frame = JSON.parse(chunk);
+				if (!handshaken) {
+					handshaken = true;
+					socket.send('{}' + RS);
+					continue;
+				}
+				if (frame.target !== 'chat') continue;
+				sawArgs = frame.arguments[0];
+				const update = (messages: unknown[]) => socket.send(JSON.stringify({ type: 1, target: 'update', arguments: [{ messages }] }) + RS);
+				setTimeout(() => {
+					update([{ author: 'bot', messageType: 'InternalSearchQuery', text: 'node lts' }]);
+					update([{ author: 'bot', text: 'Node 24', messageId: 'a' }]);
+					update([{ author: 'bot', messageType: 'RenderCardRequest' }]);
+					update([{ author: 'bot', text: 'Node 24 is the LTS [^1^].', messageId: 'a', sourceAttributions: [{ providerDisplayName: 'Node.js', seeMoreUrl: 'https://nodejs.org' }] }]);
+					update([{ author: 'bot', messageType: 'EndOfRequest' }]);
+				}, 5);
+			}
+		});
+	});
+	const profile = {
+		...makeProfile(port),
+		endpoint: `wss://substrate.office.com/m365Copilot/Chathub/o@t?access_token=old&variants=feat.web&source=officeweb`,
+		invocationTemplate: { tone: 'Gpt_5_5_Chat', plugins: [{ Id: 'BingWebSearch' }], previousMessages: [1], message: { author: 'user', text: 'old' } },
+	};
+	let text = '';
+	const sources: unknown[] = [];
+	// Through the retry wrapper, as the extension calls it: the sources must survive it.
+	await streamCopilotTurnWithRetry({
+		profile,
+		endpointBase: mockBase(port),
+		prompt: 'PROMPT',
+		tone: null,
+		mode: 'web',
+		signal: new AbortController().signal,
+		callbacks: { onText: (delta) => (text += delta), onSources: (found) => sources.push(...found) },
+	});
+	wss.close();
+	assert.equal(text, 'Node 24 is the LTS [^1^].', 'una tarjeta a mitad de respuesta no corta el turno');
+	assert.deepEqual(sources, [{ title: 'Node.js', url: 'https://nodejs.org' }]);
+	assert.match(sawUrl, /[?&]variants=feat\.web(?:&|$)/);
+	assert.deepEqual(sawArgs?.plugins, [{ Id: 'BingWebSearch' }]);
+	assert.equal('previousMessages' in (sawArgs ?? {}), false);
+	assert.equal(new URL(`http://x${sawUrl}`).searchParams.get('ConversationId'), sawArgs?.conversationId, 'el id de la URL y el del mensaje coinciden');
+
+	// Without a captured invocation a web turn is refused up front.
+	await assert.rejects(
+		streamCopilotTurn({
+			profile: { ...makeProfile(port), invocationTemplate: null },
+			endpointBase: mockBase(port),
+			prompt: 'P',
+			tone: null,
+			mode: 'web',
+			signal: new AbortController().signal,
+			callbacks: { onText: () => {} },
+		}),
+		/browser extension or the userscript/,
+	);
+	console.log('  ✓ turno con web: plugins y variants capturados, tarjetas a mitad, fuentes, id de conversación');
+}
+
 
 // ---- modelCatalog.ts (dynamic models) ---------------------------------------
 
@@ -1603,7 +2244,7 @@ function testModelCatalog() {
 	assert.equal(prettyTone('Claude_Opus_4_1'), 'Claude Opus 4.1');
 	assert.equal(prettyTone('Claude_Sonnet'), 'Claude Sonnet');
 	assert.equal(prettyTone('magic'), 'Magic');
-	assert.equal(modelIdForTone('Gpt_5_7_Chat'), 'ms365-copilot-tone-gpt-5-7-chat');
+	assert.equal(modelIdForTone('Gpt_5_7_Chat'), 'm365-copilot-tone-gpt-5-7-chat');
 
 	// models.json: shape validated, junk dropped, detail as text or {en, es}.
 	assert.equal(parseModelCatalog({ nope: [] }), null);
@@ -1647,10 +2288,10 @@ function testModelCatalog() {
 		custom: [{ tone: 'Gpt_5_5_Chat', name: 'GPT 5.5 (mine)' }, { tone: 'Exp_Model' }],
 	});
 	const byTone = new Map(merged.map((model) => [model.tone, model]));
-	assert.equal(merged[0].id, 'ms365-copilot-auto', 'Auto stays first');
+	assert.equal(merged[0].id, 'm365-copilot-auto', 'Auto stays first');
 	// A catalog rename keeps the built-in id (settings that point to it keep working).
 	assert.equal(byTone.get('Claude_Sonnet')?.name, 'M365 Copilot · Claude Sonnet 5');
-	assert.equal(byTone.get('Claude_Sonnet')?.id, 'ms365-copilot-claude');
+	assert.equal(byTone.get('Claude_Sonnet')?.id, 'm365-copilot-claude');
 	// New from the catalog, with its own description.
 	assert.equal(byTone.get('Gpt_5_7_Chat')?.source, 'catalog');
 	assert.deepEqual(byTone.get('Gpt_5_7_Chat')?.detail, { en: 'Newest', es: 'El más nuevo' });
@@ -1738,6 +2379,17 @@ async function main() {
 	testTerminalPrompt();
 	testClipboardDetection();
 	testModelCatalog();
+	testLegacyNames();
+	testAccountOf();
+	testReviewPrompt();
+	testReviewFindings();
+	testUnifiedDiff();
+	testRagText();
+	testRagCode();
+	testRagSearch();
+	await testRagRendering();
+	testWebHelpers();
+	await testWebTurn();
 	await testInvocationLocale();
 	setLocale('es');
 	console.log('\nAll tests passed.');

@@ -1,5 +1,5 @@
 /**
- * Field-name tolerance for `ms365_apply_edits`.
+ * Field-name tolerance for `m365_apply_edits`.
  *
  * Models routinely mix up which text field belongs to which operation — a
  * `create` carrying `newText` instead of `content` was observed discarding a

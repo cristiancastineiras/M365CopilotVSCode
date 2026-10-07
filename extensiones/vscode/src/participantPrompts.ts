@@ -56,6 +56,8 @@ export interface ParticipantPromptInput {
 	readonly history?: readonly HistoryTurn[];
 	/** Workspace-relative paths of other files attached with `#`. */
 	readonly attachedPaths?: readonly string[];
+	/** Project context retrieved from the local index (projectIndex.ts), if any. */
+	readonly projectContext?: string;
 }
 
 const TASK_KEYS: Readonly<Record<ParticipantCommand | 'ask', MessageKey>> = {
@@ -76,6 +78,9 @@ const TASK_KEYS: Readonly<Record<ParticipantCommand | 'ask', MessageKey>> = {
 export function toolsForCommand(command: ParticipantCommand | undefined): readonly string[] {
 	if (command === 'explain') {
 		return [
+			M365_TOOL_NAMES.searchProject,
+			M365_TOOL_NAMES.projectMap,
+			M365_TOOL_NAMES.webSearch,
 			M365_TOOL_NAMES.listFiles,
 			M365_TOOL_NAMES.searchText,
 			M365_TOOL_NAMES.readFile,
@@ -113,6 +118,7 @@ export function buildParticipantFraming(input: ParticipantPromptInput): string {
 	if (input.attachedPaths && input.attachedPaths.length > 0) {
 		sections.push(t('participant.prompt.attached', input.attachedPaths.join(', ')));
 	}
+	if (input.projectContext) sections.push(input.projectContext);
 
 	const request = input.request.trim();
 	sections.push(`${t('participant.prompt.request')}\n${request || t('participant.prompt.noRequest')}`);

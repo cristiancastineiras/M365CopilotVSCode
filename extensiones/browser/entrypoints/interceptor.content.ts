@@ -14,7 +14,7 @@ import {
   withObservedTone,
   withoutExpiredToken,
   type CaptureStore,
-} from '@ms365copilot/core';
+} from '@m365copilot/core';
 import { logger } from '@/utils/logger';
 
 /**
@@ -27,7 +27,7 @@ import { logger } from '@/utils/logger';
  * y el puente (content.ts, mundo ISOLATED) lo reenvía al background.
  *
  * Las decisiones (qué token aceptar, qué frame es el del chat, cuándo volver a
- * escanear) viven en `@ms365copilot/core` (capture.ts) y son las mismas que usa
+ * escanear) viven en `@m365copilot/core` (capture.ts) y son las mismas que usa
  * el userscript de Tampermonkey; aquí sólo queda el pegamento con la página.
  */
 export default defineContentScript({

@@ -23,7 +23,7 @@ está en gris hasta que VS Code tiene el token, entonces se enciende y el token
 recorre la flecha — además del estado del token, del endpoint, de la conexión
 con VS Code y de la renovación, con los botones **Enviar a VS Code**, **Copiar
 token** y **Renovar ahora**. La lógica de captura y la ilustración viven en
-`@ms365copilot/core` y las comparte el userscript de Tampermonkey, así que los
+`@m365copilot/core` y las comparte el userscript de Tampermonkey, así que los
 dos se comportan igual. Está disponible en **inglés y español** (según el idioma del
 navegador), igual que el nombre y la descripción de la extensión.
 
@@ -52,7 +52,7 @@ pnpm test               # política y ciclo de renovación contra un `chrome` fa
 
 Stack: [WXT](https://wxt.dev/) + React 18 + TypeScript. El contrato compartido
 con VS Code (puerto, rutas, tipos del perfil, utilidades de JWT) vive en
-[`@ms365copilot/core`](../../packages/core).
+[`@m365copilot/core`](../../packages/core).
 
 ```
 entrypoints/

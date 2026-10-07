@@ -24,10 +24,10 @@ export const HEALTH_ENDPOINT_PATH = '/health';
 export const M365_CHAT_URL = 'https://m365.cloud.microsoft/chat/';
 
 /** Clave de localStorage donde el interceptor del navegador acumula la captura. */
-export const CAPTURE_STORE_KEY = 'ms365copilot.capture.v1';
+export const CAPTURE_STORE_KEY = 'm365copilot.capture.v1';
 
 /**
  * Marcador de los mensajes `window.postMessage` entre el interceptor (mundo
  * MAIN) y el puente (mundo ISOLATED) de la extensión de navegador.
  */
-export const BRIDGE_MESSAGE_MARKER = '__ms365copilot';
+export const BRIDGE_MESSAGE_MARKER = '__m365copilot';

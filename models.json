@@ -1,5 +1,5 @@
 {
-  "$comment": "Online catalog of M365 Copilot models, downloaded by the VS Code extension on start and every 12 h (setting ms365copilot.models.updateFromCatalog). Add an entry to offer a new model to every user without a release; set \"hidden\": true to retire one. 'tone' is the BizChat tone the web app sends (the browser extension and userscript also detect them automatically). 'name' is shown after 'M365 Copilot · '.",
+  "$comment": "Online catalog of M365 Copilot models, downloaded by the VS Code extension on start and every 12 h (setting m365copilot.models.updateFromCatalog). Add an entry to offer a new model to every user without a release; set \"hidden\": true to retire one. 'tone' is the BizChat tone the web app sends (the browser extension and userscript also detect them automatically). 'name' is shown after 'M365 Copilot · '.",
   "version": 1,
   "updated": "2026-10-07",
   "models": [

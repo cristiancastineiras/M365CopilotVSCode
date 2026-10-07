@@ -4,7 +4,7 @@ import { getLocale, t, type MessageKey } from '@/utils/i18n';
 import { Pill, type Tone } from './components/Pill';
 import { StatusRow } from './components/StatusRow';
 import { ConnectionArt } from './components/ConnectionArt';
-import { connectionState } from '@ms365copilot/core';
+import { connectionState } from '@m365copilot/core';
 
 interface ProfileState {
   hasToken: boolean;

@@ -19,7 +19,7 @@ The popup shows an animated **M365 → VS Code** illustration — the VS Code lo
 stays grey until VS Code has the token, then lights up and the token flows along
 the arrow — plus the token, endpoint, VS Code connection and renewal state, and
 **Send to VS Code**, **Copy token** and **Renew now** buttons. The capture logic
-and the illustration live in `@ms365copilot/core` and are shared with the
+and the illustration live in `@m365copilot/core` and are shared with the
 Tampermonkey userscript, so both behave the same. It is
 available in **English and Spanish** (following the browser's language), as are
 the extension's name and description.
@@ -49,7 +49,7 @@ pnpm test               # refresh policy and refresh cycle against a fake `chrom
 
 Stack: [WXT](https://wxt.dev/) + React 18 + TypeScript. The shared contract with
 VS Code (port, paths, profile types, JWT helpers) lives in
-[`@ms365copilot/core`](../../packages/core).
+[`@m365copilot/core`](../../packages/core).
 
 ```
 entrypoints/

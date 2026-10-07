@@ -1,5 +1,5 @@
 /**
- * Tests de la lógica de captura compartida (@ms365copilot/core, capture.ts):
+ * Tests de la lógica de captura compartida (@m365copilot/core, capture.ts):
  * es la que usan tanto el interceptor de esta extensión como el userscript de
  * Tampermonkey, así que un fallo aquí rompería los dos a la vez.
  *
@@ -30,7 +30,7 @@ import {
   toneOfTemplate,
   withObservedTone,
   withoutExpiredToken,
-} from '@ms365copilot/core';
+} from '@m365copilot/core';
 
 const NOW = Date.UTC(2026, 9, 7, 12, 0, 0);
 const b64url = (value: unknown) =>

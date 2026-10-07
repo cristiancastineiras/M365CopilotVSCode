@@ -28,9 +28,9 @@ const CATALOG_TIMEOUT_MS = 8_000;
 /** Give activation room before going to the network. */
 const FIRST_FETCH_DELAY_MS = 5_000;
 
-const CATALOG_CACHE_KEY = 'ms365copilot.models.catalog';
-const OBSERVED_KEY = 'ms365copilot.models.observed';
-const ANNOUNCED_KEY = 'ms365copilot.models.announced';
+const CATALOG_CACHE_KEY = 'm365copilot.models.catalog';
+const OBSERVED_KEY = 'm365copilot.models.observed';
+const ANNOUNCED_KEY = 'm365copilot.models.announced';
 const MAX_OBSERVED = 20;
 
 const MAX_INPUT_TOKENS = 128_000;
@@ -49,10 +49,10 @@ export function findModel(id: string): CopilotModel | undefined {
 
 /**
  * Tone for answers written straight into the editor — inline edits, the
- * lightbulb fix, the Source Control commit message (`ms365copilot.editor.model`).
+ * lightbulb fix, the Source Control commit message (`m365copilot.editor.model`).
  */
 export function editorTone(): string | null {
-	const id = vscode.workspace.getConfiguration('ms365copilot.editor').get<string>('model', 'ms365-copilot-auto');
+	const id = vscode.workspace.getConfiguration('m365copilot.editor').get<string>('model', 'm365-copilot-auto');
 	return findModel(id)?.tone ?? null;
 }
 
@@ -84,9 +84,9 @@ export class ModelRegistry implements vscode.Disposable {
 		this.disposables.push(
 			store.onDidChange(() => void this.absorbProfile()),
 			vscode.workspace.onDidChangeConfiguration((event) => {
-				if (!event.affectsConfiguration('ms365copilot.models')) return;
+				if (!event.affectsConfiguration('m365copilot.models')) return;
 				this.recompute();
-				if (event.affectsConfiguration('ms365copilot.models.updateFromCatalog') && catalogEnabled()) {
+				if (event.affectsConfiguration('m365copilot.models.updateFromCatalog') && catalogEnabled()) {
 					void this.refreshCatalog();
 				}
 			}),
@@ -145,7 +145,7 @@ export class ModelRegistry implements vscode.Disposable {
 	}
 
 	private recompute(announce = true): void {
-		const config = vscode.workspace.getConfiguration('ms365copilot.models');
+		const config = vscode.workspace.getConfiguration('m365copilot.models');
 		const next = mergeModels({
 			catalog: catalogEnabled() ? (this.memento.get<CatalogCache>(CATALOG_CACHE_KEY)?.entries ?? []) : [],
 			observed: config.get<boolean>('detectFromBrowser', true) ? this.memento.get<string[]>(OBSERVED_KEY, []) : [],
@@ -191,7 +191,7 @@ export function installModelRegistry(
 }
 
 function catalogEnabled(): boolean {
-	return vscode.workspace.getConfiguration('ms365copilot.models').get<boolean>('updateFromCatalog', true);
+	return vscode.workspace.getConfiguration('m365copilot.models').get<boolean>('updateFromCatalog', true);
 }
 
 /** The picker's one-line description of a model. */

@@ -5,7 +5,7 @@ import {
   isTokenUsable,
   profileFromCapture,
   type CopilotProfile,
-} from '@ms365copilot/core';
+} from '@m365copilot/core';
 import { registerHandlers } from '@/utils/messaging';
 import { getStorage, patchStorage, setStorage } from '@/utils/storage';
 import { logger } from '@/utils/logger';

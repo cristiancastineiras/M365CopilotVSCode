@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { M365_CHAT_URL } from '@ms365copilot/core';
+import { M365_CHAT_URL } from '@m365copilot/core';
 import { isTokenUsable, minutesUntilExpiry } from './profile';
 import type { ProfileStore } from './secrets';
 import { t } from './i18n';
@@ -78,7 +78,7 @@ export class TokenWatcher implements vscode.Disposable {
 			level === 'warning'
 				? await vscode.window.showWarningMessage(message, paste, open)
 				: await vscode.window.showInformationMessage(message, paste, open);
-		if (picked === paste) await vscode.commands.executeCommand('ms365copilot.pasteProfile');
+		if (picked === paste) await vscode.commands.executeCommand('m365copilot.pasteProfile');
 		if (picked === open) await vscode.env.openExternal(vscode.Uri.parse(M365_CHAT_URL));
 	}
 
@@ -89,5 +89,5 @@ export class TokenWatcher implements vscode.Disposable {
 }
 
 function notificationsEnabled(): boolean {
-	return vscode.workspace.getConfiguration('ms365copilot.notifications').get<boolean>('tokenExpiry', true);
+	return vscode.workspace.getConfiguration('m365copilot.notifications').get<boolean>('tokenExpiry', true);
 }

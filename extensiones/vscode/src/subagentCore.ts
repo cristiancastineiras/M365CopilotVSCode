@@ -24,7 +24,7 @@ import { t } from './i18n';
 /**
  * Cola FIFO con un máximo de ejecuciones simultáneas. Se usa dos veces: para
  * acotar cuántos sub-agentes corren a la vez, y como mutex (límite 1) para
- * serializar `ms365_apply_edits`/`ms365_run_command` entre sub-agentes
+ * serializar `m365_apply_edits`/`m365_run_command` entre sub-agentes
  * concurrentes — `tools/terminal.ts` cachea UN terminal por cwd y
  * `tools/writeFile.ts` mantiene estado mutable compartido, así que dos
  * llamadas mutantes a la vez podrían entrelazar salida de terminal o pisarse
@@ -82,7 +82,7 @@ export interface ToolLoopParams {
 	readonly tone: string | null;
 	readonly maxSteps: number;
 	readonly signal: AbortSignal;
-	/** Herramientas ofrecidas al bucle (normalmente las 9 de workspace, nunca `ms365_spawn_agents`). */
+	/** Herramientas ofrecidas al bucle (normalmente las de workspace, nunca `m365_spawn_agents`). */
 	readonly offeredTools: readonly OfferedTool[];
 	readonly executeTool: SubagentToolExecutor;
 	readonly onStep?: (info: SubagentStepInfo) => void;

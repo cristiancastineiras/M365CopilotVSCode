@@ -20,7 +20,7 @@ importers:
 
   extensiones/browser:
     dependencies:
-      '@ms365copilot/core':
+      '@m365copilot/core':
         specifier: workspace:*
         version: link:../../packages/core
       react:
@@ -57,7 +57,7 @@ importers:
 
   extensiones/vscode:
     dependencies:
-      '@ms365copilot/core':
+      '@m365copilot/core':
         specifier: workspace:*
         version: link:../../packages/core
       ws:
