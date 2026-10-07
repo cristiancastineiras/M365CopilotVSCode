@@ -1,0 +1,47 @@
+{
+  "$comment": "Online catalog of M365 Copilot models, downloaded by the VS Code extension on start and every 12 h (setting ms365copilot.models.updateFromCatalog). Add an entry to offer a new model to every user without a release; set \"hidden\": true to retire one. 'tone' is the BizChat tone the web app sends (the browser extension and userscript also detect them automatically). 'name' is shown after 'M365 Copilot · '.",
+  "version": 1,
+  "updated": "2026-10-07",
+  "models": [
+    {
+      "tone": "Gpt_5_6_Chat",
+      "name": "GPT 5.6",
+      "detail": {
+        "en": "GPT 5.6 (fast answers) — M365 Copilot’s preferred model since July 2026.",
+        "es": "GPT 5.6 (respuestas rápidas) — el modelo preferido de M365 Copilot desde julio de 2026."
+      }
+    },
+    {
+      "tone": "Gpt_5_6_Reasoning",
+      "name": "GPT 5.6 Reasoning",
+      "detail": {
+        "en": "GPT 5.6 in reasoning mode (“Think deeper”): more elaborate answers for hard work.",
+        "es": "GPT 5.6 en modo razonamiento («Think deeper»): respuestas más elaboradas para trabajo difícil."
+      }
+    },
+    {
+      "tone": "Gpt_5_5_Chat",
+      "name": "GPT",
+      "detail": {
+        "en": "Forces the GPT model of the Copilot backend.",
+        "es": "Fuerza el modelo GPT del backend de Copilot."
+      }
+    },
+    {
+      "tone": "Gpt_5_5_Reasoning",
+      "name": "Reasoning",
+      "detail": {
+        "en": "Reasoning mode (slower, more elaborate answers).",
+        "es": "Modo de razonamiento (más lento, respuestas más elaboradas)."
+      }
+    },
+    {
+      "tone": "Claude_Sonnet",
+      "name": "Claude Sonnet",
+      "detail": {
+        "en": "Forces Claude Sonnet on the Copilot backend.",
+        "es": "Fuerza Claude Sonnet en el backend de Copilot."
+      }
+    }
+  ]
+}

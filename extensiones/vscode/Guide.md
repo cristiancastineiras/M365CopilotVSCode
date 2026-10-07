@@ -6,9 +6,10 @@ There are two ways to get your Microsoft 365 Copilot token into VS Code:
 
 - **Option A — browser extension (recommended).** It captures the token, renews
   it before it expires and sends it to VS Code without any copy and paste.
-- **Option B — Tampermonkey userscript.** It shows a panel on the M365 Copilot
-  website from which you copy the token and paste it into VS Code by hand (and
-  again when it expires, roughly every hour).
+- **Option B — Tampermonkey userscript.** It does the same capture as the
+  browser extension (they share the code) and also sends the token to VS Code by
+  itself; it also shows a small panel with the connection state and buttons to
+  copy the token by hand.
 
 > VS Code also has the M365 Copilot **Get started** walkthrough (*Help →
 > Welcome*, or from the menu behind the **M365** status bar item) with these
@@ -42,8 +43,11 @@ tested on Chrome and Edge.
 - [Mozilla Firefox](https://addons.mozilla.org/en-US/firefox/addon/tampermonkey/)
 - [Microsoft Edge](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
 
-Then add the userscript that captures the Microsoft 365 Copilot access token,
-endpoint and invocation template:
+Then add the userscript. The simplest way is to open
+[this link](https://raw.githubusercontent.com/cristiancastineiras/M365CopilotVSCode/main/extensiones/vscode/ms365copilot-token.user.js) with Tampermonkey installed: it offers **Install**, and from
+then on the script updates itself when a new version is released.
+
+You can also install it by hand:
 
 1. Pin the extension in the browser's extension bar and click it.
 
@@ -64,21 +68,37 @@ Once installed or saved, it shows up among the installed scripts:
 The userscript's panel is in English or Spanish depending on your browser's
 language.
 
+> If you had an older version of the userscript installed, replace it with the
+> new one (or install it from the link above): the old one stopped picking up
+> the token as soon as it had one, and could only copy it by hand.
+
 ## 3. Option B: capture the token
 
 With the script installed and enabled, go to [Microsoft 365 Copilot](https://m365.cloud.microsoft/chat/).
 
-A box like this one should appear in the bottom-right corner of the page:
+The userscript's panel appears in the bottom-right corner. Send a "hello" in
+the chat so it captures the token.
 
-![Initial state of the userscript](imgs/primer-inicio-usercript.png)
+**The first time, Tampermonkey asks you to let the script connect to
+`localhost`.** Click **Always allow**: that is the VS Code extension's local
+server, and it is what lets the token reach VS Code without copy and paste.
 
-To make sure everything was captured, you can send a "hello" in the chat. If
-the three dots turn green, it is ready.
+The panel's illustration tells you where you are:
 
-![Token copied](imgs/copiado-token-perfil.png)
+<img src="imgs/connection-states.png" width="260" alt="Connection states: waiting for the token, token captured, connected to VS Code and token expired">
 
-You can copy the full profile or just the token: the extension only uses the
-access token, so either works. **Copy token only** is the simplest.
+1. **Waiting for the token**: both logos grey; the M365 one "breathes".
+2. **Token ready**: the M365 logo lights up, but VS Code stays grey because it is not answering yet (open it with the extension enabled).
+3. **Connected to VS Code**: the VS Code logo lights up and the token flows along the arrow. Done — it is sent again by itself every time it is renewed.
+4. **Token expired**: reload the page (the panel's button does it) or sign in again.
+
+The panel can be minimized (–) to a small icon, and the Tampermonkey menu has
+**Send token to VS Code now**, **Show panel** and the option to renew a hidden
+tab whose token expired by itself (by reloading it).
+
+If you do not grant the `localhost` permission, the panel still has **Copy
+token** and **Copy profile**: paste either into VS Code with **M365 Copilot:
+Paste profile or token**.
 
 ## 4. Install the VS Code extension
 
@@ -124,19 +144,26 @@ You can ask a coding question:
 
 ![Example of a coding question](imgs/prompt-pregunta.png)
 
-Or ask for a code edit: the changes appear highlighted in the editor with
-**Keep / Undo** above them (and in the editor title bar) so you can accept or
-revert them.
+Or ask for a code edit: each changed block appears highlighted in the editor
+with its own **Keep / Undo** above it (and the whole-file actions, with ↑ / ↓ to
+jump between changes, in the editor title bar) so you can accept or revert it
+block by block.
 
 ![Example of a code edit](imgs/ejemplo-edicion-codigo.png)
 
 From the editor itself:
 
-- **Right-click → M365 Copilot**: explain, ask about, fix, document or generate
-  tests for the selected code (or the function the cursor is in).
-- **Lightbulb (`Ctrl + .`)** on an error: **Fix with M365 Copilot**.
+- **`Ctrl + Shift + Alt + I`** with code selected (or the cursor inside a
+  function): type an instruction ("add error handling") and the change is
+  applied right there, with Keep / Undo.
+- **Right-click → M365 Copilot**: edit, explain, ask about, fix, document or
+  generate tests for the selected code (or the function the cursor is in).
+- **Lightbulb (`Ctrl + .`)** on an error: **Fix with M365 Copilot**, which fixes
+  it in place.
 - **Source Control**: the ✨ button in the title bar writes the commit message
   with M365 Copilot.
+- **Terminal**: when a command fails, right-click in the terminal → **Explain
+  last terminal command**.
 
 ## 7. Language
 

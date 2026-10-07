@@ -8,6 +8,15 @@ Monorepo (pnpm workspaces + Turborepo) of the pieces that bring your
 inline completions — and keep its token in sync. Everything is available in
 **English and Spanish**.
 
+> **Legal Notice**
+>
+> M365CopilotVSCode is an independent open source project and is not affiliated with, endorsed by, sponsored by, or approved by Microsoft Corporation.
+>
+> Users are responsible for complying with all applicable Microsoft terms, licenses, and policies when using this software.
+>
+> This software is provided "AS IS" without warranties of any kind.
+
+
 ```
 .
 ├── extensiones/
@@ -50,6 +59,14 @@ Requires Node ≥ 22.18 and pnpm 10.
   `public/_locales/`, UI text in `utils/i18n.ts`.
 - **Userscript:** follows the browser's language.
 - **Docs:** every README/guide has an English and a Spanish version.
+
+## Updating the models
+
+[`models.json`](models.json) is the online model catalog the VS Code extension
+downloads (on start and every 12 h): add an entry — `tone` as the M365 Copilot
+web app sends it, plus `name` and an `en`/`es` `detail` — and push to `main`;
+every user gets it without a release. `"hidden": true` retires a model, even a
+built-in one. The tests check that the file parses.
 
 ## Releasing
 

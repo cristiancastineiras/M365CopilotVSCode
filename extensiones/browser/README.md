@@ -15,8 +15,12 @@ sync with VS Code, so you never copy and paste a token by hand.
   for a fresh one, then reloads that tab, then opens one in the background if
   there is none — with back-off, and a red badge when you have to sign in.
 
-The popup shows the token, endpoint, VS Code connection and renewal state, and
-has **Send to VS Code**, **Copy token** and **Renew now** buttons. It is
+The popup shows an animated **M365 → VS Code** illustration — the VS Code logo
+stays grey until VS Code has the token, then lights up and the token flows along
+the arrow — plus the token, endpoint, VS Code connection and renewal state, and
+**Send to VS Code**, **Copy token** and **Renew now** buttons. The capture logic
+and the illustration live in `@ms365copilot/core` and are shared with the
+Tampermonkey userscript, so both behave the same. It is
 available in **English and Spanish** (following the browser's language), as are
 the extension's name and description.
 

@@ -1,6 +1,6 @@
 {
   "name": "m365-copilot-vscode-extension",
-  "version": "1.3.0",
+  "version": "2.0.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -9,10 +9,10 @@
     "build": "wxt build",
     "build:firefox": "wxt build -b firefox",
     "typecheck": "tsc --noEmit",
-    "zip": "wxt zip && node -e \"require('fs').renameSync('../../releases/chrome/m365-copilot-vscode-extension-0.0.1-chrome.zip', '../../releases/chrome/m365-copilot-vscode-extension-chrome.zip')\"",
-    "zip:firefox": "wxt zip -b firefox -c wxt.config.firefox.ts && node -e \"require('fs').renameSync('../../releases/firefox/m365-copilot-vscode-extension-0.0.1-firefox.zip', '../../releases/firefox/m365-copilot-vscode-extension-firefox.zip')\"",
+    "zip": "wxt zip && node scripts/rename-zip.mjs ../../releases/chrome chrome m365-copilot-vscode-extension-chrome.zip",
+    "zip:firefox": "wxt zip -b firefox -c wxt.config.firefox.ts && node scripts/rename-zip.mjs ../../releases/firefox firefox m365-copilot-vscode-extension-firefox.zip",
     "postinstall": "wxt prepare",
-    "test": "node --experimental-strip-types test/refreshPolicy.mts && node --experimental-strip-types --import ./test/register.mjs test/refreshCycle.mts"
+    "test": "node --experimental-strip-types --import ./test/register.mjs test/refreshPolicy.mts && node --experimental-strip-types --import ./test/register.mjs test/refreshCycle.mts && node --experimental-strip-types --import ./test/register.mjs test/capture.mts"
   },
   "dependencies": {
     "@ms365copilot/core": "workspace:*",

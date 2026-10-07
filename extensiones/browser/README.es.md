@@ -18,9 +18,13 @@ mano.
   segundo plano — con backoff, y un badge rojo cuando hace falta que inicies
   sesión.
 
-El popup muestra el estado del token, del endpoint, de la conexión con VS Code y
-de la renovación, con los botones **Enviar a VS Code**, **Copiar token** y
-**Renovar ahora**. Está disponible en **inglés y español** (según el idioma del
+El popup muestra una ilustración animada **M365 → VS Code** — el logo de VS Code
+está en gris hasta que VS Code tiene el token, entonces se enciende y el token
+recorre la flecha — además del estado del token, del endpoint, de la conexión
+con VS Code y de la renovación, con los botones **Enviar a VS Code**, **Copiar
+token** y **Renovar ahora**. La lógica de captura y la ilustración viven en
+`@ms365copilot/core` y las comparte el userscript de Tampermonkey, así que los
+dos se comportan igual. Está disponible en **inglés y español** (según el idioma del
 navegador), igual que el nombre y la descripción de la extensión.
 
 ## Instalación

@@ -13,7 +13,8 @@ import http from 'node:http';
 import { streamCopilotTurn, streamCopilotTurnWithRetry, CopilotAuthError } from '../src/client.ts';
 
 import { MarkdownStreamFormatter } from '../src/markdown.ts';
-import { parsePastedProfile } from '../src/profile.ts';
+import { looksLikeProfile, parsePastedProfile } from '../src/profile.ts';
+import { buildInlineEditPrompt, extractEditedCode, reindent } from '../src/inlineEditPrompt.ts';
 import {
 	M365_TOOL_NAMES,
 	ToolCallDecoder,
@@ -38,6 +39,16 @@ import {
 	toolsForCommand,
 } from '../src/participantPrompts.ts';
 import { readFileSync } from 'node:fs';
+import {
+	BUILTIN_MODELS,
+	mergeModels,
+	modelIdForTone,
+	parseCustomModels,
+	parseModelCatalog,
+	prettyTone,
+	unannounced,
+} from '../src/modelCatalog.ts';
+import { acceptHunk, diffLines, revertHunkEdit, splitLines, type Hunk, type LineEdit } from '../tools/lineDiff.ts';
 import type { CopilotProfile } from '../src/profile.ts';
 
 const RS = String.fromCharCode(0x1e);
@@ -1362,6 +1373,324 @@ async function testInvocationLocale() {
 	console.log('  ✓ la invocación a BizChat envía locale en-US / es-ES según el idioma');
 }
 
+
+// ---- lineDiff.ts (per-hunk review) ------------------------------------------
+
+/** Apply a line/character edit to a text, like VS Code would. */
+function applyLineEdit(text: string, edit: LineEdit): string {
+	const offsetOf = (line: number, character: number) => {
+		let offset = 0;
+		const pattern = /\r\n|\r|\n/g;
+		for (let current = 0; current < line; current += 1) {
+			const match = pattern.exec(text);
+			if (!match) throw new Error(`line ${line} out of range`);
+			offset = match.index + match[0].length;
+		}
+		return offset + character;
+	};
+	const start = offsetOf(edit.startLine, edit.startCharacter);
+	const end = offsetOf(edit.endLine, edit.endCharacter);
+	return text.slice(0, start) + edit.text + text.slice(end);
+}
+
+function lcsLength(a: readonly string[], b: readonly string[]): number {
+	const row = new Array<number>(b.length + 1).fill(0);
+	for (let i = 1; i <= a.length; i += 1) {
+		let diagonal = 0;
+		for (let j = 1; j <= b.length; j += 1) {
+			const above = row[j];
+			row[j] = a[i - 1] === b[j - 1] ? diagonal + 1 : Math.max(row[j], row[j - 1]);
+			diagonal = above;
+		}
+	}
+	return row[b.length];
+}
+
+/** Small deterministic PRNG so failures are reproducible. */
+function prng(seed: number) {
+	let state = seed >>> 0;
+	return () => {
+		state = (state * 1664525 + 1013904223) >>> 0;
+		return state / 2 ** 32;
+	};
+}
+
+function randomEdit(random: () => number, lines: string[]): string[] {
+	const out = [...lines];
+	const operations = 1 + Math.floor(random() * 4);
+	for (let i = 0; i < operations; i += 1) {
+		const at = Math.floor(random() * (out.length + 1));
+		const roll = random();
+		if (roll < 0.33 && out.length > 0) out.splice(Math.min(at, out.length - 1), 1 + Math.floor(random() * 2));
+		else if (roll < 0.66) out.splice(at, 0, `new ${Math.floor(random() * 5)}`);
+		else if (out.length > 0) out[Math.min(at, out.length - 1)] = `changed ${Math.floor(random() * 5)}`;
+	}
+	return out;
+}
+
+function testLineDiff() {
+	// Two far-apart changes are two hunks, not one region painting everything between.
+	const before = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].join('\n');
+	const after = ['a', 'B', 'c', 'd', 'e', 'f', 'g', 'h'].join('\n');
+	assert.deepEqual(diffLines(before, after), [
+		{ oldStart: 1, oldLength: 1, newStart: 1, newLength: 1 },
+		{ oldStart: 7, oldLength: 0, newStart: 7, newLength: 1 },
+	]);
+	assert.deepEqual(diffLines(before, before), []);
+	// An EOL-only difference is not a change.
+	assert.deepEqual(diffLines('a\nb\n', 'a\r\nb\r\n'), []);
+
+	// CRLF files: reverting restores CRLF line breaks, not LF.
+	const crlfBase = 'one\r\ntwo\r\nthree\r\n';
+	const crlfNow = 'one\r\nthree\r\n';
+	const [removed] = diffLines(crlfBase, crlfNow);
+	assert.equal(applyLineEdit(crlfNow, revertHunkEdit(crlfNow, crlfBase, removed)), crlfBase);
+
+	const random = prng(365);
+	for (let round = 0; round < 400; round += 1) {
+		const size = Math.floor(random() * 12);
+		const base = Array.from({ length: size }, () => `line ${Math.floor(random() * 6)}`);
+		const edited = randomEdit(random, base);
+		const trailing = random() < 0.5 ? '\n' : '';
+		const baseText = base.join('\n') + (base.length > 0 ? trailing : '');
+		const editedText = edited.join('\n') + (edited.length > 0 ? trailing : '');
+		const hunks = diffLines(baseText, editedText);
+		const label = `round ${round}: ${JSON.stringify(baseText)} → ${JSON.stringify(editedText)}`;
+
+		// Sorted and non-overlapping on both sides.
+		for (let i = 1; i < hunks.length; i += 1) {
+			assert.ok(hunks[i].oldStart >= hunks[i - 1].oldStart + hunks[i - 1].oldLength, label);
+			assert.ok(hunks[i].newStart > hunks[i - 1].newStart + hunks[i - 1].newLength - 1, label);
+		}
+		// Minimal: as many changed lines as an LCS says there must be.
+		const oldLines = splitLines(baseText);
+		const newLines = splitLines(editedText);
+		const changed = hunks.reduce((total, hunk) => total + hunk.oldLength + hunk.newLength, 0);
+		assert.equal(changed, oldLines.length + newLines.length - 2 * lcsLength(oldLines, newLines), label);
+
+		// Undo every hunk, last first (earlier coordinates stay valid) → the baseline.
+		let reverted = editedText;
+		for (const hunk of [...hunks].reverse()) reverted = applyLineEdit(reverted, revertHunkEdit(reverted, baseText, hunk));
+		assert.equal(reverted, baseText, `${label} (undo all)`);
+
+		// Undo ONE hunk, re-diff: the other hunks are still a valid edit script,
+		// so the minimal one costs at most that. (Not "exactly hunks - 1": a diff
+		// is not unique, and re-aligning may merge or split the remaining hunks.)
+		if (hunks.length > 1) {
+			const pick = hunks[Math.floor(random() * hunks.length)];
+			const partly = applyLineEdit(editedText, revertHunkEdit(editedText, baseText, pick));
+			const left = diffLines(baseText, partly).reduce((total, hunk) => total + hunk.oldLength + hunk.newLength, 0);
+			assert.ok(left <= changed - pick.oldLength - pick.newLength, `${label} (undo one)`);
+			assert.ok(left > 0, `${label} (undo one left something)`);
+		}
+
+		// Keep hunks one at a time, re-diffing like the review does → no change left.
+		let baseline = baseText;
+		for (let guard = 0; guard < 50; guard += 1) {
+			const remaining: Hunk[] = diffLines(baseline, editedText);
+			if (remaining.length === 0) break;
+			baseline = acceptHunk(baseline, editedText, remaining[Math.floor(random() * remaining.length)]);
+		}
+		assert.deepEqual(diffLines(baseline, editedText), [], `${label} (keep all)`);
+	}
+
+	// A huge rewrite falls back to one hunk instead of an expensive diff.
+	const big = Array.from({ length: 4_000 }, (_, i) => `a${i}`).join('\n');
+	const rewritten = Array.from({ length: 4_000 }, (_, i) => `b${i}`).join('\n');
+	assert.deepEqual(diffLines(big, rewritten), [{ oldStart: 0, oldLength: 4_000, newStart: 0, newLength: 4_000 }]);
+	console.log('  ✓ diff por bloques: mínimo, deshacer/aceptar por bloque converge, CRLF y caída a bloque único');
+}
+
+
+// ---- inline edit / terminal / clipboard ------------------------------------
+
+function testInlineEdit() {
+	setLocale('en');
+	const prompt = buildInlineEditPrompt({
+		instruction: '  add a null check  ',
+		relativePath: 'src/a.ts',
+		languageId: 'typescript',
+		startLine: 3,
+		endLine: 5,
+		code: '  function f(x) {\n    return x.y;\n  }',
+		before: 'class A {',
+		after: '}',
+		diagnostics: ['4:12 [error] (ts) Object is possibly null'],
+	});
+	assert.match(prompt, /You are a code editor inside VS Code/);
+	assert.match(prompt, /File: src\/a\.ts \(typescript\)/);
+	assert.match(prompt, /Instruction:\nadd a null check\n/);
+	assert.match(prompt, /- 4:12 \[error\] \(ts\) Object is possibly null/);
+	assert.match(prompt, /Context BEFORE[^\n]*\n```typescript\nclass A \{\n```/);
+	assert.match(prompt, /CODE TO EDIT \(lines 3-5\):\n```typescript\n  function f\(x\) \{/);
+	assert.match(prompt, /Context AFTER[^\n]*\n```typescript\n\}\n```/);
+	setLocale('es');
+	assert.match(buildInlineEditPrompt({ instruction: 'x', relativePath: 'a', languageId: 'js', startLine: 1, endLine: 1, code: 'a', before: '', after: '' }), /CÓDIGO A EDITAR \(líneas 1-1\)/);
+
+	const original = '  function f(x) {\n    return x.y;\n  }';
+	// The usual shape: one fenced block, maybe with prose around it.
+	assert.equal(
+		extractEditedCode('Here it is:\n```ts\n  function f(x) {\n    return x?.y;\n  }\n```\nDone.', original),
+		'  function f(x) {\n    return x?.y;\n  }',
+	);
+	// Flush-left answer for an indented block: re-indented by the block's base indent.
+	assert.equal(
+		extractEditedCode('```ts\nfunction f(x) {\n  return x?.y;\n}\n```', original),
+		'  function f(x) {\n    return x?.y;\n  }',
+	);
+	// No fence at all, with a chatty first line.
+	assert.equal(extractEditedCode('Updated code:\n  const a = 1;', '  const a = 0;'), '  const a = 1;');
+	// Cut-off answer (no closing fence) still yields the code.
+	assert.equal(extractEditedCode('```js\nconst a = 2;\nconst b = 3;', 'const a = 1;'), 'const a = 2;\nconst b = 3;');
+	// CRLF answers are normalised; empty answers are rejected.
+	assert.equal(extractEditedCode('```\r\nx();\r\n```', 'y();'), 'x();');
+	assert.equal(extractEditedCode('```\n\n```', 'y();'), null);
+	assert.equal(extractEditedCode('   ', 'y();'), null);
+	// reindent leaves already-indented answers and flush-left originals alone.
+	assert.equal(reindent('    a();', '  b();'), '    a();');
+	assert.equal(reindent('a();\n\nb();', 'c();'), 'a();\n\nb();');
+	assert.equal(reindent('a();\n\nb();', '\tc();'), '\ta();\n\n\tb();');
+	console.log('  ✓ edición en línea: prompt con contexto/diagnósticos y extracción robusta de la respuesta');
+}
+
+function testTerminalPrompt() {
+	setLocale('en');
+	const framing = buildParticipantFraming({
+		command: 'terminal',
+		request: '',
+		terminal: {
+			terminalName: 'bash',
+			commandLine: 'npm test',
+			cwd: '/repo',
+			exitCode: 1,
+			running: false,
+			output: 'FAIL src/a.test.ts\n  expected 1, got 2',
+			truncatedChars: 120,
+		},
+	});
+	assert.match(framing, /Explain why the terminal command below failed/);
+	assert.match(framing, /Last command in the terminal “bash”:\n\$ npm test\nExit code: 1 · cwd: \/repo/);
+	assert.match(framing, /\[start of the output omitted: 120 characters\]\n```text\nFAIL src\/a\.test\.ts/);
+	assert.equal(maxStepsForCommand('terminal'), 6);
+	assert.equal(asParticipantCommand('terminal'), 'terminal');
+
+	const running = buildParticipantFraming({
+		command: 'terminal',
+		request: 'why so slow?',
+		terminal: { terminalName: 'pwsh', commandLine: 'build', cwd: undefined, exitCode: undefined, running: true, output: '', truncatedChars: 0 },
+	});
+	assert.match(running, /\$ build\nStill running\n\(no output\)/);
+	setLocale('es');
+	console.log('  ✓ prompt de @m365 /terminal: comando, código de salida, cwd y salida recortada');
+}
+
+function testClipboardDetection() {
+	assert.equal(looksLikeProfile(fakeJwt()), true);
+	assert.equal(looksLikeProfile(`  ${fakeJwt()}\n`), true);
+	assert.equal(looksLikeProfile(JSON.stringify({ accessToken: fakeJwt(), endpoint: 'wss://x' }, null, 2)), true);
+	assert.equal(looksLikeProfile('just some copied text'), false);
+	assert.equal(looksLikeProfile('{"accessToken": 42}'), false);
+	assert.equal(looksLikeProfile(''), false);
+	console.log('  ✓ detecta un token o perfil en el portapapeles (y nada más)');
+}
+
+
+// ---- modelCatalog.ts (dynamic models) ---------------------------------------
+
+function testModelCatalog() {
+	assert.equal(prettyTone('Gpt_5_6_Reasoning'), 'GPT 5.6 Reasoning');
+	assert.equal(prettyTone('Gpt_5_7_Chat'), 'GPT 5.7');
+	assert.equal(prettyTone('Claude_Opus_4_1'), 'Claude Opus 4.1');
+	assert.equal(prettyTone('Claude_Sonnet'), 'Claude Sonnet');
+	assert.equal(prettyTone('magic'), 'Magic');
+	assert.equal(modelIdForTone('Gpt_5_7_Chat'), 'ms365-copilot-tone-gpt-5-7-chat');
+
+	// models.json: shape validated, junk dropped, detail as text or {en, es}.
+	assert.equal(parseModelCatalog({ nope: [] }), null);
+	assert.equal(parseModelCatalog(null), null);
+	assert.deepEqual(
+		parseModelCatalog({
+			models: [
+				{ tone: 'Gpt_5_7_Chat', name: '  GPT 5.7  ', detail: { en: 'New', es: 'Nuevo' } },
+				{ tone: 'bad tone with spaces' },
+				{ tone: '<script>' },
+				'Claude_Opus',
+				{ tone: 'Gpt_5_5_Chat', hidden: true },
+				{ tone: 'Phi_5', detail: 'Only text' },
+			],
+		}),
+		[
+			{ tone: 'Gpt_5_7_Chat', name: 'GPT 5.7', detail: { en: 'New', es: 'Nuevo' }, hidden: false },
+			{ tone: 'Claude_Opus' },
+			{ tone: 'Gpt_5_5_Chat', name: undefined, detail: undefined, hidden: true },
+			{ tone: 'Phi_5', name: undefined, detail: { en: 'Only text', es: 'Only text' }, hidden: false },
+		],
+	);
+	assert.deepEqual(parseCustomModels(['Gpt_5_8_Chat', { tone: 'X_1', name: 'X' }, 42, { name: 'no tone' }]), [
+		{ tone: 'Gpt_5_8_Chat', hidden: false },
+		{ tone: 'X_1', name: 'X', detail: undefined, hidden: false },
+	]);
+	assert.deepEqual(parseCustomModels('nope'), []);
+
+	// Only built-ins: exactly the shipped list, Auto first.
+	const builtinOnly = mergeModels({ catalog: [], observed: [], custom: [] });
+	assert.deepEqual(builtinOnly.map((model) => model.id), BUILTIN_MODELS.map((model) => model.id));
+	assert.equal(builtinOnly[0].tone, null);
+
+	const merged = mergeModels({
+		catalog: [
+			{ tone: 'Gpt_5_7_Chat', name: 'GPT 5.7', detail: { en: 'Newest', es: 'El más nuevo' } },
+			{ tone: 'Gpt_5_5_Chat', hidden: true },
+			{ tone: 'Claude_Sonnet', name: 'Claude Sonnet 5' },
+		],
+		observed: ['Gpt_5_6_Chat', 'Claude_Opus_4_1', 'Gpt_5_7_Chat', 'not valid!'],
+		custom: [{ tone: 'Gpt_5_5_Chat', name: 'GPT 5.5 (mine)' }, { tone: 'Exp_Model' }],
+	});
+	const byTone = new Map(merged.map((model) => [model.tone, model]));
+	assert.equal(merged[0].id, 'ms365-copilot-auto', 'Auto stays first');
+	// A catalog rename keeps the built-in id (settings that point to it keep working).
+	assert.equal(byTone.get('Claude_Sonnet')?.name, 'M365 Copilot · Claude Sonnet 5');
+	assert.equal(byTone.get('Claude_Sonnet')?.id, 'ms365-copilot-claude');
+	// New from the catalog, with its own description.
+	assert.equal(byTone.get('Gpt_5_7_Chat')?.source, 'catalog');
+	assert.deepEqual(byTone.get('Gpt_5_7_Chat')?.detail, { en: 'Newest', es: 'El más nuevo' });
+	// Detected in the web app: readable name; already-known tones are not duplicated.
+	assert.equal(byTone.get('Claude_Opus_4_1')?.name, 'M365 Copilot · Claude Opus 4.1');
+	assert.equal(byTone.get('Claude_Opus_4_1')?.source, 'observed');
+	assert.equal(merged.filter((model) => model.tone === 'Gpt_5_6_Chat').length, 1);
+	assert.equal(byTone.has('not valid!'), false);
+	// Hidden by the catalog, but the user listed it: custom wins, with its name.
+	assert.equal(byTone.get('Gpt_5_5_Chat')?.name, 'M365 Copilot · GPT 5.5 (mine)');
+	assert.equal(byTone.get('Exp_Model')?.source, 'custom');
+	// Hidden by the catalog and nobody asked for it back: gone.
+	assert.equal(
+		mergeModels({ catalog: [{ tone: 'Gpt_5_5_Reasoning', hidden: true }], observed: [], custom: [] }).some(
+			(model) => model.tone === 'Gpt_5_5_Reasoning',
+		),
+		false,
+	);
+	// Bounded, whatever the sources say.
+	const flood = Array.from({ length: 80 }, (_, i) => `Model_${i}`);
+	assert.ok(mergeModels({ catalog: [], observed: flood, custom: [] }).length <= 30);
+
+	// Announced once: built-ins never, new ones until they are known.
+	assert.deepEqual(unannounced(merged, new Set()).map((model) => model.tone), ['Gpt_5_7_Chat', 'Claude_Opus_4_1', 'Exp_Model']);
+	assert.deepEqual(unannounced(merged, new Set(['Gpt_5_7_Chat', 'Claude_Opus_4_1', 'Exp_Model'])), []);
+
+	// The catalog published in the repository parses and only lists valid tones.
+	const published = parseModelCatalog(JSON.parse(readFileSync(new URL('../../../models.json', import.meta.url), 'utf8')));
+	assert.ok(published && published.length > 0, 'models.json must parse');
+	for (const entry of published!) assert.ok(entry.name, `${entry.tone} needs a name`);
+
+	// The profile the browser side sends keeps the observed tones (and only valid ones).
+	const profile = parsePastedProfile(
+		JSON.stringify({ accessToken: fakeJwt(), observedTones: ['Gpt_5_7_Chat', 'bad tone', 7, 'Claude_Opus'] }),
+	);
+	assert.deepEqual(profile.observedTones, ['Gpt_5_7_Chat', 'Claude_Opus']);
+	assert.equal(parsePastedProfile(fakeJwt()).observedTones, undefined);
+	console.log('  ✓ modelos dinámicos: catálogo validado, detectados en la web, propios, ocultar retirados y anuncio único');
+}
+
 async function main() {
 	// The assertions below were written against the Spanish catalog (the
 	// extension's original language); the i18n tests switch locale themselves
@@ -1400,9 +1729,15 @@ async function main() {
 	await testSubagentLoopWallClock();
 	testClipClosesDanglingFence();
 	await testToolLoopStreamsProse();
+	console.log('lineDiff.ts');
+	testLineDiff();
 	console.log('participant / editor');
 	testParticipantPrompts();
 	testCommitMessageGeneration();
+	testInlineEdit();
+	testTerminalPrompt();
+	testClipboardDetection();
+	testModelCatalog();
 	await testInvocationLocale();
 	setLocale('es');
 	console.log('\nAll tests passed.');

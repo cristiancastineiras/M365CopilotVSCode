@@ -10,7 +10,7 @@
  * viven en `@ms365copilot/core`; aquí sólo queda el parseo de lo pegado, que
  * es específico de VS Code.
  */
-import { extractClaims, type CopilotProfile, type TokenClaims } from '@ms365copilot/core';
+import { extractClaims, TONE_PATTERN, type CopilotProfile, type TokenClaims } from '@ms365copilot/core';
 import { t } from './i18n';
 
 export type { CopilotProfile, TokenClaims } from '@ms365copilot/core';
@@ -21,6 +21,13 @@ const DEFAULT_UA =
 	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 
 export class ProfileParseError extends Error {}
+
+/** A bare JWT or a JSON profile with an access token — what the browser side copies. */
+export function looksLikeProfile(text: string): boolean {
+	const value = text.trim();
+	if (/^ey[\w-]+\.[\w-]+\.[\w-]+$/.test(value)) return true;
+	return value.startsWith('{') && /"(accessToken|access_token|token)"\s*:\s*"ey/.test(value);
+}
 
 /**
  * Parsea lo que el usuario pegó en un {@link CopilotProfile} normalizado.
@@ -82,5 +89,15 @@ function normalize(record: Record<string, unknown>, token?: string): CopilotProf
 		claims,
 		capturedAt:
 			typeof record.capturedAt === 'string' ? record.capturedAt : new Date().toISOString(),
+		...observedTonesOf(record),
 	};
+}
+
+/** The models the web app used (sent by the browser side), kept only if they look like tones. */
+function observedTonesOf(record: Record<string, unknown>): Pick<CopilotProfile, 'observedTones'> {
+	if (!Array.isArray(record.observedTones)) return {};
+	const tones = record.observedTones
+		.filter((tone): tone is string => typeof tone === 'string' && TONE_PATTERN.test(tone))
+		.slice(-20);
+	return tones.length > 0 ? { observedTones: tones } : {};
 }

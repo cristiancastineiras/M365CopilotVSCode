@@ -5,9 +5,10 @@
  */
 import * as vscode from 'vscode';
 import { M365_CHAT_URL } from '@ms365copilot/core';
-import { isTokenUsable, minutesUntilExpiry, ProfileParseError } from './profile';
+import { isTokenUsable, looksLikeProfile, minutesUntilExpiry, ProfileParseError, type CopilotProfile } from './profile';
 import type { ProfileStore } from './secrets';
 import type { WorkspaceEditManager } from '../tools/writeFile';
+import type { ModelRegistry } from './models';
 import { getLocale, resolveLocale, t, type LanguageSetting, type Locale } from './i18n';
 
 /** The walkthrough contributed in package.json (`<publisher>.<name>#<id>`). */
@@ -48,6 +49,7 @@ export async function showMenu(store: ProfileStore, edits: WorkspaceEditManager)
 				]
 			: []),
 		{ label: `$(git-commit) ${t('menu.commitMessage')}`, run: command('ms365copilot.generateCommitMessage') },
+		{ label: `$(sync) ${t('menu.models')}`, run: command('ms365copilot.refreshModels') },
 		{ label: t('menu.section.extension'), kind: vscode.QuickPickItemKind.Separator },
 		{
 			label: `$(globe) ${t('menu.language', languageLabel(currentLanguageSetting()))}`,
@@ -67,11 +69,38 @@ export async function showMenu(store: ProfileStore, edits: WorkspaceEditManager)
 	await picked?.run?.();
 }
 
+/**
+ * The stored profile if its token can be used right now. Otherwise says why
+ * (missing / expired) with a "Paste token" button, and resolves undefined —
+ * the common guard of every editor command that talks to M365 directly.
+ */
+export async function requireUsableProfile(store: ProfileStore): Promise<CopilotProfile | undefined> {
+	const profile = await store.get();
+	if (profile && isTokenUsable(profile)) return profile;
+	const paste = t('watcher.pasteToken');
+	const picked = await vscode.window.showWarningMessage(
+		t(profile ? 'participant.tokenExpired' : 'participant.noToken'),
+		paste,
+	);
+	if (picked === paste) await vscode.commands.executeCommand('ms365copilot.pasteProfile');
+	return undefined;
+}
+
 export async function pasteProfile(store: ProfileStore): Promise<void> {
+	// The usual flow is "Copy token" in the browser, then this command: when
+	// the clipboard already holds a token, pre-fill it so Enter is enough.
+	let clipboard = '';
+	try {
+		clipboard = await vscode.env.clipboard.readText();
+	} catch {
+		/* no clipboard access (remote/web): paste by hand */
+	}
+	const fromClipboard = looksLikeProfile(clipboard);
 	const pasted = await vscode.window.showInputBox({
 		title: t('paste.title'),
-		prompt: t('paste.prompt'),
+		prompt: t(fromClipboard ? 'paste.fromClipboard' : 'paste.prompt'),
 		placeHolder: t('paste.placeholder'),
+		value: fromClipboard ? clipboard.trim() : undefined,
 		password: true,
 		ignoreFocusOut: true,
 	});
@@ -118,6 +147,40 @@ export async function showStatus(store: ProfileStore): Promise<void> {
 	const picked = await vscode.window.showInformationMessage(lines.join('  ·  '), ...actions);
 	if (picked === paste) await vscode.commands.executeCommand('ms365copilot.pasteProfile');
 	if (picked === open) await openM365();
+}
+
+/**
+ * "Update models": download the catalog now and list every model with where
+ * it comes from. Picking one opens the chat with it (when VS Code supports
+ * choosing the model from the command; otherwise just the chat).
+ */
+export async function refreshModels(registry: ModelRegistry): Promise<void> {
+	const updated = await vscode.window.withProgress(
+		{ location: vscode.ProgressLocation.Notification, title: t('models.updating') },
+		() => registry.refreshCatalog(),
+	);
+	if (!updated && vscode.workspace.getConfiguration('ms365copilot.models').get<boolean>('updateFromCatalog', true)) {
+		void vscode.window.showWarningMessage(t('models.updateFailed'));
+	}
+	const sourceLabel = {
+		builtin: t('models.label.builtin'),
+		catalog: t('models.label.catalog'),
+		observed: t('models.label.observed'),
+		custom: t('models.label.custom'),
+	};
+	const picked = await vscode.window.showQuickPick(
+		registry.models.map((model) => ({
+			label: model.name,
+			description: model.tone ?? 'auto',
+			detail: sourceLabel[model.source],
+			id: model.id,
+		})),
+		{ title: t('models.title', registry.models.length), placeHolder: t('models.placeholder'), matchOnDescription: true },
+	);
+	if (!picked) return;
+	await vscode.commands.executeCommand('workbench.action.chat.open', {
+		modelSelector: { vendor: 'ms365copilot', id: picked.id },
+	});
 }
 
 export async function toggleInlineCompletions(): Promise<void> {

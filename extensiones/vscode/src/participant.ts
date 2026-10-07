@@ -26,12 +26,14 @@ import {
 	toolsForCommand,
 	type HistoryTurn,
 	type ParticipantCommand,
+	type PromptTerminalRun,
 } from './participantPrompts';
 import { isTokenUsable } from './profile';
 import type { ProfileStore } from './secrets';
 import { MAX_TASK_WALL_CLOCK_MS, runToolLoop } from './subagentCore';
 import { toolResultToText } from './subagents';
 import type { WorkspaceEditManager } from '../tools/writeFile';
+import type { TerminalHistory } from './terminalHistory';
 import { errorMessage, relativePathForUri } from '../tools/common';
 import { t, type MessageKey } from './i18n';
 
@@ -42,6 +44,7 @@ interface ParticipantDeps {
 	readonly store: ProfileStore;
 	readonly handoff: EditorHandoff;
 	readonly edits: WorkspaceEditManager;
+	readonly terminals: TerminalHistory;
 	readonly extensionUri: vscode.Uri;
 	readonly log: (message: string) => void;
 }
@@ -77,8 +80,20 @@ async function handleRequest(
 		return { metadata };
 	}
 
-	const { code, attachedPaths } = await resolveCode(deps.handoff, command, request.references);
-	if (command && !code) {
+	// /terminal is about the last command of the active terminal, not about code.
+	let terminal: PromptTerminalRun | undefined;
+	if (command === 'terminal') {
+		terminal = deps.terminals.lastRun(vscode.window.activeTerminal);
+		if (!terminal) {
+			stream.markdown(t('participant.noTerminalRun'));
+			return { metadata };
+		}
+	}
+	const { code, attachedPaths } =
+		command === 'terminal'
+			? { code: undefined, attachedPaths: [] }
+			: await resolveCode(deps.handoff, command, request.references);
+	if (command && command !== 'terminal' && !code) {
 		stream.markdown(t('participant.noContext'));
 		return { metadata };
 	}
@@ -87,12 +102,14 @@ async function handleRequest(
 	// Answer with the M365 model picked in the chat, if one is; any other
 	// vendor's model falls back to Auto — this participant always talks to M365.
 	const tone = request.model.vendor === VENDOR ? (findModel(request.model.id)?.tone ?? null) : null;
-	deps.log(t('log.participantRequest', command ?? '-', tone ?? 'magic', code ? code.relativePath : '-'));
+	const contextLabel = terminal ? `$ ${terminal.commandLine}` : code ? code.relativePath : '-';
+	deps.log(t('log.participantRequest', command ?? '-', tone ?? 'magic', contextLabel));
 
 	const framing = buildParticipantFraming({
 		command,
 		request: request.prompt,
 		code,
+		terminal,
 		history: historyOf(context),
 		attachedPaths,
 	});
@@ -240,6 +257,7 @@ const FOLLOWUPS: Readonly<Record<ParticipantCommand, readonly ParticipantCommand
 	fix: ['tests'],
 	doc: ['tests'],
 	tests: [],
+	terminal: [],
 };
 
 const FOLLOWUP_LABELS: Readonly<Record<ParticipantCommand, MessageKey>> = {
@@ -247,4 +265,5 @@ const FOLLOWUP_LABELS: Readonly<Record<ParticipantCommand, MessageKey>> = {
 	fix: 'participant.followup.fix',
 	doc: 'participant.followup.doc',
 	tests: 'participant.followup.tests',
+	terminal: 'participant.followup.terminal',
 };

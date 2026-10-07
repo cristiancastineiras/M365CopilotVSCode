@@ -5,7 +5,7 @@ import { log } from './logger';
 
 import { MarkdownStreamFormatter } from './markdown';
 import { flattenMessages } from './messages';
-import { findModel, MODELS, toChatInformation, type TokenState } from './models';
+import { allModels, findModel, toChatInformation, type TokenState } from './models';
 import { isTokenUsable, minutesUntilExpiry } from './profile';
 import { buildToolCatalog, ToolCallDecoder, type DuplicatePolicy } from './toolProtocol';
 import type { ProfileStore } from './secrets';
@@ -48,7 +48,7 @@ export class Ms365CopilotProvider implements vscode.LanguageModelChatProvider, v
 	): Promise<vscode.LanguageModelChatInformation[]> {
 		const profile = await this.store.get();
 		const state: TokenState = !profile ? 'missing' : isTokenUsable(profile) ? 'ok' : 'expired';
-		return MODELS.map((m) => toChatInformation(m, state));
+		return allModels().map((m) => toChatInformation(m, state));
 	}
 
 	async provideLanguageModelChatResponse(
@@ -135,6 +135,17 @@ export class Ms365CopilotProvider implements vscode.LanguageModelChatProvider, v
 			// passed); refresh the picker so its warning state reflects that the token
 			// needs re-capturing.
 			if (error instanceof CopilotAuthError) this.changeEmitter.fire();
+			// A model that did not ship with this version (catalog, detected or
+			// custom) may simply not exist in this tenant: say so instead of
+			// leaving a bare "rejected the request".
+			if (
+				error instanceof CopilotClientError &&
+				!(error instanceof CopilotAuthError) &&
+				selected &&
+				selected.source !== 'builtin'
+			) {
+				throw new Error(`${error.message}${t('models.rejectedHint', selected.name)}`);
+			}
 			throw error instanceof Error ? error : new Error(String(error));
 		} finally {
 			cancelListener.dispose();
