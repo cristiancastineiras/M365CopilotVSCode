@@ -1,8 +1,19 @@
 import {
   CAPTURE_STORE_KEY,
   BRIDGE_MESSAGE_MARKER,
-  extractClaims,
-  isSydneyToken,
+  SCAN_MISSING_MS,
+  acceptToken,
+  inspectOutgoingFrames,
+  isCopilotSocketUrl,
+  nextScan,
+  normalizeEndpoint,
+  sameCapture,
+  tokenInSocketUrl,
+  tokensInStorageValue,
+  toneOfTemplate,
+  withObservedTone,
+  withoutExpiredToken,
+  type CaptureStore,
 } from '@ms365copilot/core';
 import { logger } from '@/utils/logger';
 
@@ -14,6 +25,10 @@ import { logger } from '@/utils/logger';
  * NO tenemos en el mundo MAIN es `chrome.runtime`, así que no podemos hablar
  * con el background directamente: publicamos el perfil con `window.postMessage`
  * y el puente (content.ts, mundo ISOLATED) lo reenvía al background.
+ *
+ * Las decisiones (qué token aceptar, qué frame es el del chat, cuándo volver a
+ * escanear) viven en `@ms365copilot/core` (capture.ts) y son las mismas que usa
+ * el userscript de Tampermonkey; aquí sólo queda el pegamento con la página.
  */
 export default defineContentScript({
   matches: [
@@ -28,10 +43,8 @@ export default defineContentScript({
   main() {
     logger.info('M365 Copilot Token Interceptor (MAIN) loaded on:', window.location.href);
 
-    const RS = '\x1e';
-
     /** Publica el perfil hacia el puente (mundo ISOLATED) para que lo reenvíe al background. */
-    function postProfile(profile: any): void {
+    function postProfile(profile: CaptureStore): void {
       try {
         window.postMessage(
           { [BRIDGE_MESSAGE_MARKER]: true, kind: 'PROFILE_UPDATED', payload: profile },
@@ -42,111 +55,44 @@ export default defineContentScript({
       }
     }
 
-    // ---------------------------------------------------------------- utilidades
+    // ---------------------------------------------------------------- estado
 
-    function readStore(): any {
+    function readStore(): CaptureStore {
       try {
         const stored = localStorage.getItem(CAPTURE_STORE_KEY);
-        return stored ? JSON.parse(stored) : {};
+        return stored ? (JSON.parse(stored) as CaptureStore) : {};
       } catch {
         return {};
       }
     }
 
-    /** Serializa el store ignorando el sello temporal, para comparar cambios reales. */
-    function fingerprint(store: any): string {
-      const clone = Object.assign({}, store);
-      delete clone.capturedAt;
-      return JSON.stringify(clone);
-    }
-
-    /** Fusiona `patch` en el store, pero sólo escribe si algo cambió de verdad. */
-    function writeStore(patch: any): any {
+    /** Fusiona `patch` en el store, pero sólo escribe (y publica) si algo cambió de verdad. */
+    function writeStore(patch: CaptureStore): CaptureStore {
       const current = readStore();
-      const merged = Object.assign({}, current, patch);
-      if (fingerprint(current) === fingerprint(merged)) return current;
+      const merged: CaptureStore = { ...current, ...patch };
+      if (sameCapture(current, merged)) return current;
       merged.capturedAt = new Date().toISOString();
       localStorage.setItem(CAPTURE_STORE_KEY, JSON.stringify(merged));
-
-      // Publica la actualización hacia el puente (mundo ISOLATED).
       postProfile(merged);
-
       return merged;
     }
 
-    /** ¿El token guardado ya caducó (según claims.exp)? */
-    function tokenExpired(store: any): boolean {
-      const exp = store && store.claims && store.claims.exp;
-      return typeof exp === 'number' && exp * 1000 <= Date.now();
-    }
-
     /** Si el token guardado caducó, lo descarta para invitar a recapturarlo. */
-    function pruneExpiredToken(): boolean {
-      const store = readStore();
-      if (!store.accessToken || !tokenExpired(store)) return false;
-      const cleaned = Object.assign({}, store);
-      delete cleaned.accessToken;
-      delete cleaned.tokenSource;
-      delete cleaned.claims;
+    function pruneExpiredToken(): void {
+      const cleaned = withoutExpiredToken(readStore());
+      if (!cleaned) return;
       cleaned.capturedAt = new Date().toISOString();
       localStorage.setItem(CAPTURE_STORE_KEY, JSON.stringify(cleaned));
-      return true;
     }
 
-    /** Validación robusta de tokens JWT antes de guardarlos. */
-    function isValidJWT(token: string): boolean {
-      if (!token || typeof token !== 'string') return false;
-      const parts = token.split('.');
-      if (parts.length !== 3) return false;
-      // Validar que cada parte sea base64url válida
-      for (const part of parts) {
-        if (!/^[A-Za-z0-9_-]+$/.test(part)) return false;
-      }
-      // Límite de tamaño razonable para un JWT (evita payloads maliciosos)
-      if (token.length > 8192) {
-        logger.warn('Token JWT rechazado: excede 8KB');
-        return false;
-      }
-      return true;
-    }
-
-    /** Validación de claims del token con tipos seguros. */
-    function validateClaims(claims: any): boolean {
-      if (!claims || typeof claims !== 'object') return false;
-      // exp debe ser un timestamp futuro válido
-      if (typeof claims.exp !== 'number' || claims.exp <= 0) return false;
-      if (claims.exp * 1000 <= Date.now()) {
-        logger.debug('Token rechazado: ya caducó');
-        return false;
-      }
-      // iat (issued at) debe ser coherente
-      if (claims.iat && (typeof claims.iat !== 'number' || claims.iat > claims.exp)) {
-        logger.warn('Token rechazado: iat inválido');
-        return false;
-      }
-      return true;
-    }
-
-    /** Guarda un token sólo si es de Sydney y no es más viejo que el que ya teníamos. */
+    /** Guarda un token sólo si es de Sydney, válido y no más viejo que el que ya teníamos. */
     function offerToken(token: string, where: string): void {
       try {
-        if (!isValidJWT(token)) return;
-        if (!isSydneyToken(token)) return;
-        
-        const claims = extractClaims(token);
-        if (!validateClaims(claims)) return;
-        
-        const current = readStore();
-        if (current.accessToken === token) return;
-        
-        const currentExp = current.claims?.exp ?? 0;
-        if (claims?.exp && currentExp && claims.exp < currentExp) {
-          logger.debug(`Token de ${where} rechazado: más viejo que el actual`);
-          return;
-        }
-        
-        logger.info(`Token capturado desde ${where}, caduca en ${Math.round(((claims?.exp ?? 0) * 1000 - Date.now()) / 60000)} min`);
-        writeStore({ accessToken: token, tokenSource: where, claims });
+        const accepted = acceptToken(readStore(), token);
+        if (!accepted) return;
+        const minutes = Math.round(((accepted.claims.exp ?? 0) * 1000 - Date.now()) / 60000);
+        logger.info(`Token capturado desde ${where}, caduca en ${minutes} min`);
+        writeStore({ ...accepted, tokenSource: where });
       } catch (error) {
         logger.error(`Error al procesar token desde ${where}:`, error);
       }
@@ -154,101 +100,36 @@ export default defineContentScript({
 
     // -------------------------------------------------------- hook de WebSocket
 
-    /** Límite de tamaño para frames de SignalR (evita payloads maliciosos). */
-    const MAX_FRAME_SIZE = 1024 * 1024; // 1 MB
-    const MAX_TEMPLATE_SIZE = 64 * 1024; // 64 KB para el template
-
-    function inspectOutgoingFrame(data: any): boolean {
-      if (typeof data !== 'string') return false;
-      if (data.length > MAX_FRAME_SIZE) {
-        logger.warn('Frame de SignalR rechazado: excede 1MB');
-        return false;
-      }
-      
-      let sawChat = false;
-      for (const chunk of data.split(RS)) {
-        if (!chunk) continue;
-        let frame: any;
-        try {
-          frame = JSON.parse(chunk);
-        } catch {
-          continue;
-        }
-        // SignalR: type 4 = StreamInvocation, type 1 = Invocation.
-        if ((frame.type === 4 || frame.type === 1) && frame.target === 'chat') {
-          sawChat = true;
-          const args = Array.isArray(frame.arguments) ? frame.arguments[0] : null;
-          if (args && typeof args === 'object') {
-            const templateJson = JSON.stringify(args);
-            if (templateJson.length <= MAX_TEMPLATE_SIZE) {
-              writeStore({ invocationTemplate: args, invocationType: frame.type });
-            } else {
-              logger.warn('Template de invocación rechazado: excede 64KB');
-            }
-          }
-        }
-      }
-      return sawChat;
-    }
-
-    /** Quita los parámetros volátiles (token, ids de sesión) para no guardar basura ni un token caducado en el endpoint. */
-    function normalizeEndpoint(raw: string): string {
-      try {
-        // Validar longitud antes de procesar
-        if (typeof raw !== 'string' || raw.length > 2048) {
-          logger.warn('Endpoint rechazado: longitud inválida');
-          return '';
-        }
-        
-        const sanitized = String(raw).replace(/^ws/i, 'http');
-        const u = new URL(sanitized);
-        
-        // Validar que sea un endpoint de Microsoft
-        if (!u.hostname.endsWith('.microsoft.com') && !u.hostname.endsWith('.microsoft')) {
-          logger.warn(`Endpoint rechazado: hostname sospechoso (${u.hostname})`);
-          return '';
-        }
-        for (const p of ['access_token', 'ConversationId', 'chatsessionid', 'clientrequestid', 'X-SessionId']) {
-          u.searchParams.delete(p);
-        }
-        return u.toString().replace(/^http/i, 'ws');
-      } catch {
-        return String(raw);
-      }
-    }
-
     function captureSocket(url: string, ws: WebSocket): void {
-      const raw = String(url);
-      if (!/chathub/i.test(raw) && !/substrate/i.test(raw)) return;
+      if (!isCopilotSocketUrl(url)) return;
 
-      // Extrae el token de la query ANTES de normalizar (ahí es donde viaja).
-      try {
-        const parsed = new URL(raw.replace(/^ws/i, 'http'));
-        const token = parsed.searchParams.get('access_token');
-        if (token) offerToken(token, 'websocket-url');
-      } catch {
-        /* URL rara: nos quedamos igualmente con el endpoint */
-      }
+      // El token viaja en la query: se extrae ANTES de normalizar la URL.
+      const token = tokenInSocketUrl(url);
+      if (token) offerToken(token, 'websocket-url');
 
       // Substrate abre varios WebSockets (presencia, notificaciones…). Guardamos
       // éste sólo de forma tentativa hasta que veamos que envía un frame `chat`,
       // que es la prueba definitiva de que es el hub del chat. Un endpoint ya
       // confirmado no se pisa con un socket cualquiera.
-      const endpoint = normalizeEndpoint(raw);
-      if (!readStore().endpointConfirmed) {
+      const endpoint = normalizeEndpoint(String(url));
+      if (endpoint && !readStore().endpointConfirmed) {
         writeStore({ endpoint, origin: location.origin, userAgent: navigator.userAgent });
       }
 
       const originalSend = ws.send;
       ws.send = function (data: any) {
         try {
-          if (inspectOutgoingFrame(data)) {
-            // Este socket es, con certeza, el hub del chat: fija su endpoint.
+          const frames = inspectOutgoingFrames(data);
+          if (frames.sawChat) {
+            // Este socket es, con certeza, el hub del chat: fija su endpoint, y
+            // apunta qué modelo (`tone`) usó la web para que VS Code lo ofrezca.
+            const tone = toneOfTemplate(frames.template);
             writeStore({
-              endpoint,
+              ...(tone ? { observedTones: withObservedTone(readStore().observedTones, tone) } : {}),
+              ...(endpoint ? { endpoint, endpointConfirmed: true } : {}),
               origin: location.origin,
               userAgent: navigator.userAgent,
-              endpointConfirmed: true,
+              ...(frames.template ? { invocationTemplate: frames.template, invocationType: frames.invocationType } : {}),
             });
           }
         } catch {
@@ -324,7 +205,6 @@ export default defineContentScript({
 
     // --------------------------------------------- rastreo de la caché de MSAL
 
-    /** MSAL guarda los access tokens en localStorage / sessionStorage como JSON. */
     function scanStorages(): void {
       for (const store of [window.localStorage, window.sessionStorage]) {
         let length = 0;
@@ -334,21 +214,12 @@ export default defineContentScript({
           continue;
         }
         for (let i = 0; i < length; i++) {
-          let key: string | null, value: string | null;
           try {
-            key = store.key(i);
-            value = key ? store.getItem(key) : null;
+            const key = store.key(i);
+            if (!key || key === CAPTURE_STORE_KEY) continue;
+            for (const token of tokensInStorageValue(store.getItem(key))) offerToken(token, 'msal-cache');
           } catch {
-            continue;
-          }
-          if (!value || value.length < 40 || !value.includes('eyJ')) continue;
-          try {
-            const parsed = JSON.parse(value);
-            const secret = parsed && (parsed.secret || parsed.access_token || parsed.accessToken);
-            if (typeof secret === 'string') offerToken(secret, 'msal-cache');
-          } catch {
-            // Algunas entradas guardan el JWT pelado.
-            if (/^ey[\w-]+\.[\w-]+\.[\w-]+$/.test(value.trim())) offerToken(value.trim(), 'storage-raw');
+            /* entrada ilegible: la siguiente */
           }
         }
       }
@@ -356,41 +227,14 @@ export default defineContentScript({
 
     // ------------------------------------------------- bucle de captura
 
-    /** Sin token: insistir. Con token fresco: vigilar de lejos. Cerca de caducar: apretar. */
-    const SCAN_MISSING_MS = 2000;
-    const SCAN_MISSING_MAX_MS = 15000;
-    const SCAN_FRESH_MS = 60000;
-    const SCAN_EXPIRING_MS = 5000;
-    /** A partir de aquí la web ya suele haber renovado su propio token. */
-    const EXPIRY_WATCH_MS = 15 * 60 * 1000;
-
-    function msLeft(store: any): number | null {
-      const exp = store && store.claims && store.claims.exp;
-      return typeof exp === 'number' ? exp * 1000 - Date.now() : null;
-    }
-
     let missingDelay = SCAN_MISSING_MS;
 
     function tick() {
-      // Se escanea SIEMPRE, haya token o no. Antes, en cuanto había uno
-      // guardado, el bucle dejaba de mirar la caché de MSAL y sólo comprobaba
-      // si había caducado: nunca recogía el token nuevo que la web renueva sola
-      // cada ~50 min, así que la sesión se rompía sin remedio al caducar el
-      // viejo y había que recargar a mano.
       scanStorages();
       pruneExpiredToken();
-
-      const store = readStore();
-      let delay: number;
-      if (!store.accessToken) {
-        missingDelay = Math.min(Math.round(missingDelay * 1.5), SCAN_MISSING_MAX_MS);
-        delay = missingDelay;
-      } else {
-        missingDelay = SCAN_MISSING_MS;
-        const left = msLeft(store);
-        delay = left !== null && left <= EXPIRY_WATCH_MS ? SCAN_EXPIRING_MS : SCAN_FRESH_MS;
-      }
-      setTimeout(tick, delay);
+      const next = nextScan(readStore(), missingDelay);
+      missingDelay = next.missingDelay;
+      setTimeout(tick, next.delay);
     }
 
     scanStorages();
@@ -430,7 +274,7 @@ export default defineContentScript({
           /* ignorar */
         }
         const store = readStore();
-        if (store && store.accessToken) postProfile(store);
+        if (store.accessToken) postProfile(store);
       }
     });
 
@@ -439,7 +283,7 @@ export default defineContentScript({
     // hace con un pequeño retardo para dar tiempo a que el puente (mundo
     // ISOLATED) registre su listener de `window.message`.
     const existing = readStore();
-    if (existing && existing.accessToken) {
+    if (existing.accessToken) {
       setTimeout(() => postProfile(existing), 500);
     }
   },

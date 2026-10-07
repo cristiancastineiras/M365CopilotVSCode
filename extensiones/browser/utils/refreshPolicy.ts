@@ -132,37 +132,6 @@ function remainingBackoff(context: RefreshContext): number {
   return Math.max(0, backoffFor(context.attempts) - elapsed);
 }
 
-export interface SyncContext {
-  /** `capturedAt` del perfil guardado (ISO), o null. */
-  readonly capturedAt: string | null;
-  /** `exp` del token que VS Code confirmó tener, o null. */
-  readonly syncedTokenExp: number | null;
-  /** `exp` del token guardado ahora. */
-  readonly currentTokenExp: number | null;
-  readonly hasToken: boolean;
-  readonly lastSyncAttemptAt: number | null;
-  readonly now: number;
-}
-
-/** No martillear al servidor local de VS Code cuando está apagado. */
-export const RESYNC_COOLDOWN_MS = 30 * 1000;
-
-/**
- * ¿Hay que (re)enviar el perfil a VS Code? Cubre el caso más molesto: VS Code
- * arranca DESPUÉS de que el navegador capturara el token, y sin esto nadie se lo
- * vuelve a mandar hasta que el token cambia.
- */
-export function needsResync(context: SyncContext): boolean {
-  if (!context.hasToken) return false;
-  if (
-    context.lastSyncAttemptAt !== null &&
-    context.now - context.lastSyncAttemptAt >= 0 &&
-    context.now - context.lastSyncAttemptAt < RESYNC_COOLDOWN_MS
-  ) {
-    return false;
-  }
-  // Nunca se sincronizó, o lo que VS Code tiene es un token distinto (más viejo).
-  if (context.syncedTokenExp === null) return true;
-  if (context.currentTokenExp === null) return true;
-  return context.currentTokenExp > context.syncedTokenExp;
-}
+// La decisión de re-sincronizar con VS Code vive en @ms365copilot/core (la
+// comparte el userscript); se re-exporta aquí para no cambiar a quien la usa.
+export { needsResync, RESYNC_COOLDOWN_MS, type SyncContext } from '@ms365copilot/core';

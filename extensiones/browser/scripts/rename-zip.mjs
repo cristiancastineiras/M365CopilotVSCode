@@ -18,7 +18,13 @@ if (!dir || !suffix || !stableName) {
   process.exit(1);
 }
 
-const match = readdirSync(dir).find((f) => f.endsWith(`-${suffix}.zip`));
+// The stable name also ends in `-<suffix>.zip`: skip it, or a leftover zip of
+// an earlier build could be "renamed" onto itself while the fresh one stays
+// unrenamed (readdir order is not alphabetical on every file system).
+const match = readdirSync(dir)
+  .filter((f) => f.endsWith(`-${suffix}.zip`) && f !== stableName)
+  .sort()
+  .at(-1);
 if (!match) {
   console.error(`No se encontró ningún .zip que acabe en "-${suffix}.zip" en ${dir}`);
   process.exit(1);

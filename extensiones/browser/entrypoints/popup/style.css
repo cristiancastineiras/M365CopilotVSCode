@@ -168,12 +168,34 @@ body {
 
 .hero {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 14px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 12px 14px 13px;
   border-radius: var(--radius);
   background: var(--surface-subtle);
   border: 1px solid var(--border-subtle);
+  text-align: center;
+}
+
+/* M365 → VS Code artwork (connectionArtSvg in @ms365copilot/core). Its own
+ * <style> handles the states; here only its size and the muted ink it uses
+ * for the "off" parts and the labels. */
+.hero-art {
+  color: var(--text-muted);
+  padding: 0 6px;
+}
+
+.hero-text {
+  min-width: 0;
+}
+
+.hero[data-tone='ok'] .hero-title {
+  color: var(--green);
+}
+
+.hero[data-tone='bad'] .hero-title {
+  color: var(--red);
 }
 
 .hero-icon {

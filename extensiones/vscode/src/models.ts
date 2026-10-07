@@ -1,73 +1,212 @@
 import * as vscode from 'vscode';
-import { t, type MessageKey } from './i18n';
+import { getLocale, t } from './i18n';
+import {
+	BUILTIN_MODELS,
+	mergeModels,
+	parseCustomModels,
+	parseModelCatalog,
+	unannounced,
+	type CatalogModel,
+	type ModelEntry,
+} from './modelCatalog';
+import type { ProfileStore } from './secrets';
 
 /**
  * M365 Copilot / BizChat selects a model through the `tone` field of the chat
- * invocation, not a model id. The available tones vary by tenant and ring, so
- * the "Auto" model deliberately reuses whatever tone the web app captured (see
- * client.ts); the named ones override it. If a ring rejects a named tone, the
- * Auto model always works because it replays the web app's own choice.
+ * invocation, not a model id. The "Auto" model sends no override and lets
+ * BizChat route; the others force a tone. Which tones exist changes often, so
+ * the list is not fixed: see modelCatalog.ts for the sources and
+ * {@link ModelRegistry} for how they are kept up to date.
  */
-export interface CopilotModel {
-	readonly id: string;
-	readonly name: string;
-	readonly family: string;
-	/** `tone` to send, or null to reuse the captured template's tone. */
-	readonly tone: string | null;
-	/** Catalog key of the one-line description shown in the picker. */
-	readonly detailKey: MessageKey;
-}
+export type CopilotModel = CatalogModel;
 
-export const MODELS: readonly CopilotModel[] = [
-	{
-		id: 'ms365-copilot-auto',
-		name: 'M365 Copilot (Auto)',
-		family: 'm365-copilot',
-		tone: null,
-		detailKey: 'model.auto.detail',
-	},
-	{
-		id: 'ms365-copilot-gpt',
-		name: 'M365 Copilot · GPT',
-		family: 'm365-copilot',
-		tone: 'Gpt_5_5_Chat',
-		detailKey: 'model.gpt.detail',
-	},
-	{
-		id: 'ms365-copilot-gpt56',
-		name: 'M365 Copilot · GPT 5.6',
-		family: 'm365-copilot',
-		tone: 'Gpt_5_6_Chat',
-		detailKey: 'model.gpt56.detail',
-	},
-	{
-		id: 'ms365-copilot-gpt56-reasoning',
-		name: 'M365 Copilot · GPT 5.6 Reasoning',
-		family: 'm365-copilot',
-		tone: 'Gpt_5_6_Reasoning',
-		detailKey: 'model.gpt56Reasoning.detail',
-	},
-	{
-		id: 'ms365-copilot-claude',
-		name: 'M365 Copilot · Claude Sonnet',
-		family: 'm365-copilot',
-		tone: 'Claude_Sonnet',
-		detailKey: 'model.claude.detail',
-	},
-	{
-		id: 'ms365-copilot-reasoning',
-		name: 'M365 Copilot · Reasoning',
-		family: 'm365-copilot',
-		tone: 'Gpt_5_5_Reasoning',
-		detailKey: 'model.reasoning.detail',
-	},
-];
+/** models.json in the project's repository — edit it there to add or retire a model for everyone. */
+export const MODEL_CATALOG_URL =
+	'https://raw.githubusercontent.com/cristiancastineiras/M365CopilotVSCode/main/models.json';
+const CATALOG_REFRESH_MS = 12 * 60 * 60_000;
+const CATALOG_TIMEOUT_MS = 8_000;
+/** Give activation room before going to the network. */
+const FIRST_FETCH_DELAY_MS = 5_000;
+
+const CATALOG_CACHE_KEY = 'ms365copilot.models.catalog';
+const OBSERVED_KEY = 'ms365copilot.models.observed';
+const ANNOUNCED_KEY = 'ms365copilot.models.announced';
+const MAX_OBSERVED = 20;
 
 const MAX_INPUT_TOKENS = 128_000;
 const MAX_OUTPUT_TOKENS = 16_000;
 
+let registry: ModelRegistry | undefined;
+
+/** Every model offered right now (built-ins only until the registry starts). */
+export function allModels(): readonly CopilotModel[] {
+	return registry?.models ?? BUILTIN_MODELS;
+}
+
 export function findModel(id: string): CopilotModel | undefined {
-	return MODELS.find((m) => m.id === id);
+	return allModels().find((model) => model.id === id);
+}
+
+/**
+ * Tone for answers written straight into the editor — inline edits, the
+ * lightbulb fix, the Source Control commit message (`ms365copilot.editor.model`).
+ */
+export function editorTone(): string | null {
+	const id = vscode.workspace.getConfiguration('ms365copilot.editor').get<string>('model', 'ms365-copilot-auto');
+	return findModel(id)?.tone ?? null;
+}
+
+interface CatalogCache {
+	readonly entries: ModelEntry[];
+	readonly fetchedAt: number;
+}
+
+/**
+ * Keeps the model list up to date: downloads the catalog (on start and every
+ * 12 h, cached for offline use), learns the tones the web app used from every
+ * profile the browser side sends, reads the custom ones from settings, and
+ * fires {@link onDidChange} when the merged list changes — the provider
+ * re-announces it and the chat's model picker updates. New models are
+ * announced once each.
+ */
+export class ModelRegistry implements vscode.Disposable {
+	private current: CopilotModel[] = [...BUILTIN_MODELS];
+	private readonly changed = new vscode.EventEmitter<void>();
+	readonly onDidChange = this.changed.event;
+	private readonly disposables: vscode.Disposable[] = [];
+	private timer: NodeJS.Timeout | undefined;
+
+	constructor(
+		private readonly memento: vscode.Memento,
+		private readonly store: ProfileStore,
+		private readonly log: (message: string) => void,
+	) {
+		this.disposables.push(
+			store.onDidChange(() => void this.absorbProfile()),
+			vscode.workspace.onDidChangeConfiguration((event) => {
+				if (!event.affectsConfiguration('ms365copilot.models')) return;
+				this.recompute();
+				if (event.affectsConfiguration('ms365copilot.models.updateFromCatalog') && catalogEnabled()) {
+					void this.refreshCatalog();
+				}
+			}),
+		);
+		this.recompute(false);
+		void this.absorbProfile();
+		this.timer = setTimeout(() => {
+			void this.refreshCatalog();
+			this.timer = setInterval(() => void this.refreshCatalog(), CATALOG_REFRESH_MS);
+		}, FIRST_FETCH_DELAY_MS);
+	}
+
+	get models(): readonly CopilotModel[] {
+		return this.current;
+	}
+
+	/**
+	 * Download models.json now. Returns false when it could not be fetched or
+	 * parsed — the cached copy (or the built-ins) stay in use.
+	 */
+	async refreshCatalog(): Promise<boolean> {
+		if (!catalogEnabled()) return false;
+		try {
+			const response = await fetch(MODEL_CATALOG_URL, {
+				signal: AbortSignal.timeout(CATALOG_TIMEOUT_MS),
+				headers: { Accept: 'application/json' },
+			});
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+			const entries = parseModelCatalog(await response.json());
+			if (!entries) throw new Error('models.json has no "models" array');
+			await this.memento.update(CATALOG_CACHE_KEY, { entries, fetchedAt: Date.now() } satisfies CatalogCache);
+			this.log(t('log.modelsCatalog', entries.length));
+			this.recompute();
+			return true;
+		} catch (error) {
+			this.log(t('log.modelsCatalogFailed', error instanceof Error ? error.message : String(error)));
+			return false;
+		}
+	}
+
+	/** When the catalog was last downloaded, if ever. */
+	get catalogFetchedAt(): number | undefined {
+		return this.memento.get<CatalogCache>(CATALOG_CACHE_KEY)?.fetchedAt;
+	}
+
+	/** Remember the tones the web app used (they come inside the profile). */
+	private async absorbProfile(): Promise<void> {
+		const profile = await this.store.get();
+		const incoming = profile?.observedTones ?? [];
+		if (incoming.length === 0) return;
+		const known = this.memento.get<string[]>(OBSERVED_KEY, []);
+		const next = [...known.filter((tone) => !incoming.includes(tone)), ...incoming].slice(-MAX_OBSERVED);
+		if (next.length === known.length && next.every((tone, index) => tone === known[index])) return;
+		await this.memento.update(OBSERVED_KEY, next);
+		this.recompute();
+	}
+
+	private recompute(announce = true): void {
+		const config = vscode.workspace.getConfiguration('ms365copilot.models');
+		const next = mergeModels({
+			catalog: catalogEnabled() ? (this.memento.get<CatalogCache>(CATALOG_CACHE_KEY)?.entries ?? []) : [],
+			observed: config.get<boolean>('detectFromBrowser', true) ? this.memento.get<string[]>(OBSERVED_KEY, []) : [],
+			custom: parseCustomModels(config.get<unknown>('custom', [])),
+		});
+		const before = this.current.map((model) => `${model.id}|${model.name}|${model.tone}`).join(',');
+		const after = next.map((model) => `${model.id}|${model.name}|${model.tone}`).join(',');
+		this.current = next;
+		if (before !== after) this.changed.fire();
+		if (announce) void this.announce(next);
+	}
+
+	/** One notification per model that appears for the first time (not on every start). */
+	private async announce(models: readonly CopilotModel[]): Promise<void> {
+		const known = new Set(this.memento.get<string[]>(ANNOUNCED_KEY, []));
+		const fresh = unannounced(models, known);
+		if (fresh.length === 0) return;
+		for (const model of fresh) known.add(model.tone!);
+		await this.memento.update(ANNOUNCED_KEY, [...known]);
+		const names = fresh.map((model) => model.name.replace(/^M365 Copilot · /, '')).join(', ');
+		const open = t('paste.openChat');
+		const picked = await vscode.window.showInformationMessage(t('models.new', names), open);
+		if (picked === open) await vscode.commands.executeCommand('workbench.action.chat.open');
+	}
+
+	dispose(): void {
+		// clearTimeout also clears an interval in Node.
+		if (this.timer) clearTimeout(this.timer);
+		this.changed.dispose();
+		for (const disposable of this.disposables) disposable.dispose();
+		if (registry === this) registry = undefined;
+	}
+}
+
+/** Create the registry and make it the source of {@link allModels} / {@link findModel}. */
+export function installModelRegistry(
+	memento: vscode.Memento,
+	store: ProfileStore,
+	log: (message: string) => void,
+): ModelRegistry {
+	registry = new ModelRegistry(memento, store, log);
+	return registry;
+}
+
+function catalogEnabled(): boolean {
+	return vscode.workspace.getConfiguration('ms365copilot.models').get<boolean>('updateFromCatalog', true);
+}
+
+/** The picker's one-line description of a model. */
+export function modelDetail(model: CopilotModel): string {
+	if (model.detailKey) return t(model.detailKey);
+	const text = model.detail?.[getLocale()] ?? model.detail?.en;
+	if (text) return text;
+	return t(
+		model.source === 'observed'
+			? 'models.source.observed'
+			: model.source === 'custom'
+				? 'models.source.custom'
+				: 'models.source.catalog',
+		model.tone ?? '',
+	);
 }
 
 /**
@@ -94,7 +233,7 @@ export type TokenState = 'ok' | 'missing' | 'expired';
 
 /** Build the model information VS Code renders in the picker. */
 export function toChatInformation(model: CopilotModel, tokenState: TokenState): vscode.LanguageModelChatInformation {
-	const detail = t(model.detailKey);
+	const detail = modelDetail(model);
 	const info: PickerChatInformation = {
 		id: model.id,
 		name: model.name,
@@ -104,7 +243,7 @@ export function toChatInformation(model: CopilotModel, tokenState: TokenState): 
 		maxOutputTokens: MAX_OUTPUT_TOKENS,
 		detail:
 			tokenState === 'ok' ? detail : t(tokenState === 'missing' ? 'model.needsToken' : 'model.tokenExpired'),
-		tooltip: detail,
+		tooltip: model.tone ? `${detail} (tone: ${model.tone})` : detail,
 		// This is what surfaces the model in the in-chat picker (not just in
 		// "Manage Models").
 		isUserSelectable: true,

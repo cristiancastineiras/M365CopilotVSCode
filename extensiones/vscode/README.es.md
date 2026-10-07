@@ -15,7 +15,7 @@ navegador y VS Code lo usa.
 | Pieza | Dónde | Qué hace |
 |-------|-------|----------|
 | **Extensión de navegador** (recomendada) | [`extensiones/browser`](https://github.com/cristiancastineiras/M365CopilotVSCode/tree/main/extensiones/browser) · [releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases) | Captura el token en la web de M365 Copilot, lo renueva antes de que caduque y lo envía a VS Code automáticamente. |
-| **Userscript** (alternativa) | [`ms365copilot-token.user.js`](ms365copilot-token.user.js) | Un panel de Tampermonkey en `m365.cloud.microsoft` que te copia el token para pegarlo. |
+| **Userscript** (alternativa) | [`ms365copilot-token.user.js`](ms365copilot-token.user.js) | La misma captura que la extensión de navegador, para Tampermonkey/Violentmonkey: envía el token a VS Code por sí solo y muestra la conexión en un pequeño panel. |
 | **Extensión de VS Code** | esta carpeta | Registra los modelos, el participante `@m365`, las acciones del editor/SCM y las herramientas de agente, y habla con Microsoft 365 Copilot con tu token. |
 
 ## Inicio rápido
@@ -26,13 +26,18 @@ navegador y VS Code lo usa.
      popup se pone en verde y el token llega solo a VS Code — y se sigue
      renovando mientras haya alguna pestaña de M365 abierta.
    - *Con el userscript:* instala [Tampermonkey](https://www.tampermonkey.net/),
-     instala `ms365copilot-token.user.js`, abre M365 Copilot, pulsa **Copiar
-     sólo el token** y ejecuta **M365 Copilot: Pegar perfil o token** en VS Code.
+     abre [el userscript](https://raw.githubusercontent.com/cristiancastineiras/M365CopilotVSCode/main/extensiones/vscode/ms365copilot-token.user.js) para instalarlo (después se actualiza solo),
+     abre M365 Copilot y envía un mensaje. La primera vez, Tampermonkey pide
+     permiso para conectar con `localhost` — permítelo: es VS Code. El panel se
+     enciende cuando VS Code tiene el token. Sin ese permiso siguen funcionando
+     **Copiar token** del panel y **M365 Copilot: Pegar perfil o token** (detecta
+     el token en el portapapeles, así que basta con pulsar Intro).
 2. **Chatea**: escribe **`@m365`** en el chat, o elige uno de los modelos **M365
    Copilot** (`Auto`, `GPT`, `GPT 5.6`, `GPT 5.6 Reasoning`, `Claude Sonnet`,
    `Reasoning`) en el selector de modelos.
-3. **Trabaja desde el editor**: clic derecho en el código → **M365 Copilot**, o
-   la bombilla sobre un error.
+3. **Trabaja desde el editor**: selecciona código y pulsa **Ctrl+Mayús+Alt+I**
+   para editarlo con una instrucción, clic derecho → **M365 Copilot**, o la
+   bombilla sobre un error.
 
 El elemento **M365** de la barra de estado te dice de un vistazo si el token es
 válido y abre un menú con todo lo demás. El recorrido **Primeros pasos**
@@ -40,6 +45,18 @@ válido y abre un menú con todo lo demás. El recorrido **Primeros pasos**
 también la [guía ilustrada](Guia.md).
 
 ## Integración con el editor
+
+### Editar código en el sitio
+
+Selecciona código (o deja el cursor dentro de una función) y pulsa
+**Ctrl+Mayús+Alt+I** (`Cmd+Mayús+Alt+I` en macOS) — o clic derecho →
+**M365 Copilot → Editar código…** — y escribe qué debe cambiar: *«añade manejo
+de errores»*, *«pásalo a async/await»*, *«hazlo genérico»*… Las instrucciones
+recientes se vuelven a ofrecer. M365 Copilot reescribe exactamente ese bloque,
+en el sitio, y el resultado aparece bajo la revisión Keep/Undo de más abajo; el
+chat no interviene. El **Corregir con M365 Copilot: «error»** de la bombilla usa
+el mismo flujo con el diagnóstico como instrucción. Si escribes en el bloque
+mientras se edita, no se sobrescribe nada.
 
 ### Participante de chat `@m365`
 
@@ -52,6 +69,7 @@ elegido en el selector (si eliges un modelo M365, se usa esa variante).
 | `@m365 /fix` | Corrige los problemas de ese código, incluidos los diagnósticos que VS Code marca ahí, y aplica la corrección con revisión Keep/Undo. |
 | `@m365 /doc` | Añade comentarios de documentación con las convenciones del lenguaje. |
 | `@m365 /tests` | Escribe tests unitarios con el framework que ya use el proyecto. |
+| `@m365 /terminal` | Explica el **último comando del terminal activo** — su salida y código de salida — y cómo arreglarlo. |
 | `@m365 <lo que sea>` | Petición libre con las herramientas del workspace; la selección actual y los adjuntos `#file` se incluyen como contexto. |
 
 El participante muestra qué código usó como referencia, transmite la respuesta
@@ -60,16 +78,20 @@ pendientes** tras editar y sugiere continuaciones (`/doc`, `/tests`…).
 
 ### Menú contextual, bombilla y barra de título
 
-- **Clic derecho → M365 Copilot**: *Explicar código*, *Preguntar sobre este
-  código…*, *Corregir código*, *Documentar código*, *Generar tests*. Cada uno
-  abre el chat con el comando `@m365` adecuado y el código exacto en el que
-  estabas.
+- **Clic derecho → M365 Copilot**: *Editar código…*, *Explicar código*,
+  *Preguntar sobre este código…*, *Corregir código*, *Documentar código*,
+  *Generar tests*. Salvo *Editar*, cada uno abre el chat con el comando `@m365`
+  adecuado y el código exacto en el que estabas.
 - **Bombilla (Ctrl+.)**: **Corregir con M365 Copilot: «error»** en errores y
-  avisos, y *Explicar / Documentar con M365 Copilot* sobre una selección. Se
-  desactiva con `ms365copilot.editor.codeActions`.
+  avisos (corregido en el sitio), y *Editar… / Explicar / Documentar con M365
+  Copilot* sobre una selección. Se desactiva con `ms365copilot.editor.codeActions`.
 - **Barra de título del editor**: cuando el archivo abierto tiene cambios del
-  agente pendientes de revisar, aparecen los botones ✓ **Keep**, ↶ **Undo** y
-  ⇄ **Diff** junto a las pestañas.
+  agente pendientes de revisar, aparecen ↑ / ↓ (cambio anterior / siguiente),
+  ✓ **Keep**, ↶ **Undo** y ⇄ **Diff** junto a las pestañas.
+- **Terminal**: clic derecho → **Explicar el último comando del terminal** envía
+  el último comando, su salida y su código de salida a `@m365 /terminal`. Requiere
+  la shell integration de VS Code; la salida sólo se guarda en memoria y sólo se
+  envía cuando lo pides (`ms365copilot.terminal.captureOutput`).
 
 ### Barra de estado y menú rápido
 
@@ -89,6 +111,15 @@ minutos) o caduca durante la sesión, una notificación ofrece **Pegar token** /
 los tokens caducados. Cuando la extensión de navegador renueva el token, un
 mensaje breve en la barra de estado lo confirma.
 
+### Ajustes del editor
+
+| Ajuste | Por defecto | Para qué |
+|--------|-------------|----------|
+| `ms365copilot.editor.codeActions` | `true` | Acciones de M365 Copilot en la bombilla. |
+| `ms365copilot.editor.model` | `auto` | Modelo de las respuestas que se escriben directamente en el editor: *Editar código…*, el arreglo de la bombilla y el mensaje de commit. |
+| `ms365copilot.terminal.captureOutput` | `true` | Guardar en memoria la salida de los últimos comandos para `@m365 /terminal`. |
+| `ms365copilot.notifications.tokenExpiry` | `true` | Avisar cuando el token va a caducar o caduca. |
+
 ### Source Control: mensaje de commit con M365
 
 El botón ✨ de la barra de título de **Source Control** (*Generar mensaje de
@@ -97,6 +128,33 @@ commit con M365 Copilot*) redacta un mensaje
 stage — o del árbol de trabajo si no hay nada en stage — y lo escribe
 directamente en el cuadro de commit, en el idioma de la extensión. Nunca
 commitea: lo revisas y commiteas tú.
+
+## Modelos que siguen el ritmo de M365 Copilot
+
+Microsoft añade y retira modelos de M365 Copilot a menudo, y no hay ninguna API
+documentada que los liste. Por eso la lista de modelos no es fija: junta cuatro
+fuentes, y el selector de modelos del chat se actualiza solo cuando cambia.
+
+| Fuente | Cómo funciona |
+|--------|---------------|
+| De serie | Los modelos que trae esta versión — siempre disponibles, también sin conexión. |
+| Catálogo en línea | [`models.json`](https://github.com/cristiancastineiras/M365CopilotVSCode/blob/main/models.json) en el repositorio, descargado al arrancar y cada 12 h. Añadir ahí un modelo (o `"hidden": true` para retirarlo) llega a todos los usuarios sin publicar versión. |
+| Detectados en la web | Cuando usas un modelo en M365 Copilot, la extensión de navegador / el userscript ven su `tone` en la invocación del chat y lo envían con el token. Si VS Code aún no lo conoce, lo añade — es la prueba de que existe para tu cuenta. |
+| Tus ajustes | `ms365copilot.models.custom`, p. ej. `["Gpt_5_9_Chat"]`, para probar un modelo antes de que llegue al catálogo. |
+
+Los modelos nuevos se anuncian una vez con una notificación. **M365 Copilot:
+Actualizar modelos** (también en el menú) descarga el catálogo al momento y
+lista cada modelo con su origen. Si BizChat rechaza un modelo que no viene de
+serie, el error indica que puede no estar disponible en tu tenant y sugiere Auto.
+
+| Ajuste | Por defecto | Para qué |
+|--------|-------------|----------|
+| `ms365copilot.models.updateFromCatalog` | `true` | Descargar `models.json` (un GET a GitHub; no se envía nada). |
+| `ms365copilot.models.detectFromBrowser` | `true` | Añadir los modelos que usa la web. |
+| `ms365copilot.models.custom` | `[]` | Modelos adicionales por `tone` (o `{ "tone", "name" }`). |
+
+Los ajustes de modelo de los sub-agentes, del autocompletado y de las respuestas
+en el editor (`*.model`) ofrecen los modelos de serie.
 
 ## Idiomas (inglés / español)
 
@@ -161,10 +219,18 @@ coincidencias».
 Los cambios se aplican **en el editor, sin guardar en disco**, como en los
 flujos de edición nativos de VS Code:
 
-- las líneas tocadas quedan **resaltadas** (colores de diff de tu tema, y marca
-  en la regla lateral);
-- encima del cambio aparece un **CodeLens** con **✓ Keep**, **↶ Undo** y
-  **⇄ Ver diff**, y las mismas acciones en la **barra de título del editor**;
+- cada **bloque (hunk)** cambiado se resalta por separado — las líneas añadidas
+  con el color de diff de tu tema, las borradas con una marca roja — y no todo el
+  tramo entre el primer cambio y el último;
+- cada bloque tiene su propio CodeLens **✓ Keep (+a −b)** y **↶ Undo**, y arriba
+  del archivo están **Keep todo / Undo todo / Ver diff**; esas mismas acciones de
+  archivo, más **cambio anterior / siguiente**, están en la **barra de título del
+  editor**;
+- la revisión es el **diff en vivo** contra el contenido de antes de la edición
+  del agente: si escribes dentro de un cambio se actualiza, y si lo deshaces a
+  mano desaparece;
+- si el agente vuelve a editar el mismo archivo antes de que revises, se conserva
+  el contenido original como base, así que Undo vuelve de verdad a antes del agente;
 - el diff enfrenta el contenido anterior con el **documento real y editable**;
 - la barra de estado indica cuántos archivos quedan por revisar;
 - como es una edición normal del editor, **Ctrl+Z funciona** tal cual.
@@ -240,6 +306,8 @@ paleta de comandos bajo **M365 Copilot**.
 |---------|--------|
 | `Mostrar menú` | El menú rápido (igual que pulsar el elemento de la barra de estado). |
 | `Abrir el chat con @m365` | Abre el chat con `@m365` listo. |
+| `Editar código…` | Edita la selección (o la función del cursor) en el sitio a partir de una instrucción — **Ctrl+Mayús+Alt+I**. |
+| `Explicar el último comando del terminal` | `@m365 /terminal` sobre el terminal activo (también en el menú contextual del terminal). |
 | `Explicar código` / `Corregir código` / `Documentar código` / `Generar tests` / `Preguntar sobre este código…` | Acciones del editor (también en el menú contextual). |
 | `Generar mensaje de commit con M365 Copilot` | Redacta el mensaje de commit en Source Control. |
 | `Pegar perfil o token` | Guarda el token en SecretStorage (cifrado). |
@@ -247,10 +315,12 @@ paleta de comandos bajo **M365 Copilot**.
 | `Borrar credenciales` | Borra el token guardado. |
 | `Activar/desactivar autocompletado en línea` | Texto fantasma sí/no. |
 | `Cambiar idioma` | Inglés / español / automático. |
+| `Actualizar modelos` | Descarga el catálogo de modelos al momento y lista cada modelo con su origen. |
 | `Primeros pasos` | Abre el recorrido de bienvenida. |
 | `Mostrar registro (diagnóstico)` | Abre el canal de salida «M365 Copilot». |
 | `Revisar cambios de agente pendientes` | Diff de los cambios sin revisar. |
-| `Aceptar (Keep)` / `Revertir (Undo)` / `Ver diff de los cambios del agente` | Acciones de revisión (también en la barra de título). |
+| `Aceptar (Keep)` / `Revertir (Undo)` / `Ver diff de los cambios del agente` | Acciones de revisión de un archivo entero (también en la barra de título). |
+| `Siguiente cambio del agente` / `Cambio anterior del agente` | Salta entre los cambios pendientes, también entre archivos. |
 | `Descartar cambios de agente pendientes` | Revierte todo lo pendiente de una vez. |
 | `Deshacer último lote de cambios del agente` | Restaura el último lote aceptado. |
 
@@ -310,6 +380,13 @@ pnpm package          # .vsix en ../../releases
 ```
 
 Pulsa `F5` en VS Code para lanzar un *Extension Development Host*.
+
+**Userscript.** `ms365copilot-token.user.js` se genera — edita
+[`userscript/main.ts`](userscript/main.ts). `pnpm build` lo empaqueta con la
+lógica de captura de `@ms365copilot/core` (`capture.ts`, el mismo código que
+ejecuta el interceptor de la extensión de navegador), y `pnpm test` falla si el
+archivo del repo está desactualizado y después lo ejecuta contra una página y
+un Tampermonkey simulados.
 
 **Traducciones.** Los textos de ejecución viven en
 [`src/locales/en.ts`](src/locales/en.ts) (la referencia) y

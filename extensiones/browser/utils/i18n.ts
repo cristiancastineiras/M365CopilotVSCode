@@ -14,6 +14,7 @@ export type Locale = 'en' | 'es';
 
 const en = {
   'popup.title': 'M365 Copilot for VS Code',
+  'art.title': 'Connection between Microsoft 365 Copilot and VS Code',
   'hero.needsUser.title': 'Sign-in required',
   'hero.needsUser.sub': 'Open M365 Copilot and sign in with your account.',
   'hero.noToken.title': 'Waiting for a token',
@@ -63,6 +64,7 @@ const en = {
 
 const es: Record<keyof typeof en, string> = {
   'popup.title': 'M365 Copilot para VS Code',
+  'art.title': 'Conexión entre Microsoft 365 Copilot y VS Code',
   'hero.needsUser.title': 'Hace falta iniciar sesión',
   'hero.needsUser.sub': 'Abre M365 Copilot y entra con tu cuenta.',
   'hero.noToken.title': 'Esperando token',

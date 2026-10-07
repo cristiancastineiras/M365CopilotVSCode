@@ -8,6 +8,15 @@ de **Microsoft 365 Copilot** a VS Code — como modelos del chat, el participant
 autocompletado en línea — y mantienen su token sincronizado. Todo está
 disponible en **inglés y español**.
 
+> **Aviso Legal**
+>
+> M365CopilotVSCode es un proyecto independiente de código abierto y no está afiliado, respaldado, patrocinado ni aprobado por Microsoft Corporation.
+>
+> Los usuarios son responsables de cumplir todos los términos, licencias y políticas aplicables de Microsoft al utilizar este software.
+>
+> Este software se proporciona "TAL CUAL" ("AS IS"), sin garantías de ningún tipo, ya sean expresas o implícitas.
+
+
 ```
 .
 ├── extensiones/
@@ -51,6 +60,15 @@ Requiere Node ≥ 22.18 y pnpm 10.
   manifiesto en `public/_locales/`, de la interfaz en `utils/i18n.ts`.
 - **Userscript:** sigue el idioma del navegador.
 - **Documentación:** cada README/guía tiene versión en inglés y en español.
+
+## Actualizar los modelos
+
+[`models.json`](models.json) es el catálogo de modelos en línea que descarga la
+extensión de VS Code (al arrancar y cada 12 h): añade una entrada — `tone` tal
+como lo envía la web de M365 Copilot, más `name` y un `detail` en `en`/`es` — y
+haz push a `main`; todos los usuarios la reciben sin publicar versión.
+`"hidden": true` retira un modelo, aunque venga de serie. Los tests comprueban
+que el archivo se puede leer.
 
 ## Publicar una versión
 

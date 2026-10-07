@@ -7,7 +7,7 @@
 import { t, type MessageKey } from './i18n';
 import { M365_TOOL_NAMES, M365_WORKSPACE_TOOL_NAMES } from './toolCatalog';
 
-export const PARTICIPANT_COMMANDS = ['explain', 'fix', 'doc', 'tests'] as const;
+export const PARTICIPANT_COMMANDS = ['explain', 'fix', 'doc', 'tests', 'terminal'] as const;
 export type ParticipantCommand = (typeof PARTICIPANT_COMMANDS)[number];
 
 export function asParticipantCommand(value: string | undefined): ParticipantCommand | undefined {
@@ -28,6 +28,20 @@ export interface PromptCodeContext {
 	readonly diagnostics: readonly string[];
 }
 
+/** The terminal command `/terminal` is about (see terminalHistory.ts). */
+export interface PromptTerminalRun {
+	readonly terminalName: string;
+	readonly commandLine: string;
+	readonly cwd: string | undefined;
+	/** Undefined while running, or when the shell did not report it. */
+	readonly exitCode: number | undefined;
+	readonly running: boolean;
+	/** Clean output (no escape sequences), its tail when it was long. */
+	readonly output: string;
+	/** Characters of output left out from the start. */
+	readonly truncatedChars: number;
+}
+
 export interface HistoryTurn {
 	readonly role: 'user' | 'assistant';
 	readonly text: string;
@@ -38,6 +52,7 @@ export interface ParticipantPromptInput {
 	/** What the user typed after `@m365 /command`. */
 	readonly request: string;
 	readonly code?: PromptCodeContext;
+	readonly terminal?: PromptTerminalRun;
 	readonly history?: readonly HistoryTurn[];
 	/** Workspace-relative paths of other files attached with `#`. */
 	readonly attachedPaths?: readonly string[];
@@ -48,6 +63,7 @@ const TASK_KEYS: Readonly<Record<ParticipantCommand | 'ask', MessageKey>> = {
 	fix: 'participant.task.fix',
 	doc: 'participant.task.doc',
 	tests: 'participant.task.tests',
+	terminal: 'participant.task.terminal',
 	ask: 'participant.task.ask',
 };
 
@@ -72,7 +88,9 @@ export function toolsForCommand(command: ParticipantCommand | undefined): readon
 
 /** Tool-call budget per request: an explanation rarely needs more than a couple of reads. */
 export function maxStepsForCommand(command: ParticipantCommand | undefined): number {
-	return command === 'explain' ? 4 : 10;
+	if (command === 'explain') return 4;
+	if (command === 'terminal') return 6;
+	return 10;
 }
 
 const MAX_HISTORY_TURNS = 6;
@@ -90,6 +108,7 @@ export function buildParticipantFraming(input: ParticipantPromptInput): string {
 	const history = renderHistory(input.history ?? []);
 	if (history) sections.push(`${t('participant.prompt.history')}\n${history}`);
 
+	if (input.terminal) sections.push(renderTerminal(input.terminal));
 	if (input.code) sections.push(renderCode(input.code));
 	if (input.attachedPaths && input.attachedPaths.length > 0) {
 		sections.push(t('participant.prompt.attached', input.attachedPaths.join(', ')));
@@ -111,6 +130,27 @@ function renderCode(code: PromptCodeContext): string {
 	if (code.truncatedChars > 0) lines.push(t('participant.prompt.contextTruncated', code.truncatedChars));
 	if (code.diagnostics.length > 0) {
 		lines.push(t('participant.prompt.diagnostics'), ...code.diagnostics.map((line) => `- ${line}`));
+	}
+	return lines.join('\n');
+}
+
+function renderTerminal(run: PromptTerminalRun): string {
+	const status = run.running
+		? t('participant.prompt.terminalRunning')
+		: run.exitCode === undefined
+			? t('participant.prompt.terminalNoExitCode')
+			: t('participant.prompt.terminalExitCode', run.exitCode);
+	const lines = [
+		t('participant.prompt.terminal', run.terminalName),
+		`$ ${run.commandLine}`,
+		`${status}${run.cwd ? ` · cwd: ${run.cwd}` : ''}`,
+	];
+	if (run.output.trim()) {
+		const fence = fenceFor(run.output);
+		if (run.truncatedChars > 0) lines.push(t('participant.prompt.terminalTruncated', run.truncatedChars));
+		lines.push(`${fence}text`, run.output, fence);
+	} else {
+		lines.push(t('participant.prompt.terminalNoOutput'));
 	}
 	return lines.join('\n');
 }

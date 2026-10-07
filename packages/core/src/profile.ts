@@ -25,4 +25,10 @@ export interface CopilotProfile {
   invocationType: number;
   claims: TokenClaims | null;
   capturedAt: string;
+  /**
+   * `tone`s (modelos) que la web de M365 Copilot ha usado de verdad, vistos en
+   * sus invocaciones `chat`: la extensión de VS Code añade al selector los que
+   * aún no conoce. Opcional: los perfiles antiguos no lo traen.
+   */
+  observedTones?: string[];
 }

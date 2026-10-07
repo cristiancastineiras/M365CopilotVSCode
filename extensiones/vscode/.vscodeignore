@@ -2,6 +2,7 @@
 src/**
 test/**
 scripts/**
+userscript/**
 node_modules/**
 tsconfig.json
 tsdown.config.ts

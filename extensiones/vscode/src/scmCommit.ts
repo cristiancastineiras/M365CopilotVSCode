@@ -11,7 +11,8 @@
  */
 import * as vscode from 'vscode';
 import { streamCopilotTurnWithRetry } from './client';
-import { isTokenUsable } from './profile';
+import { requireUsableProfile } from './commands';
+import { editorTone } from './models';
 import type { ProfileStore } from './secrets';
 import { buildCommitMessagePrompt, cleanGeneratedCommitMessage } from '../tools/commitMessage';
 import { execGit } from '../tools/git';
@@ -28,16 +29,8 @@ export function registerScmCommands(store: ProfileStore, log: (message: string) 
 }
 
 async function generateCommitMessage(store: ProfileStore, log: (message: string) => void, source: unknown) {
-	const profile = await store.get();
-	if (!profile || !isTokenUsable(profile)) {
-		const paste = t('watcher.pasteToken');
-		const picked = await vscode.window.showWarningMessage(
-			t(profile ? 'participant.tokenExpired' : 'participant.noToken'),
-			paste,
-		);
-		if (picked === paste) await vscode.commands.executeCommand('ms365copilot.pasteProfile');
-		return;
-	}
+	const profile = await requireUsableProfile(store);
+	if (!profile) return;
 
 	let repository: GitRepository | undefined;
 	try {
@@ -73,7 +66,7 @@ async function generateCommitMessage(store: ProfileStore, log: (message: string)
 				await streamCopilotTurnWithRetry({
 					profile,
 					prompt: buildCommitMessagePrompt({ files: lines(files), diff, staged }),
-					tone: null,
+					tone: editorTone(),
 					signal: controller.signal,
 					log,
 					callbacks: { onText: (delta) => (answer += delta) },

@@ -3,6 +3,8 @@ import { sendMessage } from '@/utils/messaging';
 import { getLocale, t, type MessageKey } from '@/utils/i18n';
 import { Pill, type Tone } from './components/Pill';
 import { StatusRow } from './components/StatusRow';
+import { ConnectionArt } from './components/ConnectionArt';
+import { connectionState } from '@ms365copilot/core';
 
 interface ProfileState {
   hasToken: boolean;
@@ -128,6 +130,12 @@ export default function App() {
 
   const expired = profile.minutesLeft !== null && profile.minutesLeft <= 0;
   const hero = deriveHero(profile.hasToken, expired, vscode, profile.refreshAction);
+  const artState = connectionState({
+    hasToken: profile.hasToken,
+    expired,
+    vscodeConnected: vscode === 'connected',
+    needsUser: profile.refreshAction === 'needsUser',
+  });
   const tokenValue = !profile.hasToken
     ? t('token.none')
     : expired
@@ -141,11 +149,9 @@ export default function App() {
   return (
     <div className="app">
 
-      <section className="hero">
-        <div className="hero-icon" data-tone={hero.tone}>
-          {hero.icon}
-        </div>
-        <div>
+      <section className="hero" data-tone={hero.tone}>
+        <ConnectionArt state={artState} />
+        <div className="hero-text">
           <div className="hero-title">{hero.title}</div>
           <div className="hero-sub">{hero.sub}</div>
         </div>
@@ -214,21 +220,21 @@ function deriveHero(
   expired: boolean,
   vscode: VSCode,
   refreshAction: string | null,
-): { tone: Tone; icon: string; title: string; sub: string } {
+): { tone: Tone; title: string; sub: string } {
   // El auto-renovador agotó sus intentos: esto sí necesita al usuario.
   if (refreshAction === 'needsUser') {
-    return { tone: 'bad', icon: '!', title: t('hero.needsUser.title'), sub: t('hero.needsUser.sub') };
+    return { tone: 'bad', title: t('hero.needsUser.title'), sub: t('hero.needsUser.sub') };
   }
   if (!hasToken) {
-    return { tone: 'neutral', icon: '…', title: t('hero.noToken.title'), sub: t('hero.noToken.sub') };
+    return { tone: 'neutral', title: t('hero.noToken.title'), sub: t('hero.noToken.sub') };
   }
   if (expired) {
-    return { tone: 'warn', icon: '↻', title: t('hero.expired.title'), sub: t('hero.expired.sub') };
+    return { tone: 'warn', title: t('hero.expired.title'), sub: t('hero.expired.sub') };
   }
   if (vscode !== 'connected') {
-    return { tone: 'warn', icon: '!', title: t('hero.noVSCode.title'), sub: t('hero.noVSCode.sub') };
+    return { tone: 'warn', title: t('hero.noVSCode.title'), sub: t('hero.noVSCode.sub') };
   }
-  return { tone: 'ok', icon: '✓', title: t('hero.ok.title'), sub: t('hero.ok.sub') };
+  return { tone: 'ok', title: t('hero.ok.title'), sub: t('hero.ok.sub') };
 }
 
 function vscodePill(vscode: VSCode): { tone: Tone; label: string } {

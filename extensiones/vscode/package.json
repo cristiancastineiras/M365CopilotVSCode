@@ -2,7 +2,7 @@
   "name": "ms365-copilot-vscode",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "1.3.0",
+  "version": "2.0.0",
   "publisher": "ms365-copilot-vscode",
   "license": "MIT",
   "repository": {
@@ -461,6 +461,24 @@
           "default": true,
           "markdownDescription": "%config.editor.codeActions%"
         },
+        "ms365copilot.editor.model": {
+          "type": "string",
+          "enum": [
+            "ms365-copilot-auto",
+            "ms365-copilot-gpt",
+            "ms365-copilot-gpt56",
+            "ms365-copilot-gpt56-reasoning",
+            "ms365-copilot-claude",
+            "ms365-copilot-reasoning"
+          ],
+          "default": "ms365-copilot-auto",
+          "markdownDescription": "%config.editor.model%"
+        },
+        "ms365copilot.terminal.captureOutput": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.terminal.captureOutput%"
+        },
         "ms365copilot.tools.includeEditorTools": {
           "type": "boolean",
           "default": true,
@@ -487,6 +505,44 @@
           "minimum": 4,
           "maximum": 200,
           "markdownDescription": "%config.tools.maxAdvertised%"
+        },
+        "ms365copilot.models.updateFromCatalog": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.models.updateFromCatalog%"
+        },
+        "ms365copilot.models.detectFromBrowser": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.models.detectFromBrowser%"
+        },
+        "ms365copilot.models.custom": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]{1,63}$"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "tone"
+                ],
+                "properties": {
+                  "tone": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z][A-Za-z0-9_.-]{1,63}$"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          },
+          "markdownDescription": "%config.models.custom%"
         },
         "ms365copilot.subagents.enabled": {
           "type": "boolean",
@@ -599,6 +655,12 @@
         "icon": "$(comment-discussion)"
       },
       {
+        "command": "ms365copilot.editCode",
+        "title": "%command.editCode%",
+        "category": "M365 Copilot",
+        "icon": "$(wand)"
+      },
+      {
         "command": "ms365copilot.explainCode",
         "title": "%command.explainCode%",
         "category": "M365 Copilot"
@@ -629,6 +691,12 @@
         "icon": "$(sparkle-filled)"
       },
       {
+        "command": "ms365copilot.explainTerminal",
+        "title": "%command.explainTerminal%",
+        "category": "M365 Copilot",
+        "icon": "$(terminal)"
+      },
+      {
         "command": "ms365copilot.toggleInlineCompletions",
         "title": "%command.toggleInlineCompletions%",
         "category": "M365 Copilot"
@@ -654,6 +722,12 @@
         "title": "%command.selectLanguage%",
         "category": "M365 Copilot",
         "icon": "$(globe)"
+      },
+      {
+        "command": "ms365copilot.refreshModels",
+        "title": "%command.refreshModels%",
+        "category": "M365 Copilot",
+        "icon": "$(sync)"
       },
       {
         "command": "ms365copilot.openWalkthrough",
@@ -690,6 +764,30 @@
         "icon": "$(diff)"
       },
       {
+        "command": "ms365copilot.previousChange",
+        "title": "%command.previousChange%",
+        "category": "M365 Copilot",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "ms365copilot.nextChange",
+        "title": "%command.nextChange%",
+        "category": "M365 Copilot",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "ms365copilot.keepHunk",
+        "title": "%command.keepHunk%",
+        "category": "M365 Copilot",
+        "icon": "$(check)"
+      },
+      {
+        "command": "ms365copilot.undoHunk",
+        "title": "%command.undoHunk%",
+        "category": "M365 Copilot",
+        "icon": "$(discard)"
+      },
+      {
         "command": "ms365copilot.discardPendingEdits",
         "title": "%command.discardPendingEdits%",
         "category": "M365 Copilot"
@@ -723,6 +821,10 @@
           {
             "name": "tests",
             "description": "%participant.command.tests%"
+          },
+          {
+            "name": "terminal",
+            "description": "%participant.command.terminal%"
           }
         ]
       }
@@ -742,6 +844,11 @@
         }
       ],
       "ms365copilot.editor": [
+        {
+          "command": "ms365copilot.editCode",
+          "group": "0_edit@1",
+          "when": "!editorReadonly"
+        },
         {
           "command": "ms365copilot.explainCode",
           "group": "1_ask@1"
@@ -767,18 +874,28 @@
       ],
       "editor/title": [
         {
-          "command": "ms365copilot.keepEdits",
+          "command": "ms365copilot.previousChange",
           "group": "navigation@1",
           "when": "ms365copilot.activeEditorHasPendingEdits"
         },
         {
-          "command": "ms365copilot.undoEdits",
+          "command": "ms365copilot.nextChange",
           "group": "navigation@2",
           "when": "ms365copilot.activeEditorHasPendingEdits"
         },
         {
-          "command": "ms365copilot.showEditDiff",
+          "command": "ms365copilot.keepEdits",
           "group": "navigation@3",
+          "when": "ms365copilot.activeEditorHasPendingEdits"
+        },
+        {
+          "command": "ms365copilot.undoEdits",
+          "group": "navigation@4",
+          "when": "ms365copilot.activeEditorHasPendingEdits"
+        },
+        {
+          "command": "ms365copilot.showEditDiff",
+          "group": "navigation@5",
           "when": "ms365copilot.activeEditorHasPendingEdits"
         }
       ],
@@ -825,6 +942,32 @@
         {
           "command": "ms365copilot.discardPendingEdits",
           "when": "ms365copilot.hasPendingEdits"
+        },
+        {
+          "command": "ms365copilot.editCode",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "ms365copilot.previousChange",
+          "when": "ms365copilot.hasPendingEdits"
+        },
+        {
+          "command": "ms365copilot.nextChange",
+          "when": "ms365copilot.hasPendingEdits"
+        },
+        {
+          "command": "ms365copilot.keepHunk",
+          "when": "false"
+        },
+        {
+          "command": "ms365copilot.undoHunk",
+          "when": "false"
+        }
+      ],
+      "terminal/context": [
+        {
+          "command": "ms365copilot.explainTerminal",
+          "group": "ms365copilot@1"
         }
       ]
     },
@@ -876,6 +1019,7 @@
               "altText": "%walkthrough.editor.alt%"
             },
             "completionEvents": [
+              "onCommand:ms365copilot.editCode",
               "onCommand:ms365copilot.explainCode",
               "onCommand:ms365copilot.fixCode"
             ]
@@ -894,14 +1038,22 @@
           }
         ]
       }
+    ],
+    "keybindings": [
+      {
+        "command": "ms365copilot.editCode",
+        "key": "ctrl+shift+alt+i",
+        "mac": "cmd+shift+alt+i",
+        "when": "editorTextFocus && !editorReadonly"
+      }
     ]
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && node scripts/build-userscript.mjs",
     "watch": "tsdown --watch",
-    "typecheck": "tsc --noEmit",
-    "lint": "oxlint src",
-    "test": "node --experimental-strip-types --import ./test/register.mjs test/e2e.mts",
+    "typecheck": "tsc --noEmit && tsc -p userscript/tsconfig.json",
+    "lint": "oxlint src tools userscript",
+    "test": "node --experimental-strip-types --import ./test/register.mjs test/e2e.mts && node scripts/build-userscript.mjs --check && node --experimental-strip-types --import ./test/register.mjs test/userscript.mts",
     "icon": "node scripts/render-icon.mjs",
     "package": "pnpm build && vsce package --no-dependencies --allow-missing-repository --out ../../releases",
     "vscode:prepublish": "pnpm build",

@@ -10,6 +10,7 @@ import { ProfileStore } from './secrets';
 import { TokenAutoRefreshServer } from './tokenServer';
 import { WorkspaceEditManager } from '../tools/writeFile';
 import { minutesUntilExpiry } from './profile';
+import { installModelRegistry } from './models';
 import { initLogger, log, showLog, type LogSink } from './logger';
 import { getLocale, resolveLocale, setLocale, t } from './i18n';
 import { M365StatusBar } from './statusBar';
@@ -17,12 +18,16 @@ import { TokenWatcher } from './tokenWatcher';
 import { EditorHandoff, registerEditorActions } from './editorActions';
 import { registerChatParticipant } from './participant';
 import { registerScmCommands } from './scmCommit';
+import { registerInlineEdit } from './inlineEdit';
+import { TerminalHistory } from './terminalHistory';
+import type { Hunk } from '../tools/lineDiff';
 import {
 	clearProfile,
 	currentLanguageSetting,
 	languageName,
 	openWalkthrough,
 	pasteProfile,
+	refreshModels,
 	selectLanguage,
 	showMenu,
 	showStatus,
@@ -34,7 +39,14 @@ const VENDOR = 'ms365copilot';
 /** Diagnostics also stream to this file so raw frames can be inspected. */
 const DEBUG_FILE = path.join(os.tmpdir(), 'ms365copilot-debug.log');
 
-export function activate(context: vscode.ExtensionContext): void {
+/** What `activate` hands to the extension's own integration tests (and only to them). */
+export interface TestingApi {
+	readonly workspaceEdits: WorkspaceEditManager;
+	/** To hand the extension a profile (e.g. with observed models) without the local server. */
+	readonly store: ProfileStore;
+}
+
+export function activate(context: vscode.ExtensionContext): TestingApi | undefined {
 	// Before anything says a word: every message below goes through t().
 	setLocale(resolveLocale(currentLanguageSetting(), vscode.env.language));
 
@@ -69,9 +81,12 @@ export function activate(context: vscode.ExtensionContext): void {
 	});
 	tokenServer.start();
 	const provider = new Ms365CopilotProvider(store);
+	// Before anything reads the model list: it replaces the built-in one.
+	const modelRegistry = installModelRegistry(context.globalState, store, log);
 	const workspaceEdits = new WorkspaceEditManager();
 	const completions = new Ms365InlineCompletionProvider(store, statusBar);
 	const handoff = new EditorHandoff();
+	const terminals = new TerminalHistory();
 	const tokenWatcher = new TokenWatcher(
 		store,
 		() => statusBar.refresh(),
@@ -87,6 +102,9 @@ export function activate(context: vscode.ExtensionContext): void {
 		provider,
 		workspaceEdits,
 		tokenWatcher,
+		terminals,
+		modelRegistry,
+		modelRegistry.onDidChange(() => provider.refresh()),
 		workspaceEdits.onDidChangePending((count) => statusBar.setPendingEdits(count)),
 		vscode.lm.registerLanguageModelChatProvider(VENDOR, provider),
 		vscode.languages.registerInlineCompletionItemProvider({ pattern: '**' }, completions),
@@ -100,8 +118,16 @@ export function activate(context: vscode.ExtensionContext): void {
 				});
 			}
 		}),
-		registerChatParticipant({ store, handoff, edits: workspaceEdits, extensionUri: context.extensionUri, log }),
-		...registerEditorActions(handoff),
+		registerChatParticipant({
+			store,
+			handoff,
+			edits: workspaceEdits,
+			terminals,
+			extensionUri: context.extensionUri,
+			log,
+		}),
+		...registerEditorActions(handoff, terminals),
+		...registerInlineEdit({ store, edits: workspaceEdits, memento: context.globalState, log }),
 		...registerScmCommands(store, log),
 		...registerM365WorkspaceTools(workspaceEdits),
 		...registerM365SubagentTools(store, log),
@@ -111,6 +137,7 @@ export function activate(context: vscode.ExtensionContext): void {
 		vscode.commands.registerCommand('ms365copilot.clearProfile', () => clearProfile(store)),
 		vscode.commands.registerCommand('ms365copilot.showStatus', () => showStatus(store)),
 		vscode.commands.registerCommand('ms365copilot.selectLanguage', () => selectLanguage()),
+		vscode.commands.registerCommand('ms365copilot.refreshModels', () => refreshModels(modelRegistry)),
 		vscode.commands.registerCommand('ms365copilot.openWalkthrough', () => openWalkthrough()),
 		vscode.commands.registerCommand('ms365copilot.showLog', () => showLog()),
 		vscode.commands.registerCommand('ms365copilot.reviewPendingEdits', () => workspaceEdits.reviewPendingEdits()),
@@ -120,11 +147,25 @@ export function activate(context: vscode.ExtensionContext): void {
 			workspaceEdits.showDiff(asUri(uri)),
 		),
 		vscode.commands.registerCommand('ms365copilot.discardPendingEdits', () => workspaceEdits.undo()),
+		// Per-hunk actions come from CodeLens only, with the hunk as argument.
+		vscode.commands.registerCommand('ms365copilot.keepHunk', (uri?: unknown, hunk?: unknown) =>
+			asUri(uri) && isHunk(hunk) ? workspaceEdits.keepHunk(asUri(uri)!, hunk) : undefined,
+		),
+		vscode.commands.registerCommand('ms365copilot.undoHunk', (uri?: unknown, hunk?: unknown) =>
+			asUri(uri) && isHunk(hunk) ? workspaceEdits.undoHunk(asUri(uri)!, hunk) : undefined,
+		),
+		vscode.commands.registerCommand('ms365copilot.nextChange', () => workspaceEdits.goToChange(1)),
+		vscode.commands.registerCommand('ms365copilot.previousChange', () => workspaceEdits.goToChange(-1)),
 		vscode.commands.registerCommand('ms365copilot.undoLastAgentEdit', () => workspaceEdits.undoLastBatch()),
 	);
 
 	// Nudge Copilot Chat to pick up our models on activation.
 	void activateCopilotChat().then(() => provider.refresh());
+
+	// Only when VS Code runs the extension's tests (--extensionTestsPath): lets
+	// them drive the Keep/Undo review directly, without the chat UI or the
+	// tool-confirmation dialog, which a test host refuses to show.
+	return context.extensionMode === vscode.ExtensionMode.Test ? { workspaceEdits, store } : undefined;
 }
 
 export function deactivate(): void {
@@ -152,6 +193,12 @@ function applyLanguage(rerender: () => void): void {
  */
 function asUri(value: unknown): vscode.Uri | undefined {
 	return value instanceof vscode.Uri ? value : undefined;
+}
+
+function isHunk(value: unknown): value is Hunk {
+	if (!value || typeof value !== 'object') return false;
+	const hunk = value as Record<string, unknown>;
+	return ['oldStart', 'oldLength', 'newStart', 'newLength'].every((key) => Number.isInteger(hunk[key]));
 }
 
 async function activateCopilotChat(): Promise<void> {

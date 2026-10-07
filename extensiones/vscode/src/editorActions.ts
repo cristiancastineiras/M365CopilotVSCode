@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { captureCodeContext, currentTextEditor, type CodeContext } from './editorContext';
 import type { ParticipantCommand } from './participantPrompts';
+import type { TerminalHistory } from './terminalHistory';
 import { errorMessage } from '../tools/common';
 import { t } from './i18n';
 
@@ -43,7 +44,7 @@ const ACTION_COMMANDS: readonly (readonly [string, ParticipantCommand])[] = [
 	['ms365copilot.generateTests', 'tests'],
 ];
 
-export function registerEditorActions(handoff: EditorHandoff): vscode.Disposable[] {
+export function registerEditorActions(handoff: EditorHandoff, terminals: TerminalHistory): vscode.Disposable[] {
 	const selector: vscode.DocumentSelector = [
 		{ scheme: 'file' },
 		{ scheme: 'untitled' },
@@ -57,6 +58,7 @@ export function registerEditorActions(handoff: EditorHandoff): vscode.Disposable
 			),
 		),
 		vscode.commands.registerCommand('ms365copilot.askAboutCode', () => askAboutCode()),
+		vscode.commands.registerCommand('ms365copilot.explainTerminal', () => explainTerminal(terminals)),
 		vscode.commands.registerCommand('ms365copilot.openChat', () => openChat(`@${PARTICIPANT_NAME} `, true)),
 		vscode.languages.registerCodeActionsProvider(selector, new M365CodeActionProvider(), {
 			providedCodeActionKinds: M365CodeActionProvider.kinds,
@@ -114,6 +116,20 @@ async function askAboutCode(): Promise<void> {
 	await openChat(`@${PARTICIPANT_NAME} ${question.trim()}`, false);
 }
 
+/** Last terminal command → `@m365 /terminal`, which reads it from the history itself. */
+async function explainTerminal(terminals: TerminalHistory): Promise<void> {
+	const terminal = vscode.window.activeTerminal;
+	if (!terminal) {
+		void vscode.window.showWarningMessage(t('terminal.none'));
+		return;
+	}
+	if (!terminals.lastRun(terminal)) {
+		void vscode.window.showWarningMessage(t('participant.noTerminalRun'));
+		return;
+	}
+	await openChat(`@${PARTICIPANT_NAME} /terminal`, false);
+}
+
 /**
  * Opens the chat view with `query`. `partial` leaves it in the input box for
  * the user to complete; otherwise it is sent straight away. Always in Ask
@@ -134,8 +150,9 @@ async function openChat(query: string, partial: boolean): Promise<void> {
 
 /**
  * Lightbulb integration: "Fix with M365 Copilot" on errors/warnings under the
- * cursor, and "Explain / Document with M365 Copilot" on a selection — the
- * same entry points GitHub Copilot offers, routed to `@m365`.
+ * cursor — an inline edit with the diagnostic as the instruction, so the fix
+ * lands right there under Keep/Undo — and "Edit… / Explain / Document with
+ * M365 Copilot" on a selection (the last two through `@m365`).
  */
 class M365CodeActionProvider implements vscode.CodeActionProvider {
 	static readonly kinds = [vscode.CodeActionKind.QuickFix, vscode.CodeActionKind.RefactorRewrite];
@@ -158,15 +175,16 @@ class M365CodeActionProvider implements vscode.CodeActionProvider {
 			);
 			action.diagnostics = [diagnostic];
 			action.command = {
-				command: 'ms365copilot.fixCode',
+				command: 'ms365copilot.editCode',
 				title: action.title,
-				arguments: [document.uri, diagnostic.range],
+				arguments: [document.uri, diagnostic.range, t('inlineEdit.fixInstruction', diagnostic.message)],
 			};
 			actions.push(action);
 		}
 
 		if (!range.isEmpty) {
 			for (const [command, key] of [
+				['ms365copilot.editCode', 'actions.codeAction.edit'],
 				['ms365copilot.explainCode', 'actions.codeAction.explain'],
 				['ms365copilot.documentCode', 'actions.codeAction.document'],
 			] as const) {

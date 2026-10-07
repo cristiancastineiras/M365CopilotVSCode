@@ -11,12 +11,9 @@ export default defineConfig({
   runner: {
     disabled: true,
   },
-  manifest: {
-    ...sharedManifest,
-    // Fijada a mano (y no la de package.json) porque los scripts `zip` de
-    // package.json renombran el .zip esperando exactamente este número.
-    version: '0.0.1',
-  },
+  // Sin `version`: WXT usa la de package.json, que Changesets sube en cada
+  // release junto con las de los otros dos paquetes.
+  manifest: sharedManifest,
   vite: () => ({
     build: {
       target: 'esnext',

@@ -3,6 +3,7 @@ import {
   TOKEN_ENDPOINT_PATH,
   HEALTH_ENDPOINT_PATH,
   isTokenUsable,
+  profileFromCapture,
   type CopilotProfile,
 } from '@ms365copilot/core';
 import { registerHandlers } from '@/utils/messaging';
@@ -23,20 +24,9 @@ const TOKEN_EXPIRED_SYNC_ERROR = 'token-expired';
 export default defineBackground(() => {
   logger.info('M365 Copilot Background Script loaded', { id: chrome.runtime.id });
 
-  // Construye un perfil completo a partir del store crudo.
+  // Construye un perfil completo a partir del store crudo (misma forma que el userscript).
   function buildProfile(store: any): CopilotProfile | null {
-    if (!store || !store.accessToken) return null;
-    return {
-      version: 1,
-      capturedAt: store.capturedAt || new Date().toISOString(),
-      accessToken: store.accessToken,
-      endpoint: store.endpoint || null,
-      origin: store.origin || 'https://m365.cloud.microsoft',
-      userAgent: store.userAgent || navigator.userAgent,
-      invocationTemplate: store.invocationTemplate || null,
-      invocationType: store.invocationType || 4,
-      claims: store.claims || null,
-    };
+    return store ? profileFromCapture(store, navigator.userAgent) : null;
   }
 
   /**
