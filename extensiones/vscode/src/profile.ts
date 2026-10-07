@@ -7,14 +7,14 @@
  * `endpoint` e `invocationTemplate` se conservan por compatibilidad y como
  * diagnóstico, pero client.ts ya NO los usa para construir peticiones: sólo
  * `accessToken` (y sus claims) importan. Los tipos y utilidades compartidas
- * viven en `@ms365copilot/core`; aquí sólo queda el parseo de lo pegado, que
+ * viven en `@m365copilot/core`; aquí sólo queda el parseo de lo pegado, que
  * es específico de VS Code.
  */
-import { extractClaims, TONE_PATTERN, type CopilotProfile, type TokenClaims } from '@ms365copilot/core';
+import { extractClaims, isTokenUsable, TONE_PATTERN, type CopilotProfile, type TokenClaims } from '@m365copilot/core';
 import { t } from './i18n';
 
-export type { CopilotProfile, TokenClaims } from '@ms365copilot/core';
-export { decodeJwtPayload, isTokenUsable, minutesUntilExpiry } from '@ms365copilot/core';
+export type { CopilotProfile, TokenClaims } from '@m365copilot/core';
+export { decodeJwtPayload, isTokenUsable, minutesUntilExpiry } from '@m365copilot/core';
 
 const DEFAULT_ORIGIN = 'https://m365.cloud.microsoft';
 const DEFAULT_UA =
@@ -100,4 +100,28 @@ function observedTonesOf(record: Record<string, unknown>): Pick<CopilotProfile, 
 		.filter((tone): tone is string => typeof tone === 'string' && TONE_PATTERN.test(tone))
 		.slice(-20);
 	return tones.length > 0 ? { observedTones: tones } : {};
+}
+
+/** Who a profile signs in as, for VS Code's Accounts menu (account.ts). */
+export interface ProfileAccount {
+	/** Stable per user and tenant, so a renewed token is the same session. */
+	readonly sessionId: string;
+	readonly accountId: string;
+	readonly label: string;
+}
+
+/**
+ * The account behind a usable token; undefined without one or once it has
+ * expired — in the Accounts menu an expired token is "signed out".
+ */
+export function accountOf(profile: CopilotProfile | null | undefined): ProfileAccount | undefined {
+	if (!profile || !isTokenUsable(profile)) return undefined;
+	const claims = profile.claims ?? extractClaims(profile.accessToken) ?? {};
+	const upn = claims.upn?.trim();
+	const accountId = claims.oid ?? upn ?? 'm365copilot';
+	return {
+		sessionId: `${claims.tid ?? 'tenant'}/${accountId}`,
+		accountId,
+		label: upn || t('account.unknownUser'),
+	};
 }

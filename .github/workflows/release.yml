@@ -55,6 +55,6 @@ jobs:
           body_path: release-notes.md
           fail_on_unmatched_files: true
           files: |
-            releases/ms365-copilot-vscode-${{ env.VERSION }}.vsix
+            releases/m365-copilot-vscode-${{ env.VERSION }}.vsix
             releases/chrome/m365-copilot-vscode-extension-chrome.zip
             releases/firefox/m365-copilot-vscode-extension-firefox.zip

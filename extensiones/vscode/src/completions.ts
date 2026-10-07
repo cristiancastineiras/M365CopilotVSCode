@@ -7,7 +7,7 @@ import { isTokenUsable } from './profile';
 import type { ProfileStore } from './secrets';
 import { t } from './i18n';
 
-const CONFIG_SECTION = 'ms365copilot.inlineCompletions';
+const CONFIG_SECTION = 'm365copilot.inlineCompletions';
 
 /** Context bounds. Ghost text needs to be fast far more than it needs to be
  * well-informed, and every extra character is latency on a backend that opens
@@ -27,7 +27,7 @@ const SKIPPED_SCHEMES: ReadonlySet<string> = new Set([
 	'gitfs',
 	'vscode-scm',
 	'debug',
-	'ms365copilot-edit-preview',
+	'm365copilot-edit-preview',
 	'vscode-chat-code-block',
 ]);
 
@@ -58,7 +58,7 @@ function readSettings(): Settings {
 		debounceMs: clamp(config.get<number>('debounceMs', 500), 0, 5000),
 		maxLines: clamp(config.get<number>('maxLines', 6), 1, 30),
 		timeoutMs: clamp(config.get<number>('timeoutMs', 6000), 1000, 30_000),
-		modelId: config.get<string>('model', 'ms365-copilot-auto'),
+		modelId: config.get<string>('model', 'm365-copilot-auto'),
 		disabledLanguages: new Set(
 			(config.get<unknown[]>('disabledLanguages', ['scminput', 'plaintext']) ?? []).filter(
 				(value): value is string => typeof value === 'string',
@@ -90,7 +90,7 @@ export interface CompletionBusySink {
 	setBusy(busy: boolean): void;
 }
 
-export class Ms365InlineCompletionProvider implements vscode.InlineCompletionItemProvider {
+export class M365InlineCompletionProvider implements vscode.InlineCompletionItemProvider {
 	private readonly cache = new Map<string, CacheEntry>();
 	private inFlight: AbortController | undefined;
 

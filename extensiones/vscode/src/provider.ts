@@ -1,10 +1,12 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'node:crypto';
-import { streamCopilotTurnWithRetry, CopilotClientError, CopilotAuthError } from './client';
+import { streamCopilotTurnWithRetry, CopilotClientError, CopilotAuthError, type TurnMode, type WebSource } from './client';
 import { log } from './logger';
 
 import { MarkdownStreamFormatter } from './markdown';
-import { flattenMessages } from './messages';
+import { flattenMessages, latestUserText } from './messages';
+import { webSearchEnabled } from './webSearch';
+import { sourcesMarkdown } from './webSearchPrompt';
 import { allModels, findModel, toChatInformation, type TokenState } from './models';
 import { isTokenUsable, minutesUntilExpiry } from './profile';
 import { buildToolCatalog, ToolCallDecoder, type DuplicatePolicy } from './toolProtocol';
@@ -20,7 +22,7 @@ function readToolSettings(): {
 	duplicates: DuplicatePolicy;
 	maxTools: number;
 } {
-	const config = vscode.workspace.getConfiguration('ms365copilot.tools');
+	const config = vscode.workspace.getConfiguration('m365copilot.tools');
 	return {
 		includeEditorTools: config.get<boolean>('includeEditorTools', true),
 		duplicates: config.get<DuplicatePolicy>('duplicates', 'preferEditor'),
@@ -28,12 +30,18 @@ function readToolSettings(): {
 	};
 }
 
-export class Ms365CopilotProvider implements vscode.LanguageModelChatProvider, vscode.Disposable {
+/** The project context for a chat message (see projectIndex.ts), or undefined. */
+export type ProjectContextSource = (message: string) => Promise<string | undefined>;
+
+export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vscode.Disposable {
 	private readonly changeEmitter = new vscode.EventEmitter<void>();
 	readonly onDidChangeLanguageModelChatInformation = this.changeEmitter.event;
 	private readonly storeListener: vscode.Disposable;
 
-	constructor(private readonly store: ProfileStore) {
+	constructor(
+		private readonly store: ProfileStore,
+		private readonly projectContext?: ProjectContextSource,
+	) {
 		this.storeListener = store.onDidChange(() => this.changeEmitter.fire());
 	}
 
@@ -76,7 +84,16 @@ export class Ms365CopilotProvider implements vscode.LanguageModelChatProvider, v
 		// proveedor, y no sólo con las siete herramientas de la extensión.
 		const catalog = buildToolCatalog(options.tools, readToolSettings());
 		const toolsRequired = options.toolMode === vscode.LanguageModelChatToolMode.Required;
-		const prompt = flattenMessages(messages, { catalog, toolsRequired });
+		// Without tools to call there is no text protocol to protect, so the
+		// turn can go out the way the web app sends it: with web search.
+		const webTurn = catalog.callable.size === 0 && webSearchEnabled() && Boolean(profile.invocationTemplate);
+		let projectContext: string | undefined;
+		try {
+			projectContext = await this.projectContext?.(latestUserText(messages));
+		} catch (error) {
+			log(t('log.indexContextFailed', error instanceof Error ? error.message : String(error)));
+		}
+		const prompt = flattenMessages(messages, { catalog, toolsRequired, projectContext });
 		log(
 			t(
 				'log.chatRequest',
@@ -85,7 +102,7 @@ export class Ms365CopilotProvider implements vscode.LanguageModelChatProvider, v
 				prompt.length,
 				catalog.entries.length,
 				catalog.callable.size,
-				catalog.ms365Count,
+				catalog.m365Count,
 				catalog.editorCount,
 			) + (catalog.omitted.length > 0 ? t('log.chatRequestOmitted', catalog.omitted.join(', ')) : ''),
 		);
@@ -111,21 +128,47 @@ export class Ms365CopilotProvider implements vscode.LanguageModelChatProvider, v
 			},
 		);
 		const cancelListener = token.onCancellationRequested(() => controller.abort());
-
-		try {
-			await streamCopilotTurnWithRetry({
+		const sources: WebSource[] = [];
+		let emitted = false;
+		const run = (mode: TurnMode) =>
+			streamCopilotTurnWithRetry({
 				profile,
 				prompt,
 				tone: selected?.tone ?? null,
+				mode,
 				signal: controller.signal,
 				log,
 				callbacks: {
-					onText: (delta) => toolDecoder.push(delta),
+					onText: (delta) => {
+						if (delta) emitted = true;
+						toolDecoder.push(delta);
+					},
+					onSources: (found) => sources.push(...found),
 				},
 			});
+
+		try {
+			try {
+				await run(webTurn ? 'web' : 'tools');
+			} catch (error) {
+				// The web app's invocation is captured, not designed for us: if
+				// BizChat turns it down, answer the plain way instead of failing.
+				const retryable =
+					webTurn &&
+					!emitted &&
+					!token.isCancellationRequested &&
+					error instanceof CopilotClientError &&
+					!(error instanceof CopilotAuthError) &&
+					error.message !== '__CANCELLED__';
+				if (!retryable) throw error;
+				log(t('log.webFallback', error.message));
+				await run('tools');
+			}
 			toolDecoder.finish();
 			const formatted = markdown.finish();
 			if (formatted) progress.report(new vscode.LanguageModelTextPart(formatted));
+			const cited = sourcesMarkdown(sources);
+			if (cited) progress.report(new vscode.LanguageModelTextPart(cited));
 		} catch (error) {
 			if (error instanceof CopilotClientError && error.message === '__CANCELLED__') {
 				return; // user cancelled — swallow quietly

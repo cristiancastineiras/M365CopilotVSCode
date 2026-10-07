@@ -1,0 +1,11 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      // `wxt build` escribe en releases/chrome/chrome-mv3 (outDir de
+      // wxt.config.ts), fuera del paquete: sólo esa carpeta, no releases/ entera.
+      "outputs": ["../../releases/chrome/chrome-mv3/**"]
+    }
+  }
+}

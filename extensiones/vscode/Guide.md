@@ -44,7 +44,7 @@ tested on Chrome and Edge.
 - [Microsoft Edge](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
 
 Then add the userscript. The simplest way is to open
-[this link](https://raw.githubusercontent.com/cristiancastineiras/M365CopilotVSCode/main/extensiones/vscode/ms365copilot-token.user.js) with Tampermonkey installed: it offers **Install**, and from
+[this link](https://raw.githubusercontent.com/cristiancastineiras/M365CopilotVSCode/main/extensiones/vscode/m365copilot-token.user.js) with Tampermonkey installed: it offers **Install**, and from
 then on the script updates itself when a new version is released.
 
 You can also install it by hand:
@@ -53,7 +53,7 @@ You can also install it by hand:
 
 ![Create a new script in Tampermonkey](imgs/tampermonkey-crear-nuevo-script.png)
 
-2. Click **Create a new script** and paste the contents of [`ms365copilot-token.user.js`](ms365copilot-token.user.js).
+2. Click **Create a new script** and paste the contents of [`m365copilot-token.user.js`](m365copilot-token.user.js).
 
 3. Click **File > Save**. You can also drag the file onto the editor.
 
@@ -156,19 +156,28 @@ From the editor itself:
 - **`Ctrl + Shift + Alt + I`** with code selected (or the cursor inside a
   function): type an instruction ("add error handling") and the change is
   applied right there, with Keep / Undo.
-- **Right-click → M365 Copilot**: edit, explain, ask about, fix, document or
-  generate tests for the selected code (or the function the cursor is in).
+- **Right-click → M365 Copilot**: edit, explain, ask about, review, fix, document
+  or generate tests for the selected code (or the function the cursor is in).
+  **Review code** leaves its findings as comments on the lines, each with
+  **Apply fix** and **Dismiss** (they are also in the **Comments** panel).
 - **Lightbulb (`Ctrl + .`)** on an error: **Fix with M365 Copilot**, which fixes
-  it in place.
+  it in place — and **Fix all problems in this file** when there are several.
 - **Source Control**: the ✨ button in the title bar writes the commit message
-  with M365 Copilot.
+  with M365 Copilot, and ☑ reviews your uncommitted changes as comments.
+- **Accounts menu** (person icon, bottom left): shows your M365 Copilot account,
+  signs you out (deletes the token), and signs you in when there is no token.
+
+M365 Copilot also **knows your project**: a local index of the workspace adds
+the relevant code to each request, and **M365 Copilot: Search the project…**
+finds code by meaning ("where is the token saved"). With the browser extension
+or the userscript, it can also **search the internet** when it needs to.
 - **Terminal**: when a command fails, right-click in the terminal → **Explain
   last terminal command**.
 
 ## 7. Language
 
 By default the extension follows VS Code's language (English or Spanish). To
-change it: status bar menu → **Language**, or the `ms365copilot.language`
+change it: status bar menu → **Language**, or the `m365copilot.language`
 setting. It also changes the language of the instructions sent to the model, so
 it answers in that language.
 

@@ -1,5 +1,5 @@
 /**
- * Black-box tests of the GENERATED userscript (ms365copilot-token.user.js):
+ * Black-box tests of the GENERATED userscript (m365copilot-token.user.js):
  * it runs in a `vm` context with a fake page (WebSocket, fetch, XHR, MSAL
  * cache) and a fake Tampermonkey (GM_* storage, GM_xmlhttpRequest), and the
  * assertions look only at what it stores and what it sends to VS Code.
@@ -10,9 +10,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
-const SCRIPT = readFileSync(new URL('../ms365copilot-token.user.js', import.meta.url), 'utf8');
-const CAPTURE_KEY = 'ms365copilot.capture.v1';
-const SYNC_KEY = 'ms365copilot.sync.v1';
+const SCRIPT = readFileSync(new URL('../m365copilot-token.user.js', import.meta.url), 'utf8');
+const CAPTURE_KEY = 'm365copilot.capture.v1';
+const SYNC_KEY = 'm365copilot.sync.v1';
 
 const b64url = (value: unknown) =>
 	Buffer.from(JSON.stringify(value)).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');

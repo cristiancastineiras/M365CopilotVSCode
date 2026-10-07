@@ -34,11 +34,12 @@ import { MAX_TASK_WALL_CLOCK_MS, runToolLoop } from './subagentCore';
 import { toolResultToText } from './subagents';
 import type { WorkspaceEditManager } from '../tools/writeFile';
 import type { TerminalHistory } from './terminalHistory';
+import type { ContextOptions } from './projectIndex';
 import { errorMessage, relativePathForUri } from '../tools/common';
 import { t, type MessageKey } from './i18n';
 
-export const PARTICIPANT_ID = 'ms365copilot.m365';
-const VENDOR = 'ms365copilot';
+export const PARTICIPANT_ID = 'm365copilot.m365';
+const VENDOR = 'm365copilot';
 
 interface ParticipantDeps {
 	readonly store: ProfileStore;
@@ -47,6 +48,8 @@ interface ParticipantDeps {
 	readonly terminals: TerminalHistory;
 	readonly extensionUri: vscode.Uri;
 	readonly log: (message: string) => void;
+	/** The local project index's context for a request (projectIndex.ts). */
+	readonly projectContext?: (message: string, options: ContextOptions) => Promise<string | undefined>;
 }
 
 interface ParticipantResultMetadata {
@@ -57,7 +60,7 @@ export function registerChatParticipant(deps: ParticipantDeps): vscode.Disposabl
 	const participant = vscode.chat.createChatParticipant(PARTICIPANT_ID, (request, context, stream, token) =>
 		handleRequest(deps, request, context, stream, token),
 	);
-	participant.iconPath = vscode.Uri.joinPath(deps.extensionUri, 'logo', 'ms365-vscode.png');
+	participant.iconPath = vscode.Uri.joinPath(deps.extensionUri, 'logo', 'm365-vscode.png');
 	participant.followupProvider = { provideFollowups: (result) => followupsFor(result) };
 	return participant;
 }
@@ -76,7 +79,7 @@ async function handleRequest(
 	if (!profile || !isTokenUsable(profile)) {
 		deps.log(t('log.participantNoToken', command ?? '-'));
 		stream.markdown(t(profile ? 'participant.tokenExpired' : 'participant.noToken'));
-		stream.button({ command: 'ms365copilot.pasteProfile', title: t('participant.button.paste') });
+		stream.button({ command: 'm365copilot.pasteProfile', title: t('participant.button.paste') });
 		return { metadata };
 	}
 
@@ -105,6 +108,25 @@ async function handleRequest(
 	const contextLabel = terminal ? `$ ${terminal.commandLine}` : code ? code.relativePath : '-';
 	deps.log(t('log.participantRequest', command ?? '-', tone ?? 'magic', contextLabel));
 
+	// What to look up in the project index: the request, plus the code or the
+	// command output it is about — whose own lines are left out, since they are
+	// in the prompt already. What comes back is the code around it: callers,
+	// definitions it uses, related files.
+	const lookup = [
+		request.prompt,
+		code ? code.text.slice(0, 1_500) : '',
+		terminal ? `${terminal.commandLine}\n${terminal.output.slice(-1_500)}` : '',
+	].join('\n');
+	let projectContext: string | undefined;
+	try {
+		projectContext = await deps.projectContext?.(lookup, {
+			activeUri: code?.uri ?? currentTextEditor()?.document.uri,
+			...(code ? { exclude: { uri: code.uri, startLine: code.startLine, endLine: code.endLine } } : {}),
+		});
+	} catch (error) {
+		deps.log(t('log.indexContextFailed', errorMessage(error)));
+	}
+
 	const framing = buildParticipantFraming({
 		command,
 		request: request.prompt,
@@ -112,6 +134,7 @@ async function handleRequest(
 		terminal,
 		history: historyOf(context),
 		attachedPaths,
+		projectContext,
 	});
 	const wanted = new Set(toolsForCommand(command));
 	const offeredTools = vscode.lm.tools.filter((tool) => wanted.has(tool.name));
@@ -177,7 +200,7 @@ async function handleRequest(
 				break;
 		}
 		if (deps.edits.pendingCount > 0) {
-			stream.button({ command: 'ms365copilot.reviewPendingEdits', title: t('participant.button.review') });
+			stream.button({ command: 'm365copilot.reviewPendingEdits', title: t('participant.button.review') });
 		}
 		return { metadata };
 	} finally {

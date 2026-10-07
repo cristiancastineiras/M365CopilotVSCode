@@ -1,7 +1,7 @@
 /**
  * Node ESM resolve hook for `--experimental-strip-types`.
  *
- * The extension sources (and `@ms365copilot/core`'s build output) are consumed
+ * The extension sources (and `@m365copilot/core`'s build output) are consumed
  * through a bundler, so they import each other without a file extension
  * (`./toolCatalog`). Node's ESM resolver requires the extension, which made
  * `pnpm test` fail before it ran a single assertion. This hook retries an

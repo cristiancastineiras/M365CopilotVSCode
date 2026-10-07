@@ -103,7 +103,7 @@ export function registerM365WorkspaceTools(manager: WorkspaceEditManager): vscod
 	];
 }
 
-async function toolResult(run: () => Promise<string>): Promise<vscode.LanguageModelToolResult> {
+export async function toolResult(run: () => Promise<string>): Promise<vscode.LanguageModelToolResult> {
 	try {
 		return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(await run())]);
 	} catch (error) {

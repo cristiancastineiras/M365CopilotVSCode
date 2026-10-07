@@ -6,7 +6,7 @@
  * Relies on VS Code's shell integration, which reports every command line,
  * streams its output and its exit code. Everything stays in memory, bounded
  * per command and per terminal, and is only sent to the model when the user
- * asks for it; `ms365copilot.terminal.captureOutput` turns it off entirely.
+ * asks for it; `m365copilot.terminal.captureOutput` turns it off entirely.
  */
 import * as vscode from 'vscode';
 import { cleanTerminalOutput } from '../tools/terminalOutput';
@@ -63,7 +63,7 @@ export class TerminalHistory implements vscode.Disposable {
 	}
 
 	private start(event: vscode.TerminalShellExecutionStartEvent): void {
-		if (!vscode.workspace.getConfiguration('ms365copilot.terminal').get<boolean>('captureOutput', true)) return;
+		if (!vscode.workspace.getConfiguration('m365copilot.terminal').get<boolean>('captureOutput', true)) return;
 		const run: TerminalRun = {
 			commandLine: event.execution.commandLine.value,
 			cwd: event.execution.cwd?.fsPath,

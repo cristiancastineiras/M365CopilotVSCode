@@ -4,21 +4,35 @@
  * Keep/Undo review (per hunk), so it is as reversible as an agent edit.
  *
  * Also behind the lightbulb's "Fix with M365 Copilot", which runs the same
- * flow with the diagnostic as the instruction.
+ * flow with the diagnostic as the instruction, behind "Apply fix" on a review
+ * comment (review.ts), and behind "Fix all problems in this file", which runs
+ * it once per block of code with errors or warnings.
  */
 import * as vscode from 'vscode';
 import { streamCopilotTurnWithRetry, CopilotClientError } from './client';
 import { requireUsableProfile } from './commands';
-import { captureCodeContext, currentTextEditor } from './editorContext';
+import { captureCodeContext, currentTextEditor, type CodeContext } from './editorContext';
 import { buildInlineEditPrompt, extractEditedCode } from './inlineEditPrompt';
 import { editorTone } from './models';
 import type { ProfileStore } from './secrets';
 import type { WorkspaceEditManager } from '../tools/writeFile';
-import { errorMessage } from '../tools/common';
+import { errorMessage, relativePathForUri } from '../tools/common';
 import { t } from './i18n';
 
-const HISTORY_KEY = 'ms365copilot.inlineEdit.history';
+const HISTORY_KEY = 'm365copilot.inlineEdit.history';
 const MAX_HISTORY = 10;
+/** Errors/warnings "Fix all problems" takes, and blocks it rewrites, in one go. */
+const MAX_FIX_ALL_PROBLEMS = 40;
+const MAX_FIX_ALL_BLOCKS = 8;
+const PRESET_INSTRUCTIONS = [
+	'inlineEdit.preset.simplify',
+	'inlineEdit.preset.errors',
+	'inlineEdit.preset.types',
+	'inlineEdit.preset.names',
+	'inlineEdit.preset.comments',
+	'inlineEdit.preset.performance',
+	'inlineEdit.preset.async',
+] as const;
 /** Read-only context shown to the model around the block, each side. */
 const CONTEXT_LINES = 30;
 const MAX_CONTEXT_CHARS = 3_000;
@@ -38,7 +52,7 @@ export function registerInlineEdit(deps: InlineEditDeps): vscode.Disposable[] {
 	return [
 		editing,
 		vscode.commands.registerCommand(
-			'ms365copilot.editCode',
+			'm365copilot.editCode',
 			(uri?: unknown, range?: unknown, instruction?: unknown) =>
 				editCode(
 					deps,
@@ -48,13 +62,17 @@ export function registerInlineEdit(deps: InlineEditDeps): vscode.Disposable[] {
 					typeof instruction === 'string' ? instruction : undefined,
 				),
 		),
+		vscode.commands.registerCommand('m365copilot.fixAllProblems', (uri?: unknown) =>
+			fixAllProblems(deps, editing, uri instanceof vscode.Uri ? uri : undefined),
+		),
 	];
 }
 
 /**
  * `uri` + `range` come from a code action (the diagnostic or the selection
- * it was offered on) and `instruction` from the quick fix; from the context
- * menu, the keybinding or the palette all three are absent.
+ * it was offered on) or a review comment, and `instruction` from the quick
+ * fix or the comment; from the context menu, the keybinding or the palette
+ * all three are absent. Resolves whether a change was staged for review.
  */
 async function editCode(
 	deps: InlineEditDeps,
@@ -62,13 +80,13 @@ async function editCode(
 	uri: vscode.Uri | undefined,
 	range: vscode.Range | undefined,
 	instruction: string | undefined,
-): Promise<void> {
+): Promise<boolean> {
 	const editor = uri
 		? await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri), { preview: false })
 		: currentTextEditor();
 	if (!editor) {
 		void vscode.window.showWarningMessage(t('actions.noEditor'));
-		return;
+		return false;
 	}
 	const document = editor.document;
 
@@ -84,13 +102,13 @@ async function editCode(
 	);
 	if (context.truncatedChars > 0) {
 		void vscode.window.showWarningMessage(t('inlineEdit.tooLarge'));
-		return;
+		return false;
 	}
 
 	const request = instruction ?? (await askInstruction(deps.memento, context.startLine, context.endLine));
-	if (!request) return;
+	if (!request) return false;
 	const profile = await requireUsableProfile(deps.store);
-	if (!profile) return;
+	if (!profile) return false;
 
 	const original = document.getText(context.range);
 	const versionAtStart = document.version;
@@ -104,31 +122,144 @@ async function editCode(
 			},
 			(_progress, token) => requestEdit(deps, profile, document, context, request, token),
 		);
-		if (answer === undefined) return; // cancelled
+		if (answer === undefined) return false; // cancelled
 
 		// The user may have typed in the block while the model was thinking:
 		// replacing it now would silently throw that typing away.
 		if (document.version !== versionAtStart && document.getText(context.range) !== original) {
 			void vscode.window.showWarningMessage(t('inlineEdit.changed'));
-			return;
+			return false;
 		}
 		const replacement = extractEditedCode(answer, original);
 		if (replacement === null) {
 			void vscode.window.showWarningMessage(t('inlineEdit.empty'));
-			return;
+			return false;
 		}
 		if (replacement === original.replace(/\r\n?/g, '\n')) {
 			void vscode.window.showInformationMessage(t('inlineEdit.noChange'));
-			return;
+			return false;
 		}
 		await deps.edits.stageDocumentEdit(document, context.range, matchEol(replacement, document));
 		void rememberInstruction(deps.memento, request);
 		void vscode.window.setStatusBarMessage(t('inlineEdit.done'), 5000);
+		return true;
 	} catch (error) {
 		void vscode.window.showErrorMessage(t('inlineEdit.failed', errorMessage(error)));
+		return false;
 	} finally {
 		editor.setDecorations(editing, []);
 	}
+}
+
+/**
+ * "Fix all problems in this file": one inline edit per block of code with
+ * errors or warnings (the function/class each one is in, overlapping blocks
+ * merged), applied from the bottom of the file up so that a rewritten block
+ * never shifts the lines of the ones still to do. Each lands under Keep/Undo.
+ */
+async function fixAllProblems(
+	deps: InlineEditDeps,
+	editing: vscode.TextEditorDecorationType,
+	uri: vscode.Uri | undefined,
+): Promise<void> {
+	const editor = uri
+		? await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri), { preview: false })
+		: currentTextEditor();
+	if (!editor) {
+		void vscode.window.showWarningMessage(t('actions.noEditor'));
+		return;
+	}
+	const document = editor.document;
+	const problems = vscode.languages
+		.getDiagnostics(document.uri)
+		.filter((diagnostic) => diagnostic.severity <= vscode.DiagnosticSeverity.Warning)
+		.slice(0, MAX_FIX_ALL_PROBLEMS);
+	if (problems.length === 0) {
+		void vscode.window.showInformationMessage(t('fixAll.none'));
+		return;
+	}
+	const profile = await requireUsableProfile(deps.store);
+	if (!profile) return;
+
+	const allBlocks = await problemBlocks(document, problems);
+	const blocks = allBlocks.filter((block) => block.truncatedChars === 0).slice(0, MAX_FIX_ALL_BLOCKS);
+	if (blocks.length === 0) {
+		void vscode.window.showWarningMessage(t('inlineEdit.tooLarge'));
+		return;
+	}
+	const originals = blocks.map((block) => document.getText(block.range));
+	let fixed = 0;
+	let failed = 0;
+	editor.setDecorations(editing, blocks.map((block) => block.range));
+	try {
+		await vscode.window.withProgress(
+			{
+				location: vscode.ProgressLocation.Notification,
+				title: t('fixAll.progress', problems.length, relativePathForUri(document.uri)),
+				cancellable: true,
+			},
+			async (progress, token) => {
+				for (const [index, block] of blocks.entries()) {
+					if (token.isCancellationRequested) return;
+					progress.report({ message: t('fixAll.step', index + 1, blocks.length, block.startLine, block.endLine) });
+					const listed = problems
+						.filter((problem) => problem.range.intersection(block.range))
+						.map((problem) => `- ${problem.range.start.line + 1}:${problem.range.start.character + 1} ${problem.message}`);
+					try {
+						const answer = await requestEdit(
+							deps,
+							profile,
+							document,
+							block,
+							t('fixAll.instruction', listed.join('\n')),
+							token,
+						);
+						if (answer === undefined) return; // cancelled
+						// Typed into meanwhile: leave that block alone.
+						if (document.getText(block.range) !== originals[index]) continue;
+						const replacement = extractEditedCode(answer, originals[index]);
+						if (replacement === null || replacement === originals[index].replace(/\r\n?/g, '\n')) continue;
+						await deps.edits.stageDocumentEdit(document, block.range, matchEol(replacement, document));
+						fixed += 1;
+					} catch (error) {
+						failed += 1;
+						deps.log(t('log.fixAllBlockFailed', block.startLine, block.endLine, errorMessage(error)));
+					}
+				}
+			},
+		);
+	} finally {
+		editor.setDecorations(editing, []);
+	}
+	if (fixed > 0) {
+		const rest = allBlocks.length - blocks.length;
+		void vscode.window.showInformationMessage(
+			rest > 0 ? t('fixAll.doneSome', fixed, rest) : t('fixAll.done', fixed),
+		);
+	} else if (failed > 0) {
+		void vscode.window.showErrorMessage(t('fixAll.failed', failed));
+	} else {
+		void vscode.window.showInformationMessage(t('fixAll.nothing'));
+	}
+}
+
+/**
+ * The code around each problem (as for a single quick fix), overlapping
+ * blocks merged, last block first.
+ */
+async function problemBlocks(document: vscode.TextDocument, problems: readonly vscode.Diagnostic[]): Promise<CodeContext[]> {
+	const ranges: vscode.Range[] = [];
+	for (const problem of problems) ranges.push((await captureCodeContext(document, { range: problem.range })).range);
+	ranges.sort((a, b) => a.start.line - b.start.line);
+	const merged: vscode.Range[] = [];
+	for (const range of ranges) {
+		const last = merged[merged.length - 1];
+		if (last && range.start.line <= last.end.line) merged[merged.length - 1] = last.union(range);
+		else merged.push(range);
+	}
+	const blocks: CodeContext[] = [];
+	for (const range of merged) blocks.push(await captureCodeContext(document, { range }));
+	return blocks.reverse();
 }
 
 /** Resolves the model's answer, or undefined when the user cancelled. */
@@ -136,7 +267,7 @@ async function requestEdit(
 	deps: InlineEditDeps,
 	profile: NonNullable<Awaited<ReturnType<ProfileStore['get']>>>,
 	document: vscode.TextDocument,
-	context: Awaited<ReturnType<typeof captureCodeContext>>,
+	context: CodeContext,
 	instruction: string,
 	token: vscode.CancellationToken,
 ): Promise<string | undefined> {
@@ -189,20 +320,28 @@ function matchEol(text: string, document: vscode.TextDocument): string {
 }
 
 /**
- * Asks for the instruction, offering the last ones used: the same few
- * ("add error handling", "convert to async/await") get repeated a lot.
+ * Asks for the instruction, offering the last ones used — the same few get
+ * repeated a lot — and then a handful of common ones.
  */
 function askInstruction(memento: vscode.Memento, startLine: number, endLine: number): Promise<string | undefined> {
 	const history = memento.get<string[]>(HISTORY_KEY, []);
-	const recent = history.map((label) => ({ label, description: t('inlineEdit.recent') }));
+	const recent: vscode.QuickPickItem[] = history.map((label) => ({ label, description: t('inlineEdit.recent') }));
+	const presets: vscode.QuickPickItem[] = PRESET_INSTRUCTIONS.map((key) => t(key))
+		.filter((label) => !history.includes(label))
+		.map((label) => ({ label, iconPath: new vscode.ThemeIcon('lightbulb') }));
+	const suggested: vscode.QuickPickItem[] = [
+		...recent,
+		{ label: t('inlineEdit.suggestions'), kind: vscode.QuickPickItemKind.Separator },
+		...presets,
+	];
 	const picker = vscode.window.createQuickPick();
 	picker.title = t('inlineEdit.title', startLine, endLine);
 	picker.placeholder = t('inlineEdit.placeholder');
 	picker.ignoreFocusOut = true;
-	picker.items = recent;
+	picker.items = suggested;
 	picker.onDidChangeValue((value) => {
 		const typed = value.trim();
-		picker.items = typed ? [{ label: typed }, ...recent.filter((item) => item.label !== typed)] : recent;
+		picker.items = typed ? [{ label: typed }, ...suggested.filter((item) => item.label !== typed)] : suggested;
 	});
 	return new Promise((resolve) => {
 		let settled = false;

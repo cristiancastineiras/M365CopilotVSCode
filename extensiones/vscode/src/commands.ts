@@ -4,24 +4,25 @@
  * language picker.
  */
 import * as vscode from 'vscode';
-import { M365_CHAT_URL } from '@ms365copilot/core';
+import { M365_CHAT_URL } from '@m365copilot/core';
 import { isTokenUsable, looksLikeProfile, minutesUntilExpiry, ProfileParseError, type CopilotProfile } from './profile';
 import type { ProfileStore } from './secrets';
 import type { WorkspaceEditManager } from '../tools/writeFile';
 import type { ModelRegistry } from './models';
+import type { IndexStatus } from './projectIndex';
 import { getLocale, resolveLocale, t, type LanguageSetting, type Locale } from './i18n';
 
 /** The walkthrough contributed in package.json (`<publisher>.<name>#<id>`). */
-export const WALKTHROUGH_ID = 'ms365-copilot-vscode.ms365-copilot-vscode#ms365copilot.gettingStarted';
+export const WALKTHROUGH_ID = 'm365-copilot-vscode.m365-copilot-vscode#m365copilot.gettingStarted';
 
 interface MenuItem extends vscode.QuickPickItem {
 	readonly run?: () => unknown;
 }
 
-export async function showMenu(store: ProfileStore, edits: WorkspaceEditManager): Promise<void> {
+export async function showMenu(store: ProfileStore, edits: WorkspaceEditManager, index?: IndexStatus): Promise<void> {
 	const profile = await store.get();
 	const completionsOn = vscode.workspace
-		.getConfiguration('ms365copilot.inlineCompletions')
+		.getConfiguration('m365copilot.inlineCompletions')
 		.get<boolean>('enabled', true);
 
 	const command = (id: string) => () => vscode.commands.executeCommand(id);
@@ -30,35 +31,43 @@ export async function showMenu(store: ProfileStore, edits: WorkspaceEditManager)
 		{
 			label: `$(key) ${t('menu.paste')}`,
 			detail: t('menu.paste.detail'),
-			run: command('ms365copilot.pasteProfile'),
+			run: command('m365copilot.pasteProfile'),
 		},
-		{ label: `$(info) ${t('menu.status')}`, description: tokenSummary(profile), run: command('ms365copilot.showStatus') },
+		{ label: `$(info) ${t('menu.status')}`, description: tokenSummary(profile), run: command('m365copilot.showStatus') },
 		{ label: `$(link-external) ${t('menu.openM365')}`, run: () => openM365() },
 		{ label: t('menu.section.editor'), kind: vscode.QuickPickItemKind.Separator },
-		{ label: `$(comment-discussion) ${t('menu.openChat')}`, run: command('ms365copilot.openChat') },
+		{ label: `$(comment-discussion) ${t('menu.openChat')}`, run: command('m365copilot.openChat') },
 		{
 			label: `${completionsOn ? '$(circle-slash)' : '$(sparkle)'} ${t(completionsOn ? 'menu.completionsOff' : 'menu.completionsOn')}`,
-			run: command('ms365copilot.toggleInlineCompletions'),
+			run: command('m365copilot.toggleInlineCompletions'),
 		},
 		...(edits.pendingCount > 0
 			? [
 					{
 						label: `$(edit) ${t('menu.reviewEdits', edits.pendingCount)}`,
-						run: command('ms365copilot.reviewPendingEdits'),
+						run: command('m365copilot.reviewPendingEdits'),
 					},
 				]
 			: []),
-		{ label: `$(git-commit) ${t('menu.commitMessage')}`, run: command('ms365copilot.generateCommitMessage') },
-		{ label: `$(sync) ${t('menu.models')}`, run: command('ms365copilot.refreshModels') },
+		{ label: `$(git-commit) ${t('menu.commitMessage')}`, run: command('m365copilot.generateCommitMessage') },
+		{ label: `$(sync) ${t('menu.models')}`, run: command('m365copilot.refreshModels') },
+		{ label: t('menu.section.project'), kind: vscode.QuickPickItemKind.Separator },
+		{
+			label: `$(search) ${t('menu.searchProject')}`,
+			description: index ? indexSummary(index) : undefined,
+			run: command('m365copilot.searchProject'),
+		},
+		{ label: `$(type-hierarchy) ${t('menu.projectMap')}`, run: command('m365copilot.showProjectMap') },
+		{ label: `$(database) ${t('menu.rebuildIndex')}`, run: command('m365copilot.rebuildIndex') },
 		{ label: t('menu.section.extension'), kind: vscode.QuickPickItemKind.Separator },
 		{
 			label: `$(globe) ${t('menu.language', languageLabel(currentLanguageSetting()))}`,
-			run: command('ms365copilot.selectLanguage'),
+			run: command('m365copilot.selectLanguage'),
 		},
 		{ label: `$(gear) ${t('menu.settings')}`, run: () => openSettings() },
 		{ label: `$(book) ${t('menu.walkthrough')}`, run: () => openWalkthrough() },
-		{ label: `$(output) ${t('menu.log')}`, run: command('ms365copilot.showLog') },
-		...(profile ? [{ label: `$(trash) ${t('menu.clear')}`, run: command('ms365copilot.clearProfile') }] : []),
+		{ label: `$(output) ${t('menu.log')}`, run: command('m365copilot.showLog') },
+		...(profile ? [{ label: `$(trash) ${t('menu.clear')}`, run: command('m365copilot.clearProfile') }] : []),
 	];
 
 	const picked = await vscode.window.showQuickPick(items, {
@@ -82,11 +91,22 @@ export async function requireUsableProfile(store: ProfileStore): Promise<Copilot
 		t(profile ? 'participant.tokenExpired' : 'participant.noToken'),
 		paste,
 	);
-	if (picked === paste) await vscode.commands.executeCommand('ms365copilot.pasteProfile');
+	if (picked === paste) await vscode.commands.executeCommand('m365copilot.pasteProfile');
 	return undefined;
 }
 
 export async function pasteProfile(store: ProfileStore): Promise<void> {
+	const profile = await promptForProfile(store);
+	if (profile) await announceProfile(profile);
+}
+
+/**
+ * Asks for the profile/token and stores it. Resolves the stored profile, or
+ * undefined when the user cancelled or it could not be parsed (already said).
+ * Without the "ready" notification, which only resolves once dismissed: the
+ * Accounts sign-in (account.ts) must not wait for that.
+ */
+export async function promptForProfile(store: ProfileStore): Promise<CopilotProfile | undefined> {
 	// The usual flow is "Copy token" in the browser, then this command: when
 	// the clipboard already holds a token, pre-fill it so Enter is enough.
 	let clipboard = '';
@@ -104,20 +124,25 @@ export async function pasteProfile(store: ProfileStore): Promise<void> {
 		password: true,
 		ignoreFocusOut: true,
 	});
-	if (pasted === undefined) return;
+	if (pasted === undefined) return undefined;
 
 	try {
-		const profile = await store.setFromPaste(pasted);
-		const who = profile.claims?.upn ? ` (${profile.claims.upn})` : '';
-		const mins = minutesUntilExpiry(profile);
-		const expiry = mins !== null ? t('paste.validFor', mins) : '';
-		const openChat = t('paste.openChat');
-		const picked = await vscode.window.showInformationMessage(t('paste.ready', who, expiry), openChat);
-		if (picked === openChat) await vscode.commands.executeCommand('ms365copilot.openChat');
+		return await store.setFromPaste(pasted);
 	} catch (error) {
 		const msg = error instanceof ProfileParseError ? error.message : String(error);
 		void vscode.window.showErrorMessage(t('paste.failed', msg));
+		return undefined;
 	}
+}
+
+/** "Ready (user@…), valid for N minutes" with a button to open the chat. */
+export async function announceProfile(profile: CopilotProfile): Promise<void> {
+	const who = profile.claims?.upn ? ` (${profile.claims.upn})` : '';
+	const mins = minutesUntilExpiry(profile);
+	const expiry = mins !== null ? t('paste.validFor', mins) : '';
+	const openChat = t('paste.openChat');
+	const picked = await vscode.window.showInformationMessage(t('paste.ready', who, expiry), openChat);
+	if (picked === openChat) await vscode.commands.executeCommand('m365copilot.openChat');
 }
 
 export async function clearProfile(store: ProfileStore): Promise<void> {
@@ -133,7 +158,7 @@ export async function showStatus(store: ProfileStore): Promise<void> {
 	const paste = t('watcher.pasteToken');
 	if (!profile) {
 		const picked = await vscode.window.showInformationMessage(t('status.noToken'), paste);
-		if (picked === paste) await vscode.commands.executeCommand('ms365copilot.pasteProfile');
+		if (picked === paste) await vscode.commands.executeCommand('m365copilot.pasteProfile');
 		return;
 	}
 	const usable = isTokenUsable(profile);
@@ -145,7 +170,7 @@ export async function showStatus(store: ProfileStore): Promise<void> {
 	const open = t('status.openM365');
 	const actions = usable ? [open] : [paste, open];
 	const picked = await vscode.window.showInformationMessage(lines.join('  ·  '), ...actions);
-	if (picked === paste) await vscode.commands.executeCommand('ms365copilot.pasteProfile');
+	if (picked === paste) await vscode.commands.executeCommand('m365copilot.pasteProfile');
 	if (picked === open) await openM365();
 }
 
@@ -159,7 +184,7 @@ export async function refreshModels(registry: ModelRegistry): Promise<void> {
 		{ location: vscode.ProgressLocation.Notification, title: t('models.updating') },
 		() => registry.refreshCatalog(),
 	);
-	if (!updated && vscode.workspace.getConfiguration('ms365copilot.models').get<boolean>('updateFromCatalog', true)) {
+	if (!updated && vscode.workspace.getConfiguration('m365copilot.models').get<boolean>('updateFromCatalog', true)) {
 		void vscode.window.showWarningMessage(t('models.updateFailed'));
 	}
 	const sourceLabel = {
@@ -179,12 +204,12 @@ export async function refreshModels(registry: ModelRegistry): Promise<void> {
 	);
 	if (!picked) return;
 	await vscode.commands.executeCommand('workbench.action.chat.open', {
-		modelSelector: { vendor: 'ms365copilot', id: picked.id },
+		modelSelector: { vendor: 'm365copilot', id: picked.id },
 	});
 }
 
 export async function toggleInlineCompletions(): Promise<void> {
-	const config = vscode.workspace.getConfiguration('ms365copilot.inlineCompletions');
+	const config = vscode.workspace.getConfiguration('m365copilot.inlineCompletions');
 	const enabled = config.get<boolean>('enabled', true);
 	// Global target: the toggle is about how you want the editor to behave, not
 	// a property of whichever folder happens to be open.
@@ -206,12 +231,12 @@ export async function selectLanguage(): Promise<void> {
 	if (!picked || picked.value === current) return;
 	// The configuration listener in extension.ts applies the change.
 	await vscode.workspace
-		.getConfiguration('ms365copilot')
+		.getConfiguration('m365copilot')
 		.update('language', picked.value, vscode.ConfigurationTarget.Global);
 }
 
 export function currentLanguageSetting(): LanguageSetting {
-	const value = vscode.workspace.getConfiguration('ms365copilot').get<string>('language', 'auto');
+	const value = vscode.workspace.getConfiguration('m365copilot').get<string>('language', 'auto');
 	return value === 'en' || value === 'es' ? value : 'auto';
 }
 
@@ -223,6 +248,19 @@ function languageLabel(setting: LanguageSetting): string {
 
 export function languageName(locale: Locale): string {
 	return t(locale === 'es' ? 'language.es' : 'language.en');
+}
+
+function indexSummary(status: IndexStatus): string {
+	switch (status.state) {
+		case 'indexing':
+			return t('index.status.indexing', status.files);
+		case 'disabled':
+			return t('index.status.disabled');
+		case 'untrusted':
+			return t('index.status.untrusted');
+		default:
+			return t('index.status.ready', status.files);
+	}
 }
 
 function tokenSummary(profile: Awaited<ReturnType<ProfileStore['get']>>): string {
@@ -239,7 +277,7 @@ export async function openM365(): Promise<void> {
 }
 
 async function openSettings(): Promise<void> {
-	await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:ms365-copilot-vscode.ms365-copilot-vscode');
+	await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:m365-copilot-vscode.m365-copilot-vscode');
 }
 
 export async function openWalkthrough(): Promise<void> {

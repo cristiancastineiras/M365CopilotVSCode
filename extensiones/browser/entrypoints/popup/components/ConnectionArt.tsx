@@ -1,9 +1,9 @@
-import { connectionArtSvg, type ConnectionState } from '@ms365copilot/core';
+import { connectionArtSvg, type ConnectionState } from '@m365copilot/core';
 import { t } from '@/utils/i18n';
 
 /**
  * Same artwork as the userscript's panel (see `connectionArtSvg` in
- * @ms365copilot/core). The markup is a constant string, so React never
+ * @m365copilot/core). The markup is a constant string, so React never
  * replaces it when only `state` changes: the `data-state` attribute flips and
  * the SVG's own CSS animates the change (VS Code "lights up" on connect).
  */

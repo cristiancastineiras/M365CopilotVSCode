@@ -19,7 +19,7 @@ const MAX_PATHS = 50;
  * Crea un commit de verdad — la única herramienta de esta extensión que
  * modifica el historial del repositorio, así que `agentTools.ts` la registra
  * con `confirmationMessages`: el usuario ve el mensaje exacto y qué se va a
- * stagear antes de que se ejecute nada (mismo patrón que `ms365_run_command`).
+ * stagear antes de que se ejecute nada (mismo patrón que `m365_run_command`).
  *
  * El mensaje se valida con {@link validateConventionalCommitMessage} en vez
  * de reescribirse: si no sigue Conventional Commits, la herramienta falla con
@@ -44,7 +44,7 @@ export async function commitWorkspace(input: GitCommitInput, token: vscode.Cance
 	ensureNotCancelled(token);
 	const staged = (await execGit(['diff', '--cached', '--name-status'], root.uri.fsPath, token)).trim();
 	if (!staged) {
-		throw new Error(t('commit.nothingStaged', 'ms365_run_command'));
+		throw new Error(t('commit.nothingStaged', 'm365_run_command'));
 	}
 
 	await execGit(['commit', '-m', message], root.uri.fsPath, token);

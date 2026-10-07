@@ -1,8 +1,8 @@
 /**
  * Validación (sin `vscode`, igual que `gitArgs.ts`) del mensaje que
- * `ms365_git_commit` va a usar. No reescribe nada: quien redacta el mensaje
+ * `m365_git_commit` va a usar. No reescribe nada: quien redacta el mensaje
  * de verdad es el modelo que llama a la herramienta —con el diff que le da
- * `ms365_generate_commit_message` como contexto—, así que un mensaje mal
+ * `m365_generate_commit_message` como contexto—, así que un mensaje mal
  * formado es un error a corregir (misma filosofía que el resto de
  * herramientas: "si falla, lee el error y corrige la llamada"), no algo que
  * esta función deba arreglar en silencio.
@@ -76,7 +76,7 @@ export interface CommitPromptInput {
 
 /**
  * Prompt for the Source Control "Generate commit message with M365 Copilot"
- * button (`ms365copilot.generateCommitMessage`). The language of the message
+ * button (`m365copilot.generateCommitMessage`). The language of the message
  * follows the extension's language; the format is always Conventional
  * Commits, the same rule {@link validateConventionalCommitMessage} enforces
  * for the agent's own commits.

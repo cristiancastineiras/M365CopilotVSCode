@@ -178,7 +178,7 @@ body {
   text-align: center;
 }
 
-/* M365 → VS Code artwork (connectionArtSvg in @ms365copilot/core). Its own
+/* M365 → VS Code artwork (connectionArtSvg in @m365copilot/core). Its own
  * <style> handles the states; here only its size and the muted ink it uses
  * for the "off" parts and the labels. */
 .hero-art {

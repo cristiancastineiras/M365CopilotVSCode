@@ -26,7 +26,7 @@ const GENERATE_TIMEOUT_MS = 20_000;
  * registrado — así que el resultado incluye SIEMPRE también el diff en stage
  * (vía {@link getGitInfo}), para que el modelo que llamó a esta herramienta
  * pueda redactar o corregir el mensaje él mismo con Conventional Commits
- * antes de pasarlo a `ms365_git_commit`.
+ * antes de pasarlo a `m365_git_commit`.
  */
 export async function generateCommitMessage(
 	input: GenerateCommitMessageInput,
@@ -68,9 +68,9 @@ export async function generateCommitMessage(
 			: t('genCommit.notGenerated', noMessageReason);
 
 	return [
-		!hasStaged ? t('genCommit.nothingStaged', 'ms365_git_commit') : null,
+		!hasStaged ? t('genCommit.nothingStaged', 'm365_git_commit') : null,
 		messageSection,
-		t('genCommit.checkConventional', 'ms365_git_commit'),
+		t('genCommit.checkConventional', 'm365_git_commit'),
 		diff,
 	]
 		.filter((line): line is string => line !== null)

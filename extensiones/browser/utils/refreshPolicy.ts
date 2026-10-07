@@ -132,6 +132,6 @@ function remainingBackoff(context: RefreshContext): number {
   return Math.max(0, backoffFor(context.attempts) - elapsed);
 }
 
-// La decisión de re-sincronizar con VS Code vive en @ms365copilot/core (la
+// La decisión de re-sincronizar con VS Code vive en @m365copilot/core (la
 // comparte el userscript); se re-exporta aquí para no cambiar a quien la usa.
-export { needsResync, RESYNC_COOLDOWN_MS, type SyncContext } from '@ms365copilot/core';
+export { needsResync, RESYNC_COOLDOWN_MS, type SyncContext } from '@m365copilot/core';

@@ -290,20 +290,20 @@ export const en = {
 		'Block format for long text or code (avoids the most common failure: unescaped quotes or backslashes inside the JSON):',
 	'protocol.blocks.body':
 		'In ANY tool, a text field can be the marker "@@block:ID@@" (ID = a number, unique within the call) instead of a ' +
-		'JSON literal. Right after {0}, add one <ms365_block id="ID">...</ms365_block> per marker you used, with the EXACT ' +
+		'JSON literal. Right after {0}, add one <m365_block id="ID">...</m365_block> per marker you used, with the EXACT ' +
 		'text as-is, on its own line — without escaping quotes, backslashes or anything else.',
 	'protocol.blocks.mandatory': 'In {0} it is MANDATORY: oldText/newText/content ALWAYS go as "@@block:ID@@".',
 	'protocol.blocks.example': 'Example:',
 	'protocol.blockExample.path': 'src/greeting.ts',
 	'protocol.blockExample.before': 'console.log("hello");',
 	'protocol.blockExample.after': 'console.log("hello world");',
-	'protocol.origin.ms365': 'from this extension',
+	'protocol.origin.m365': 'from this extension',
 	'protocol.origin.editor': 'native to VS Code',
 	'protocol.noDescription': 'No description.',
 	'protocol.entry.input': '  input: {0}',
 	'protocol.entry.example': '  example input: {0}',
 	'protocol.entry.duplicate': '  (duplicate: use {0} for this; this one only if the other fails)',
-	'protocol.reminder.shapeWithBlocks': '{0} (followed by the <ms365_block> sections if you use the block format)',
+	'protocol.reminder.shapeWithBlocks': '{0} (followed by the <m365_block> sections if you use the block format)',
 	'protocol.reminder.start':
 		'Remember: to read or modify the workspace, your answer must be ONLY {0}, without code fences and without ' +
 		'explaining it beforehand instead of emitting it. Use exactly one of the names from the tool list. ',
@@ -324,7 +324,7 @@ export const en = {
 		'Proposes an atomic batch of replacements, new files or deletions. Fields per operation: ' +
 		'replace → oldText (exact and unique) + newText; create → content; delete → only path. ' +
 		'oldText/newText/content NEVER go as literal text: they go as "@@block:ID@@" and the real text goes afterwards, ' +
-		'in a <ms365_block id="ID"> (see the block format below).',
+		'in a <m365_block id="ID"> (see the block format below).',
 	'hint.applyEdits.newFile': 'src/new.ts',
 	'hint.diagnostics':
 		'Reads errors and warnings that VS Code\'s language server already computed, for one file or the whole workspace. ' +
@@ -552,7 +552,7 @@ export const en = {
 		'Delegating {0} sub-task(s) to M365 Copilot sub-agents (it can take several minutes; progress shows in the notifications)...',
 	'subagent.invocation.several': 'several',
 	'subagent.disabled':
-		'Delegating to sub-agents is disabled (setting ms365copilot.subagents.enabled). ' +
+		'Delegating to sub-agents is disabled (setting m365copilot.subagents.enabled). ' +
 		'Enable it if you want to use this tool, or solve the task directly.',
 	'subagent.errorPrefix': 'Error: {0}',
 	'subagent.noToken':
@@ -709,4 +709,178 @@ export const en = {
 	'scm.prompt.diffEnd': '--- end of diff ---',
 	'scm.prompt.truncated': '[diff truncated: {0} more characters]',
 	'scm.prompt.unstaged': 'Nothing is staged: these are the working-tree changes the commit is likely to include.',
+
+	// ------------------------------------------------------------ migration from ms365-copilot-vscode
+	'migration.settingsMoved':
+		'M365 Copilot: {0} setting(s) of the previous version (ms365copilot.*) were copied to m365copilot.*. The old entries in settings.json no longer do anything and can be deleted.',
+	'migration.openSettings': 'Open settings (JSON)',
+	'migration.legacyInstalled':
+		'The previous version of M365 Copilot (ms365-copilot-vscode) is still installed. Both would compete for the token from the browser and for @m365 — uninstall the old one.',
+	'migration.uninstall': 'Uninstall the old version',
+	'migration.uninstalled': 'The old version of M365 Copilot was uninstalled. Reload the window to finish.',
+	'migration.reload': 'Reload window',
+	'migration.uninstallFailed': 'M365 Copilot: could not uninstall the old version ({0}). Uninstall it from the Extensions view.',
+	'log.legacySettingsMigrated': 'settings copied from the previous version: {0}',
+	'log.legacySettingSkipped': 'setting {0} not copied from the previous version: {1}',
+	'log.legacyMigrationFailed': 'could not copy the settings of the previous version: {0}',
+
+	// ------------------------------------------------------------ Accounts menu
+	'account.unknownUser': 'M365 Copilot user',
+	'account.signIn.title': 'Sign in with M365 Copilot',
+	'account.signIn.placeholder': 'How do you want to bring your M365 Copilot session to VS Code?',
+	'account.signIn.browser': 'Open M365 Copilot in the browser',
+	'account.signIn.browserDetail': 'The browser extension or the userscript sends the token to VS Code by itself.',
+	'account.signIn.paste': 'Paste profile or token',
+	'account.signIn.pasteDetail': 'Copied with “Copy token” in the browser extension or the userscript.',
+	'account.signIn.waiting': 'Waiting for the token from the browser… (sign in to M365 Copilot there)',
+	'account.signIn.timeout':
+		'M365 Copilot: no token arrived from the browser. Is the browser extension or the userscript installed? You can also paste the token.',
+	'account.signInCancelled': 'Sign-in to M365 Copilot was cancelled.',
+
+	// ------------------------------------------------------------ code review (comments)
+	'review.controller': 'M365 Copilot review',
+	'review.severity.error': 'Error',
+	'review.severity.warning': 'Warning',
+	'review.severity.info': 'Suggestion',
+	'review.suggestion': 'Suggested fix:',
+	'review.progress': 'M365 Copilot is reviewing {0}…',
+	'review.partial': 'M365 Copilot: the file is large, so only lines {0}–{1} (the code at the cursor) are reviewed.',
+	'review.tooLarge': 'M365 Copilot: this code is too large to review at once. Select a smaller part.',
+	'review.failed': 'M365 Copilot: the review failed: {0}',
+	'review.unreadable': 'the answer was not a list of findings — try again',
+	'review.clean': 'M365 Copilot found nothing to comment on in {0}.',
+	'review.found': 'M365 Copilot left {0} review comment(s) in {1}. They are also listed in the Comments panel.',
+	'review.show': 'Go to the first one',
+	'review.fixInstruction': 'Fix this problem found in code review: {0}. {1} Suggested fix: {2}',
+	'review.changes.progress': 'M365 Copilot is reviewing your changes',
+	'review.changes.count': '{0} of {1} files',
+	'review.changes.none': 'M365 Copilot: there are no changes to review.',
+	'review.changes.tooMany': 'M365 Copilot: only the first {0} of the {1} changed files are reviewed.',
+	'review.changes.failedFiles': 'M365 Copilot could not review: {0}',
+	'review.changes.files': '{0} changed file(s)',
+	'log.review': 'review of {0}: {1} finding(s)',
+	'log.reviewSkipped': 'review: {0} skipped (too large)',
+	'log.reviewFileFailed': 'review of {0} failed: {1}',
+	'log.reviewUnreadable': 'review of {0}: unreadable answer:\n{1}',
+	'review.prompt.role': 'You are a senior code reviewer inside VS Code.',
+	'review.prompt.rules':
+		'Review the code below and report only real problems: bugs, wrong logic, unhandled errors or edge cases, ' +
+		'security issues, race conditions, resource leaks, misleading names, and clearly better alternatives. ' +
+		'Do not report formatting or style a formatter or linter would catch, and do not praise the code.\n' +
+		'Reply with ONE fenced ```json block containing an array, and nothing before or after it. Each item:\n' +
+		'{"line": <first line>, "endLine": <last line>, "severity": "error" | "warning" | "info", ' +
+		'"title": "<short summary, at most 80 characters>", "message": "<what is wrong and why, 1-3 sentences>", ' +
+		'"suggestion": "<how to fix it; optional>"}\n' +
+		'Use the line numbers shown at the left of each line ("12 | code"). Write title, message and suggestion in English. ' +
+		'If there is nothing worth reporting, reply with [].',
+	'review.prompt.file': 'File: {0} ({1})',
+	'review.prompt.changes':
+		'These lines were just changed: {0}. Report only problems in them or caused by them; the rest of the file is context.',
+	'review.prompt.diff': 'The diff of those changes (lines starting with "-" were removed):',
+	'review.prompt.code': 'CODE (each line starts with its number):',
+	'review.prompt.reminder': 'Remember: reply with ONE fenced ```json block containing the array of findings ([] if none), and nothing else.',
+
+	// ------------------------------------------------------------ fix all problems / edit suggestions
+	'actions.codeAction.fixAll': 'Fix all {0} problems in this file with M365 Copilot',
+	'fixAll.none': 'M365 Copilot: this file has no errors or warnings to fix.',
+	'fixAll.progress': 'M365 Copilot is fixing {0} problem(s) in {1}',
+	'fixAll.step': 'block {0} of {1} (lines {2}–{3})',
+	'fixAll.instruction':
+		'Fix these problems reported by VS Code in this code, without changing anything else:\n{0}',
+	'fixAll.done': 'M365 Copilot rewrote {0} block(s) — review them with Keep / Undo.',
+	'fixAll.doneSome':
+		'M365 Copilot rewrote {0} block(s) — review them with Keep / Undo. {1} more block(s) with problems were left for another run.',
+	'fixAll.nothing': 'M365 Copilot did not change anything.',
+	'fixAll.failed': 'M365 Copilot: {0} block(s) could not be fixed. See the log for details.',
+	'log.fixAllBlockFailed': 'fix all: lines {0}-{1} failed: {2}',
+	'inlineEdit.suggestions': 'suggestions',
+	'inlineEdit.preset.simplify': 'Simplify this code without changing what it does',
+	'inlineEdit.preset.errors': 'Add error handling',
+	'inlineEdit.preset.types': 'Add type annotations',
+	'inlineEdit.preset.names': 'Use clearer names for variables and functions',
+	'inlineEdit.preset.comments': 'Add short comments explaining the non-obvious parts',
+	'inlineEdit.preset.performance': 'Make it faster without changing what it does',
+	'inlineEdit.preset.async': 'Convert to async/await',
+
+	// ------------------------------------------------------------ project index (RAG) — read by the MODEL
+	'hint.searchProject':
+		'Searches the project index (RAG) and returns the most relevant code with file and line ranges, ranked by relevance — use it FIRST to find where something lives, how a flow works or which files are involved, before reading or editing. Plain words or identifiers, English code terms work best.',
+	'hint.searchProject.example': 'where the access token is stored',
+	'hint.projectMap':
+		'Project map from the index: languages, packages, folder structure, entry points and most used modules. With `path` = a file: its outline (symbols with lines), what it imports and which files import it; = a folder: its files with their main symbols.',
+	'hint.webSearch':
+		'Searches the INTERNET (Bing, through Microsoft 365 Copilot) and returns an up-to-date answer with its sources. Use it for current documentation, versions, APIs, error messages or anything outside the workspace.',
+	'hint.webSearch.example': 'latest stable version of TypeScript and its breaking changes',
+	'rag.context.header':
+		'PROJECT CONTEXT — retrieved automatically from a local index of the user’s workspace for this request. It may be incomplete or slightly out of date: rely on it to know which files exist and where things live, and read the files (m365_read_file) before changing them. Paths are workspace-relative.',
+	'rag.context.snippets': 'Most relevant code for this request:',
+	'rag.context.more': 'Also relevant:',
+	'rag.context.footer': 'END OF PROJECT CONTEXT. To look further, use m365_search_project (search) or m365_project_map (structure, imports and importers of a file).',
+	'rag.summary.header': 'Workspace “{0}”: {1} files indexed ({2}). Areas:',
+	'rag.map.empty': 'The project index is empty: there are no indexable files in this workspace.',
+	'rag.map.header': 'Project map of “{0}” — {1} files, {2} chunks indexed.',
+	'rag.map.languages': 'Languages:',
+	'rag.map.packages': 'Packages / projects:',
+	'rag.map.structure': 'Structure — folder/ (files): subfolders/ (files), main files [main symbols]:',
+	'rag.map.keyFiles': 'Key files:',
+	'rag.map.entries': 'Likely entry points:',
+	'rag.map.central': 'Most imported modules (← number of files that import them):',
+	'rag.map.external': 'External dependencies used (files):',
+	'rag.map.moreAreas': '… and {0} more folders',
+	'rag.map.notFound': 'Nothing indexed at “{0}”. Use m365_project_map without path to see the structure, or m365_list_files.',
+	'rag.file.header': '{0} — {1}, {2} lines',
+	'rag.file.symbols': 'Symbols (line: kind name):',
+	'rag.file.imports': 'Imports:',
+	'rag.file.external': 'external',
+	'rag.file.importedBy': 'Imported by:',
+	'rag.file.notImported': 'No indexed file imports it.',
+	'rag.folder.header': 'Folder {0} — {1} indexed files [main symbols]:',
+	'rag.search.header': 'Project search: “{0}” — {1} results, most relevant first:',
+	'rag.search.none': 'No results in the project index for “{0}”. Try other words (code terms in English, identifiers), m365_search_text for literal text, or m365_project_map to see the structure.',
+	'rag.search.more': 'More results (not shown):',
+	'rag.search.footer': 'Read a file with m365_read_file before editing it; the snippets show the most relevant lines of each result.',
+	'rag.search.noQuery': 'Say what to search for in `query`.',
+	'rag.truncated': 'Note: the project is larger than the index limit (m365copilot.index.maxFiles), so some files are not indexed.',
+	'rag.disabled': 'The project index is turned off (m365copilot.index.enabled). Use m365_search_text and m365_list_files.',
+	'rag.notReady': 'The project index is not ready yet (or the workspace has no indexable files). Use m365_search_text and m365_list_files meanwhile.',
+	'web.prompt.role': 'You are a research assistant with web search.',
+	'web.prompt.rules':
+		'Search the web for the query below and answer with the most relevant, up-to-date facts: concise, in bullet points, with exact versions, names and code where they matter. Say when sources disagree or something could not be found. Cite the sources you used.',
+	'web.prompt.query': 'Query:',
+	'web.result.header': 'Web search: “{0}”',
+	'web.result.sources': 'Sources:',
+	'web.empty': 'The web search for “{0}” returned nothing.',
+	'web.noQuery': 'Say what to search for in `query`.',
+	'web.disabled': 'Web search is turned off (m365copilot.web.enabled).',
+	'web.noTemplate':
+		'Web search needs the session captured by the browser extension or the userscript (a pasted bare token is not enough): the user has to open Microsoft 365 Copilot in the browser once with either of them installed.',
+
+	// ------------------------------------------------------------ project index (RAG) — for the user
+	'tool.searchingProject': 'Searching the project for “{0}”...',
+	'tool.projectMap': 'Reading the project map...',
+	'tool.projectMap.path': 'Reading the project map of {0}...',
+	'tool.webSearching': 'Searching the web for “{0}”...',
+	'index.progress': 'M365 Copilot: indexing the project',
+	'index.rebuilding': 'M365 Copilot: rebuilding the project index…',
+	'index.rebuilt': 'M365 Copilot: project index ready — {0} files in {1} s.',
+	'index.search.title': 'Search the project ({0} files indexed)',
+	'index.search.placeholder': 'What are you looking for? e.g. “where is the token saved”, ProfileStore, login flow',
+	'index.map.title': 'Project map — {0}',
+	'index.status.indexing': 'indexing… ({0} files so far)',
+	'index.status.ready': '{0} files indexed',
+	'index.status.disabled': 'index off',
+	'index.status.untrusted': 'workspace not trusted',
+	'menu.section.project': 'Project',
+	'menu.searchProject': 'Search the project…',
+	'menu.projectMap': 'Project map',
+	'menu.rebuildIndex': 'Rebuild project index',
+	'client.error.noWebTemplate':
+		'web search needs the session captured by the browser extension or the userscript (a pasted bare token is not enough)',
+	'log.indexBuilt': 'project index: {0} files, {1} chunks in {2} ms{3}',
+	'log.indexFailed': 'project index failed: {0}',
+	'log.indexContext': 'project context: {0} hits, {1} snippets, {2} chars',
+	'log.indexContextFailed': 'project context unavailable: {0}',
+	'log.webSearch': 'web search: {0}',
+	'log.webSearchDone': 'web search answered: {0} chars, {1} sources',
+	'log.webFallback': 'the web turn was rejected ({0}); answering without web search',
 } satisfies Record<string, string>;

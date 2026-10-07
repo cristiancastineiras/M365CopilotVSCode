@@ -8,9 +8,9 @@
  * Code extension's local server, so there is nothing to copy and paste.
  *
  * Every decision (which token to accept, which frame is the chat, when to scan
- * again, when to re-sync with VS Code) comes from `@ms365copilot/core`, the
+ * again, when to re-sync with VS Code) comes from `@m365copilot/core`, the
  * same code the browser extension runs. This file is bundled into
- * `../ms365copilot-token.user.js` by scripts/build-userscript.mjs — edit this
+ * `../m365copilot-token.user.js` by scripts/build-userscript.mjs — edit this
  * one, never the generated file.
  *
  * State lives in GM storage, shared by every tab and frame where the script
@@ -40,10 +40,10 @@ import {
 	withObservedTone,
 	withoutExpiredToken,
 	type CaptureStore,
-} from '@ms365copilot/core';
+} from '@m365copilot/core';
 
-const SYNC_KEY = 'ms365copilot.sync.v1';
-const UI_KEY = 'ms365copilot.ui.v1';
+const SYNC_KEY = 'm365copilot.sync.v1';
+const UI_KEY = 'm365copilot.ui.v1';
 const HEALTH_EVERY_MS = 30_000;
 const REQUEST_TIMEOUT_MS = 4_000;
 /** Reload a hidden tab whose token expired at most this often (shared by all tabs). */
@@ -531,9 +531,9 @@ button.ghost:hover:enabled { background: #21262d; }
 }`;
 
 function mountUi(): void {
-	if (!IS_TOP || document.getElementById('ms365copilot-grabber')) return;
+	if (!IS_TOP || document.getElementById('m365copilot-grabber')) return;
 	const host = document.createElement('div');
-	host.id = 'ms365copilot-grabber';
+	host.id = 'm365copilot-grabber';
 	const root = host.attachShadow ? host.attachShadow({ mode: 'open' }) : host;
 
 	const style = document.createElement('style');

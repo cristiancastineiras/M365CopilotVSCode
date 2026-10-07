@@ -19,7 +19,7 @@
  *    pestaña que re-escanee la caché de MSAL (la web renueva su propio token
  *    sola) → recargar la pestaña → abrir una en segundo plano.
  */
-import { M365_CHAT_URL } from '@ms365copilot/core';
+import { M365_CHAT_URL } from '@m365copilot/core';
 import { logger } from './logger';
 import {
   getStorage,
@@ -38,7 +38,7 @@ import {
   type TokenSnapshot,
 } from './refreshPolicy';
 
-const ALARM_NAME = 'ms365copilot-token-refresh';
+const ALARM_NAME = 'm365copilot-token-refresh';
 /** 1 minuto es el periodo mínimo que Chrome respeta en extensiones empaquetadas. */
 const ALARM_PERIOD_MINUTES = 1;
 

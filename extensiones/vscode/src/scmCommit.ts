@@ -3,7 +3,7 @@
  * Control title bar (and an entry in the quick menu) that writes the message
  * straight into the repository's commit box.
  *
- * Unlike the `ms365_generate_commit_message` agent tool, which triggers VS
+ * Unlike the `m365_generate_commit_message` agent tool, which triggers VS
  * Code's native ✨ generator (answered by whatever model Copilot Chat uses),
  * this asks Microsoft 365 Copilot directly, in one turn, from the staged diff
  * — or the working tree's when nothing is staged. It never commits: the
@@ -22,7 +22,7 @@ import { t } from './i18n';
 
 export function registerScmCommands(store: ProfileStore, log: (message: string) => void): vscode.Disposable[] {
 	return [
-		vscode.commands.registerCommand('ms365copilot.generateCommitMessage', (source?: unknown) =>
+		vscode.commands.registerCommand('m365copilot.generateCommitMessage', (source?: unknown) =>
 			generateCommitMessage(store, log, source),
 		),
 	];
@@ -94,7 +94,7 @@ async function generateCommitMessage(store: ProfileStore, log: (message: string)
  * clicked (VS Code passes its `SourceControl`, which carries `rootUri`), the
  * only one open, or the one the user picks.
  */
-async function resolveRepository(source: unknown): Promise<GitRepository | undefined> {
+export async function resolveRepository(source: unknown): Promise<GitRepository | undefined> {
 	const rootUri = (source as { rootUri?: unknown } | undefined)?.rootUri;
 	if (rootUri instanceof vscode.Uri) return getGitRepository(rootUri);
 

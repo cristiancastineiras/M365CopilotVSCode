@@ -12,7 +12,7 @@ import { createContentOf, replaceNewTextOf } from './editFields';
 import { acceptHunk, describeChange, describeHunks, diffLines, revertHunkEdit, type Hunk } from './lineDiff';
 import { t } from '../src/i18n';
 
-const PREVIEW_SCHEME = 'ms365copilot-edit-preview';
+const PREVIEW_SCHEME = 'm365copilot-edit-preview';
 const MAX_EDIT_COUNT = 20;
 const MAX_EDIT_TEXT_CHARS = 500_000;
 /** Beyond this many hunks in one file, per-hunk lenses are noise: only Keep all / Undo all remain. */
@@ -143,7 +143,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 
 	constructor() {
 		this.status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-		this.status.command = 'ms365copilot.reviewPendingEdits';
+		this.status.command = 'm365copilot.reviewPendingEdits';
 		this.disposables.push(
 			vscode.workspace.registerTextDocumentContentProvider(PREVIEW_SCHEME, this.previews),
 			vscode.languages.registerCodeLensProvider({ pattern: '**' }, this),
@@ -692,19 +692,19 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 				new vscode.CodeLens(range, {
 					title: t('edit.lens.keep', created ? t('diff.newFile') : describeHunks(hunks)),
 					tooltip: t('edit.lens.keepTooltip'),
-					command: 'ms365copilot.keepEdits',
+					command: 'm365copilot.keepEdits',
 					arguments: fileArgs,
 				}),
 				new vscode.CodeLens(range, {
 					title: t('edit.lens.undo'),
 					tooltip: t('edit.lens.undoTooltip'),
-					command: 'ms365copilot.undoEdits',
+					command: 'm365copilot.undoEdits',
 					arguments: fileArgs,
 				}),
 				new vscode.CodeLens(range, {
 					title: t('edit.lens.diff'),
 					tooltip: t('edit.lens.diffTooltip'),
-					command: 'ms365copilot.showEditDiff',
+					command: 'm365copilot.showEditDiff',
 					arguments: fileArgs,
 				}),
 			];
@@ -716,19 +716,19 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 			new vscode.CodeLens(top, {
 				title: t('edit.lens.keepAll', hunks.length),
 				tooltip: t('edit.lens.keepTooltip'),
-				command: 'ms365copilot.keepEdits',
+				command: 'm365copilot.keepEdits',
 				arguments: fileArgs,
 			}),
 			new vscode.CodeLens(top, {
 				title: t('edit.lens.undoAll'),
 				tooltip: t('edit.lens.undoTooltip'),
-				command: 'ms365copilot.undoEdits',
+				command: 'm365copilot.undoEdits',
 				arguments: fileArgs,
 			}),
 			new vscode.CodeLens(top, {
 				title: t('edit.lens.diff'),
 				tooltip: t('edit.lens.diffTooltip'),
-				command: 'ms365copilot.showEditDiff',
+				command: 'm365copilot.showEditDiff',
 				arguments: fileArgs,
 			}),
 		];
@@ -739,13 +739,13 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 				new vscode.CodeLens(range, {
 					title: t('edit.lens.keepHunk', describeHunks([hunk])),
 					tooltip: t('edit.lens.keepHunkTooltip'),
-					command: 'ms365copilot.keepHunk',
+					command: 'm365copilot.keepHunk',
 					arguments: args,
 				}),
 				new vscode.CodeLens(range, {
 					title: t('edit.lens.undoHunk'),
 					tooltip: t('edit.lens.undoHunkTooltip'),
-					command: 'ms365copilot.undoHunk',
+					command: 'm365copilot.undoHunk',
 					arguments: args,
 				}),
 			);
@@ -757,7 +757,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 
 	private renderStatus(): void {
 		const count = this.pending.size;
-		void vscode.commands.executeCommand('setContext', 'ms365copilot.hasPendingEdits', count > 0);
+		void vscode.commands.executeCommand('setContext', 'm365copilot.hasPendingEdits', count > 0);
 		this.updateActiveEditorContext();
 		this.pendingChanged.fire(count);
 		if (count === 0) {
@@ -773,7 +773,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 	private updateActiveEditorContext(): void {
 		const active = vscode.window.activeTextEditor?.document.uri.toString();
 		const pendingHere = active !== undefined && this.pending.has(active);
-		void vscode.commands.executeCommand('setContext', 'ms365copilot.activeEditorHasPendingEdits', pendingHere);
+		void vscode.commands.executeCommand('setContext', 'm365copilot.activeEditorHasPendingEdits', pendingHere);
 	}
 
 	private previewUri(file: PendingFile, side: 'before' | 'deleted'): vscode.Uri {
