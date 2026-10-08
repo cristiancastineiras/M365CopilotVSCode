@@ -18,11 +18,13 @@ mano.
   segundo plano — con backoff, y un badge rojo cuando hace falta que inicies
   sesión.
 
-El popup muestra una ilustración animada **M365 → VS Code** — el logo de VS Code
-está en gris hasta que VS Code tiene el token, entonces se enciende y el token
-recorre la flecha — además del estado del token, del endpoint, de la conexión
-con VS Code y de la renovación, con los botones **Enviar a VS Code**, **Copiar
-token** y **Renovar ahora**. La lógica de captura y la ilustración viven en
+El popup — claro y limpio, en Segoe UI y con el aspecto de Windows 11 — muestra
+una ilustración animada **M365 → VS Code**: entre los logos, una señal de tres
+anillos gira mientras busca el token y a VS Code, y se convierte en una señal que
+apunta a VS Code cuando conecta (VS Code sigue en gris hasta entonces). Debajo,
+el estado del token, de la conexión con VS Code y de la renovación, y un botón
+principal que siempre es el paso siguiente (**Abrir M365 Copilot**, **Renovar
+ahora** o **Enviar a VS Code**) más **Copiar token**. La lógica de captura y la ilustración viven en
 `@m365copilot/core` y las comparte el userscript de Tampermonkey, así que los
 dos se comportan igual. Está disponible en **inglés y español** (según el idioma del
 navegador), igual que el nombre y la descripción de la extensión.

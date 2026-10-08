@@ -485,50 +485,63 @@ function tick(): void {
 
 // ------------------------------------------------------------------ panel
 
+// Claro, limpio y con aspecto nativo de Windows 11: Segoe UI y los colores,
+// radios, sombras y controles de Fluent 2 (los mismos que el popup).
+const FONT = `'Segoe UI Variable Text', 'Segoe UI', -apple-system, system-ui, sans-serif`;
 const STYLE = `
 :host { all: initial; }
-.panel { position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; width: 280px; box-sizing: border-box;
-  padding: 12px 14px 14px; border-radius: 14px; background: #161b22; color: #e6edf3;
-  border: 1px solid #30363d; box-shadow: 0 10px 30px rgba(0,0,0,.45);
-  font: 12px/1.45 -apple-system, "Segoe UI", system-ui, sans-serif; }
-.head { display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 4px; }
+.panel, .mini { box-sizing: border-box; z-index: 2147483647; position: fixed; right: 16px; bottom: 16px;
+  background: #fff; color: #242424; border: 1px solid #e0e0e0; border-radius: 8px;
+  font: 13px/18px ${FONT}; -webkit-font-smoothing: antialiased; }
+.panel *, .mini * { box-sizing: border-box; }
+.panel { width: 296px; padding: 10px 16px 16px; box-shadow: 0 8px 16px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.12); }
+.head { display: flex; align-items: center; justify-content: space-between; margin: 0 -8px 4px 0;
+  color: #424242; font-size: 12px; font-weight: 600; }
 .icons { display: flex; gap: 2px; }
-.icon { cursor: pointer; background: none; border: 0; color: #9198a1; font-size: 14px; width: 24px; height: 24px; border-radius: 6px; }
-.icon:hover { background: #21262d; color: #e6edf3; }
-.art { color: #9198a1; margin: 2px 4px 6px; }
-.status { text-align: center; margin-bottom: 8px; }
-.status-title { font-weight: 600; font-size: 13px; }
-.status-sub { color: #9198a1; font-size: 11.5px; }
-[data-state="connected"] .status-title { color: #3fb950; }
-[data-state="warning"] .status-title { color: #d29922; }
-.rows { border: 1px solid #21262d; border-radius: 10px; padding: 2px 10px; margin-bottom: 10px; }
-.row { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; }
-.row + .row { border-top: 1px solid #21262d; }
-.row-label { color: #9198a1; }
-.row-value { font-variant-numeric: tabular-nums; }
-.buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-button.act { padding: 7px 10px; border: 0; border-radius: 8px; background: #1f6feb; color: #fff;
-  font: 600 12px -apple-system, "Segoe UI", system-ui, sans-serif; cursor: pointer; }
-button.act:hover:enabled { background: #388bfd; }
-button.act:disabled { background: #30363d; color: #6e7681; cursor: not-allowed; }
+.icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 4px; background: transparent; color: #616161; cursor: pointer; }
+.icon:hover { background: #f5f5f5; color: #242424; }
+.icon:active { background: #e0e0e0; }
+.art { color: #616161; margin: 4px 8px; }
+.status { text-align: center; margin: 4px 0 12px; }
+.status-title { font-size: 15px; line-height: 20px; font-weight: 600; }
+.status-title[data-busy] { background: linear-gradient(90deg, #242424 0 35%, #0f6cbd 50%, #242424 65% 100%);
+  background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: us-shimmer 2.6s ease-in-out infinite; }
+.status-sub { margin-top: 2px; color: #616161; font-size: 12px; line-height: 16px; }
+.rows { margin: 0 0 12px; padding: 0; border: 1px solid #ebebeb; border-radius: 8px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 34px; padding: 0 12px; }
+.row + .row { border-top: 1px solid #ebebeb; }
+.row dt { color: #424242; }
+.row dd { margin: 0; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #bdbdbd; }
+.dot[data-tone="ok"] { background: #107c10; }
+.dot[data-tone="warn"] { background: #bc4b09; }
+.dot[data-tone="bad"] { background: #c50f1f; }
+.buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+button.act { min-height: 32px; padding: 5px 12px; border: 1px solid #d1d1d1; border-radius: 4px; background: #fff;
+  color: #242424; font: 600 13px/18px ${FONT}; cursor: pointer; transition: background .1s, border-color .1s; }
+button.act:hover:enabled { background: #f5f5f5; border-color: #c7c7c7; }
+button.act:active:enabled { background: #e0e0e0; }
+button.primary { border-color: transparent; background: #0f6cbd; color: #fff; }
+button.primary:hover:enabled { background: #115ea3; border-color: transparent; }
+button.primary:active:enabled { background: #0c3b5e; }
+button.act:disabled { border-color: #f0f0f0; background: #f0f0f0; color: #bdbdbd; cursor: default; }
 button.wide { grid-column: 1 / -1; }
-button.ghost { background: transparent; border: 1px solid #30363d; color: #c9d1d9; }
-button.ghost:hover:enabled { background: #21262d; }
-.mini { position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; width: 132px; padding: 6px 8px 4px;
-  border-radius: 12px; background: #161b22; border: 1px solid #30363d; box-shadow: 0 6px 18px rgba(0,0,0,.4);
-  color: #9198a1; cursor: pointer; }
-.mini:hover { border-color: #1f6feb; }
+button:focus-visible { outline: 2px solid #242424; outline-offset: 1px; }
+.mini { width: 136px; padding: 8px 10px 6px; color: #616161; cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.12); transition: box-shadow .15s; }
+.mini:hover { box-shadow: 0 8px 16px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.12); }
 .hidden { display: none !important; }
-@media (prefers-color-scheme: light) {
-  .panel, .mini { background: #ffffff; color: #1f2328; border-color: #d1d9e0; box-shadow: 0 10px 30px rgba(31,35,40,.18); }
-  .art, .status-sub, .row-label, .icon, .mini { color: #59636e; }
-  .rows, .row + .row { border-color: #e4e8ec; }
-  .icon:hover, button.ghost:hover:enabled { background: #f6f8fa; color: #1f2328; }
-  button.ghost { border-color: #d1d9e0; color: #1f2328; }
-  button.act:disabled { background: #eff2f5; color: #818b98; }
-  [data-state="connected"] .status-title { color: #1a7f37; }
-  [data-state="warning"] .status-title { color: #9a6700; }
+@keyframes us-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .status-title[data-busy] { animation: none; background: none; color: #242424; }
 }`;
+
+const ICON_MINIMIZE =
+	'<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
+const ICON_CLOSE =
+	'<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
 
 function mountUi(): void {
 	if (!IS_TOP || document.getElementById('m365copilot-grabber')) return;
@@ -547,18 +560,20 @@ function mountUi(): void {
 	// only markup injected is our own static SVG.
 	panel.innerHTML = [
 		'<div class="head"><span data-text="title"></span><span class="icons">',
-		'<button class="icon" data-action="minimize">–</button><button class="icon" data-action="close">✕</button></span></div>',
+		`<button class="icon" data-action="minimize">${ICON_MINIMIZE}</button>`,
+		`<button class="icon" data-action="close">${ICON_CLOSE}</button></span></div>`,
 		`<div class="art">${connectionArtSvg({ idPrefix: 'us-art', title: T.art })}</div>`,
 		'<div class="status"><div class="status-title"></div><div class="status-sub"></div></div>',
-		'<div class="rows">',
-		'<div class="row"><span class="row-label" data-text="token"></span><span class="row-value" data-value="token"></span></div>',
-		'<div class="row"><span class="row-label" data-text="vscode"></span><span class="row-value" data-value="vscode"></span></div>',
-		'<div class="row"><span class="row-label" data-text="sync"></span><span class="row-value" data-value="sync"></span></div>',
-		'</div>',
+		'<dl class="rows">',
+		...(['token', 'vscode', 'sync'] as const).map(
+			(row) =>
+				`<div class="row"><dt data-text="${row}"></dt><dd><span class="dot" data-dot="${row}"></span><span data-value="${row}"></span></dd></div>`,
+		),
+		'</dl>',
 		'<div class="buttons">',
-		'<button class="act wide" data-action="send"></button>',
-		'<button class="act ghost" data-action="token"></button>',
-		'<button class="act ghost" data-action="profile"></button>',
+		'<button class="act primary wide" data-action="send"></button>',
+		'<button class="act" data-action="token"></button>',
+		'<button class="act" data-action="profile"></button>',
 		'</div>',
 	].join('');
 	mini.innerHTML = connectionArtSvg({ idPrefix: 'us-mini', title: T.expand });
@@ -568,8 +583,14 @@ function mountUi(): void {
 	for (const node of Array.from(panel.querySelectorAll('[data-text]'))) {
 		node.textContent = T[node.getAttribute('data-text') as keyof typeof T];
 	}
-	q<HTMLButtonElement>('[data-action="minimize"]').title = T.minimize;
-	q<HTMLButtonElement>('[data-action="close"]').title = T.close;
+	for (const [action, label] of [
+		['minimize', T.minimize],
+		['close', T.close],
+	] as const) {
+		const button = q<HTMLButtonElement>(`[data-action="${action}"]`);
+		button.title = label;
+		button.setAttribute('aria-label', label);
+	}
 	const sendButton = q<HTMLButtonElement>('[data-action="send"]');
 	const tokenButton = q<HTMLButtonElement>('[data-action="token"]');
 	const profileButton = q<HTMLButtonElement>('[data-action="profile"]');
@@ -606,6 +627,7 @@ function mountUi(): void {
 			warning: [T.warningTitle, T.warningSub],
 		}[state];
 		q('.status-title').textContent = title;
+		q<HTMLElement>('.status-title').toggleAttribute('data-busy', state === 'waiting');
 		q('.status-sub').textContent = sub;
 
 		const exp = store.claims?.exp;
@@ -621,6 +643,12 @@ function mountUi(): void {
 			sync.vscodeReachable === null ? T.vscodeChecking : sync.vscodeReachable ? T.vscodeOk : T.vscodeDown;
 		const ago = sync.lastSyncedAt ? Math.floor((Date.now() - sync.lastSyncedAt) / 60000) : null;
 		q('[data-value="sync"]').textContent = ago === null ? T.syncNever : ago < 1 ? T.syncJustNow : fill(T.syncAgo, ago);
+		const tones = {
+			token: !hasToken ? 'neutral' : usable ? 'ok' : 'warn',
+			vscode: sync.vscodeReachable === null ? 'neutral' : sync.vscodeReachable ? 'ok' : 'bad',
+			sync: ago === null ? 'neutral' : 'ok',
+		};
+		for (const [row, tone] of Object.entries(tones)) q<HTMLElement>(`[data-dot="${row}"]`).dataset.tone = tone;
 
 		if (!sendButton.dataset.flashing) sendButton.textContent = state === 'warning' ? T.renew : T.send;
 		sendButton.disabled = !hasToken && state !== 'warning';

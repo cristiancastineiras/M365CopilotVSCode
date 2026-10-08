@@ -1,66 +1,40 @@
 /* ------------------------------------------------------------------ *
- * Sistema de diseño del popup — limpio, sobrio, estilo Apple/GitHub.
- * Tokens en :root, tema oscuro vía prefers-color-scheme.
+ * Popup: claro, limpio y con aspecto nativo de Windows 11 — Segoe UI y
+ * los colores, radios y controles de Fluent 2.
  * ------------------------------------------------------------------ */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 
   --bg: #ffffff;
-  --surface: #ffffff;
-  --surface-subtle: #f6f8fa;
-  --border: #d1d9e0;
-  --border-subtle: #e4e8ec;
+  --fg1: #242424;
+  --fg2: #424242;
+  --fg3: #616161;
+  --fg-disabled: #bdbdbd;
 
-  --text: #1f2328;
-  --text-muted: #59636e;
-  --text-faint: #818b98;
+  --stroke: #ebebeb;
+  --stroke-control: #d1d1d1;
+  --stroke-control-hover: #c7c7c7;
+  --hover: #f5f5f5;
+  --pressed: #e0e0e0;
+  --disabled-bg: #f0f0f0;
 
-  --accent: #0969da;
-  --accent-hover: #0860ca;
-  --on-accent: #ffffff;
+  --brand: #0f6cbd;
+  --brand-hover: #115ea3;
+  --brand-pressed: #0c3b5e;
 
-  --green: #1a7f37;
-  --amber: #9a6700;
-  --red: #cf222e;
+  --success: #107c10;
+  --success-bg: #f1faf1;
+  --success-stroke: #9fd89f;
+  --warning: #bc4b09;
+  --danger: #c50f1f;
+  --danger-bg: #fdf3f4;
+  --danger-stroke: #eeacb2;
+  --neutral: #bdbdbd;
 
-  --tint-green: #dafbe1;
-  --tint-amber: #fff8c5;
-  --tint-red: #ffebe9;
-  --tint-neutral: #eff2f5;
-
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow: 0 1px 2px rgba(31, 35, 40, 0.06), 0 0 0 1px rgba(31, 35, 40, 0.04);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0d1117;
-    --surface: #161b22;
-    --surface-subtle: #161b22;
-    --border: #30363d;
-    --border-subtle: #21262d;
-
-    --text: #e6edf3;
-    --text-muted: #9198a1;
-    --text-faint: #6e7681;
-
-    --accent: #4493f8;
-    --accent-hover: #58a6ff;
-    --on-accent: #ffffff;
-
-    --green: #3fb950;
-    --amber: #d29922;
-    --red: #f85149;
-
-    --tint-green: rgba(46, 160, 67, 0.15);
-    --tint-amber: rgba(187, 128, 9, 0.15);
-    --tint-red: rgba(248, 81, 73, 0.15);
-    --tint-neutral: rgba(177, 186, 196, 0.12);
-
-    --shadow: 0 0 0 1px rgba(255, 255, 255, 0.04);
-  }
+  --radius: 8px;
+  --radius-control: 4px;
+  --font: 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 * {
@@ -72,251 +46,113 @@
 body {
   width: 320px;
   background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', sans-serif;
-  font-size: 13px;
-  line-height: 1.45;
+  color: var(--fg1);
+  font: 13px/18px var(--font);
   -webkit-font-smoothing: antialiased;
 }
 
 .app {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px;
-}
-
-/* ------------------------------------------------------------- header */
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.brand-mark {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #0a6cff 0%, #0b53c4 100%);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.brand-title {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.1px;
-}
-
-.brand-sub {
-  font-size: 11px;
-  color: var(--text-faint);
-}
-
-/* --------------------------------------------------------------- pill */
-
-.pill {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 9px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 500;
-  background: var(--tint-neutral);
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.pill-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.pill[data-tone='ok'] {
-  background: var(--tint-green);
-  color: var(--green);
-}
-.pill[data-tone='warn'] {
-  background: var(--tint-amber);
-  color: var(--amber);
-}
-.pill[data-tone='bad'] {
-  background: var(--tint-red);
-  color: var(--red);
+  gap: 16px;
+  padding: 20px 16px 16px;
 }
 
 /* --------------------------------------------------------------- hero */
 
 .hero {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  padding: 12px 14px 13px;
-  border-radius: var(--radius);
-  background: var(--surface-subtle);
-  border: 1px solid var(--border-subtle);
   text-align: center;
 }
 
-/* M365 → VS Code artwork (connectionArtSvg in @m365copilot/core). Its own
- * <style> handles the states; here only its size and the muted ink it uses
- * for the "off" parts and the labels. */
+/* Ilustración M365 → VS Code (connectionArtSvg en @m365copilot/core). Su
+ * propio <style> lleva los estados; aquí sólo el tamaño y la tinta gris de
+ * las etiquetas y de los anillos de fondo. */
 .hero-art {
-  color: var(--text-muted);
-  padding: 0 6px;
+  color: var(--fg3);
+  padding: 0 12px 4px;
 }
 
-.hero-text {
-  min-width: 0;
-}
-
-.hero[data-tone='ok'] .hero-title {
-  color: var(--green);
-}
-
-.hero[data-tone='bad'] .hero-title {
-  color: var(--red);
-}
-
-.hero-icon {
-  flex: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.title {
+  margin-top: 6px;
   font-size: 16px;
-  font-weight: 700;
-  background: var(--tint-neutral);
-  color: var(--text-muted);
-}
-.hero-icon[data-tone='ok'] {
-  background: var(--tint-green);
-  color: var(--green);
-}
-.hero-icon[data-tone='warn'] {
-  background: var(--tint-amber);
-  color: var(--amber);
-}
-.hero-icon[data-tone='bad'] {
-  background: var(--tint-red);
-  color: var(--red);
-}
-
-.hero-title {
-  font-size: 13px;
+  line-height: 22px;
   font-weight: 600;
 }
 
-.hero-sub {
-  font-size: 11.5px;
-  color: var(--text-muted);
-  margin-top: 1px;
-}
-
-/* --------------------------------------------------------------- card */
-
-.card {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
-  background: var(--surface);
-  overflow: hidden;
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-}
-.row + .row {
-  border-top: 1px solid var(--border-subtle);
-}
-
-.row-check {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 700;
-  border: 1.5px solid var(--border);
+/* Mientras busca o renueva, un brillo recorre el título (como el texto del
+ * loader): el texto sigue siendo texto, legible para un lector de pantalla. */
+.title[data-busy] {
+  background: linear-gradient(90deg, var(--fg1) 0 35%, var(--brand) 50%, var(--fg1) 65% 100%);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
   color: transparent;
-}
-.row-check[data-ok='true'] {
-  border-color: var(--green);
-  background: var(--green);
-  color: #fff;
+  animation: shimmer 2.6s ease-in-out infinite;
 }
 
-.row-label {
-  flex: 1;
-  font-weight: 500;
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
 }
 
-.row-value {
-  color: var(--text-faint);
-  font-size: 11.5px;
+.subtitle {
+  margin-top: 2px;
+  color: var(--fg3);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* --------------------------------------------------------------- list */
+
+.list {
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.item + .item {
+  border-top: 1px solid var(--stroke);
+}
+
+.item dt {
+  color: var(--fg2);
+}
+
+.item dd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-variant-numeric: tabular-nums;
 }
 
-/* --------------------------------------------------------------- user */
-
-.user {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-subtle);
-  border: 1px solid var(--border-subtle);
-}
-
-.avatar {
+.dot {
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: 10px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-transform: uppercase;
+  background: var(--neutral);
 }
 
-.user-name {
-  font-size: 12px;
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.dot[data-tone='ok'] {
+  background: var(--success);
+}
+.dot[data-tone='warn'] {
+  background: var(--warning);
+}
+.dot[data-tone='bad'] {
+  background: var(--danger);
 }
 
 /* ------------------------------------------------------------ actions */
@@ -327,67 +163,98 @@ body {
   gap: 8px;
 }
 
-.actions-split {
+.actions-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-.btn {
+.button {
   appearance: none;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  padding: 9px 12px;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
+  min-height: 32px;
+  padding: 5px 12px;
+  border: 1px solid var(--stroke-control);
+  border-radius: var(--radius-control);
+  background: var(--bg);
+  color: var(--fg1);
+  font: 600 13px/18px var(--font);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  transition:
+    background 0.1s,
+    border-color 0.1s,
+    color 0.1s;
 }
 
-.btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
+.button:hover:enabled {
+  background: var(--hover);
+  border-color: var(--stroke-control-hover);
+}
+.button:active:enabled {
+  background: var(--pressed);
 }
 
-.btn-primary {
-  background: var(--accent);
-  color: var(--on-accent);
+.button.primary {
+  border-color: transparent;
+  background: var(--brand);
+  color: #fff;
 }
-.btn-primary:not(:disabled):hover {
-  background: var(--accent-hover);
+.button.primary:hover:enabled {
+  background: var(--brand-hover);
 }
-
-.btn-ghost {
-  background: var(--surface);
-  border-color: var(--border);
-  color: var(--text);
-}
-.btn-ghost:not(:disabled):hover {
-  background: var(--surface-subtle);
+.button.primary:active:enabled {
+  background: var(--brand-pressed);
 }
 
-.btn-ok {
-  background: var(--tint-green) !important;
-  color: var(--green) !important;
-  border-color: transparent !important;
+.button.done,
+.button.done:hover:enabled {
+  border-color: var(--success-stroke);
+  background: var(--success-bg);
+  color: var(--success);
 }
 
-/* -------------------------------------------------------- alert/footer */
+.button:disabled {
+  border-color: var(--disabled-bg);
+  background: var(--disabled-bg);
+  color: var(--fg-disabled);
+  cursor: default;
+}
 
-.alert {
+.button:focus-visible {
+  outline: 2px solid var(--fg1);
+  outline-offset: 1px;
+}
+
+/* ------------------------------------------------------ message/footer */
+
+.message {
   display: flex;
+  align-items: flex-start;
   gap: 8px;
-  padding: 9px 11px;
-  border-radius: var(--radius-sm);
-  background: var(--tint-red);
-  color: var(--red);
-  font-size: 11.5px;
+  padding: 8px 12px;
+  border: 1px solid var(--danger-stroke);
+  border-radius: var(--radius-control);
+  background: var(--danger-bg);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.message svg {
+  flex: none;
+  color: var(--danger);
 }
 
 .footer {
-  font-size: 11px;
-  color: var(--text-faint);
+  margin-top: -4px;
+  color: var(--fg3);
+  font-size: 12px;
+  line-height: 16px;
   text-align: center;
-  padding-top: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title[data-busy] {
+    animation: none;
+    background: none;
+    color: var(--fg1);
+  }
 }

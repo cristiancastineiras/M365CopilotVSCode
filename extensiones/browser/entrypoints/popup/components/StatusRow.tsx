@@ -1,18 +1,20 @@
+export type Tone = 'ok' | 'warn' | 'bad' | 'neutral';
+
 interface StatusRowProps {
   label: string;
-  ok: boolean;
+  tone: Tone;
   value: string;
 }
 
-/** Fila de la checklist de captura: check + etiqueta + estado a la derecha. */
-export function StatusRow({ label, ok, value }: StatusRowProps) {
+/** Una fila de la lista de estado: etiqueta a la izquierda, punto de color y valor a la derecha. */
+export function StatusRow({ label, tone, value }: StatusRowProps) {
   return (
-    <div className="row">
-      <span className="row-check" data-ok={ok}>
-        ✓
-      </span>
-      <span className="row-label">{label}</span>
-      <span className="row-value">{value}</span>
+    <div className="item">
+      <dt>{label}</dt>
+      <dd>
+        <span className="dot" data-tone={tone} aria-hidden="true" />
+        {value}
+      </dd>
     </div>
   );
 }

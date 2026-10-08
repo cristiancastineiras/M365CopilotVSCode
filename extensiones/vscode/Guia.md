@@ -87,10 +87,10 @@ La ilustración del panel te dice en qué punto estás:
 
 <img src="imgs/connection-states.png" width="260" alt="Estados de la conexión: esperando el token, token capturado, conectado con VS Code y token caducado">
 
-1. **Esperando el token**: los dos logos en gris; el de M365 «respira».
-2. **Token listo**: el logo de M365 se enciende, pero VS Code sigue en gris porque no responde todavía (ábrelo con la extensión activa).
-3. **Conectado con VS Code**: el logo de VS Code se enciende y el token recorre la flecha. Ya está — se volverá a enviar solo cada vez que se renueve.
-4. **Token caducado**: recarga la página (el botón del panel lo hace) o vuelve a iniciar sesión.
+1. **Esperando el token**: los dos logos en gris y la señal girando en gris; el de M365 «respira».
+2. **Token listo**: el logo de M365 se enciende y la señal gira en azul buscando a VS Code, que sigue en gris porque no responde todavía (ábrelo con la extensión activa).
+3. **Conectado con VS Code**: la señal se para y apunta a VS Code, que se enciende. Ya está — se volverá a enviar solo cada vez que se renueve.
+4. **Token caducado**: señal débil en ámbar. Recarga la página (el botón del panel lo hace) o vuelve a iniciar sesión.
 
 El panel se puede minimizar (–) a un pequeño icono, y el menú de Tampermonkey
 tiene **Enviar el token a VS Code ahora**, **Mostrar el panel** y la opción de
