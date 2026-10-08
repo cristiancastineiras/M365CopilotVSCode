@@ -30,6 +30,31 @@ export const SIGNOUT_ENDPOINT_PATH = '/signout';
  */
 export const M365_CHAT_URL = 'https://m365.cloud.microsoft/chat/';
 
+/**
+ * Dominios donde los content scripts (interceptor + puente) tienen que
+ * inyectarse para capturar el token. Es la ÚNICA fuente de verdad: los dos
+ * content scripts la consumen, así que no se pueden desincronizar.
+ *
+ * Tiene que cubrir TODA superficie donde la web abre el WebSocket del chat o
+ * guarda el token de MSAL, no sólo `m365.cloud.microsoft`:
+ * - `*.cloud.microsoft`     el chat actual (m365, copilot…).
+ * - `*.microsoft365.com`    el portal nuevo (antes office.com); es por donde
+ *                            entra mucha gente, sobre todo desde Edge.
+ * - `*.office.com`          Outlook/Office en la web embeben BizChat.
+ * - `teams.microsoft.com`   Copilot dentro de Teams.
+ *
+ * Antes la lista era más estrecha que los `host_permissions` del manifest, así
+ * que en esas otras superficies el interceptor ni siquiera arrancaba: ni log ni
+ * captura. Debe ir acompañada de `all_frames` — el chat suele vivir en un
+ * iframe, y sin eso el interceptor sólo corre en el documento de arriba.
+ */
+export const COPILOT_CONTENT_MATCHES = [
+  'https://*.cloud.microsoft/*',
+  'https://*.microsoft365.com/*',
+  'https://*.office.com/*',
+  'https://teams.microsoft.com/*',
+] as const;
+
 /** Clave de localStorage donde el interceptor del navegador acumula la captura. */
 export const CAPTURE_STORE_KEY = 'm365copilot.capture.v1';
 

@@ -17,6 +17,7 @@ import {
   areClaimsUsable,
   connectionArtSvg,
   connectionState,
+  diagnoseToken,
   inspectOutgoingFrames,
   isCopilotSocketUrl,
   isMicrosoftHost,
@@ -75,6 +76,22 @@ function testTokenValidation() {
   assert.equal(acceptToken({}, jwt({ aud: 'https://graph.microsoft.com', exp: inMinutes(60) }), NOW), null, 'not Sydney');
   assert.equal(acceptToken({}, `  ${fresh}  `, NOW)?.accessToken, fresh, 'trimmed');
   console.log('  ✓ sólo se acepta un JWT de Sydney válido, sin caducar y no más viejo que el actual');
+}
+
+function testDiagnosis() {
+  const fresh = jwt({ exp: inMinutes(60) });
+  assert.equal(diagnoseToken({}, fresh, NOW).diagnosis, 'accepted');
+  assert.equal(diagnoseToken({}, 'not.a.jwt!', NOW).diagnosis, 'not-a-jwt');
+  assert.equal(
+    diagnoseToken({}, jwt({ aud: 'https://graph.microsoft.com', exp: inMinutes(60) }), NOW).diagnosis,
+    'not-sydney',
+    'un bearer de Graph se reconoce como no-Sydney, no como silencio',
+  );
+  assert.equal(diagnoseToken({}, jwt({ exp: inMinutes(-5) }), NOW).diagnosis, 'expired');
+  const current = { accessToken: fresh, claims: acceptToken({}, fresh, NOW)!.claims };
+  assert.equal(diagnoseToken(current, fresh, NOW).diagnosis, 'duplicate');
+  assert.equal(diagnoseToken(current, jwt({ exp: inMinutes(30) }), NOW).diagnosis, 'older-than-current');
+  console.log('  ✓ diagnoseToken explica por qué se descarta cada token');
 }
 
 function testSources() {
@@ -217,6 +234,7 @@ function testObservedTones() {
 }
 
 testTokenValidation();
+testDiagnosis();
 testSources();
 testFrames();
 testStore();

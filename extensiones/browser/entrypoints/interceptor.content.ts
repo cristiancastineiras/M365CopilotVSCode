@@ -1,8 +1,9 @@
 import {
   CAPTURE_STORE_KEY,
   BRIDGE_MESSAGE_MARKER,
+  COPILOT_CONTENT_MATCHES,
   SCAN_MISSING_MS,
-  acceptToken,
+  diagnoseToken,
   inspectOutgoingFrames,
   isCopilotSocketUrl,
   nextScan,
@@ -18,6 +19,25 @@ import {
 import { logger } from '@/utils/logger';
 
 /**
+ * Traza de diagnóstico, apagada salvo que alguien ponga
+ * `localStorage['m365copilot.debug'] = '1'` y recargue. Es la respuesta al
+ * «no captura y no sale ningún log»: con esto se ve cada WebSocket que abre la
+ * web, cuántas entradas de MSAL se miran y por qué se descarta cada token,
+ * sin tener que hacer un build especial. En producción `logger.debug` está
+ * mudo, por eso aquí se usa `logger.info` a propósito.
+ */
+const VERBOSE = (() => {
+  try {
+    return localStorage.getItem('m365copilot.debug') === '1';
+  } catch {
+    return false;
+  }
+})();
+function diag(...args: unknown[]): void {
+  if (VERBOSE) logger.info('[diag]', ...args);
+}
+
+/**
  * Interceptor que corre en el mundo MAIN de la página.
  *
  * Aquí SÍ podemos hookear el `fetch`, `WebSocket`, `XMLHttpRequest` y las
@@ -31,17 +51,18 @@ import { logger } from '@/utils/logger';
  * el userscript de Tampermonkey; aquí sólo queda el pegamento con la página.
  */
 export default defineContentScript({
-  matches: [
-    'https://m365.cloud.microsoft/*',
-    'https://*.cloud.microsoft/*',
-    'https://www.office.com/*',
-    'https://outlook.office.com/*',
-    'https://teams.microsoft.com/*',
-  ],
+  matches: [...COPILOT_CONTENT_MATCHES],
+  // El chat de Copilot se renderiza dentro de un iframe en varias de estas
+  // webs (y en Edge el encuadre no es el mismo que en Chrome). Sin
+  // `allFrames` el interceptor sólo corría en el documento de arriba, así que
+  // ni veía el WebSocket del chat ni la caché de MSAL del iframe: no capturaba
+  // nada y no dejaba ni un log. Con esto corre en cada frame de Microsoft.
+  allFrames: true,
   runAt: 'document_start',
   world: 'MAIN',
   main() {
     logger.info('M365 Copilot Token Interceptor (MAIN) loaded on:', window.location.href);
+    diag('verbose activado; top frame =', window.top === window.self);
 
     /** Publica el perfil hacia el puente (mundo ISOLATED) para que lo reenvíe al background. */
     function postProfile(profile: CaptureStore): void {
@@ -88,8 +109,13 @@ export default defineContentScript({
     /** Guarda un token sólo si es de Sydney, válido y no más viejo que el que ya teníamos. */
     function offerToken(token: string, where: string): void {
       try {
-        const accepted = acceptToken(readStore(), token);
-        if (!accepted) return;
+        const { diagnosis, accepted } = diagnoseToken(readStore(), token);
+        if (!accepted) {
+          // `not-sydney` es de lo más normal (cada fetch a Graph trae su
+          // bearer), por eso sólo se registra en modo verboso.
+          diag(`token descartado desde ${where}: ${diagnosis}`);
+          return;
+        }
         const minutes = Math.round(((accepted.claims.exp ?? 0) * 1000 - Date.now()) / 60000);
         logger.info(`Token capturado desde ${where}, caduca en ${minutes} min`);
         writeStore({ ...accepted, tokenSource: where });
@@ -101,10 +127,16 @@ export default defineContentScript({
     // -------------------------------------------------------- hook de WebSocket
 
     function captureSocket(url: string, ws: WebSocket): void {
-      if (!isCopilotSocketUrl(url)) return;
+      const copilot = isCopilotSocketUrl(url);
+      // Se registra TODO socket (recortado) en modo verboso: así se distingue
+      // «la web no abre ningún socket aquí» (mal frame/dominio) de «lo abre
+      // pero no lo reconozco» (patrón de URL a actualizar).
+      diag('WebSocket:', String(url).split('?')[0], copilot ? '(copilot)' : '(ignorado)');
+      if (!copilot) return;
 
       // El token viaja en la query: se extrae ANTES de normalizar la URL.
       const token = tokenInSocketUrl(url);
+      diag('socket de copilot; token en la URL:', Boolean(token));
       if (token) offerToken(token, 'websocket-url');
 
       // Substrate abre varios WebSockets (presencia, notificaciones…). Guardamos
@@ -206,6 +238,8 @@ export default defineContentScript({
     // --------------------------------------------- rastreo de la caché de MSAL
 
     function scanStorages(): void {
+      let keysScanned = 0;
+      let candidates = 0;
       for (const store of [window.localStorage, window.sessionStorage]) {
         let length = 0;
         try {
@@ -217,12 +251,17 @@ export default defineContentScript({
           try {
             const key = store.key(i);
             if (!key || key === CAPTURE_STORE_KEY) continue;
-            for (const token of tokensInStorageValue(store.getItem(key))) offerToken(token, 'msal-cache');
+            keysScanned++;
+            for (const token of tokensInStorageValue(store.getItem(key))) {
+              candidates++;
+              offerToken(token, 'msal-cache');
+            }
           } catch {
             /* entrada ilegible: la siguiente */
           }
         }
       }
+      diag(`escaneo MSAL: ${keysScanned} claves, ${candidates} candidatos`);
     }
 
     // ------------------------------------------------- bucle de captura
