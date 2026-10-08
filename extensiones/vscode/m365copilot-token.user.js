@@ -342,14 +342,18 @@
 /**
 	* Ilustración «M365 → VS Code» del popup de la extensión de navegador y del
 	* panel del userscript: el logo de M365 Copilot a la izquierda, el de VS Code
-	* a la derecha y una flecha entre ambos por la que viaja el token.
+	* a la derecha y, entre ambos, una señal de tres anillos concéntricos (el
+	* «wifi loader» de Uiverse.io por mobinkakei, licencia MIT, rehecho dentro
+	* del SVG) que cuenta en qué punto está la conexión.
 	*
-	* - waiting:   los dos logos apagados (en gris); M365 «respira» mientras busca el token.
-	* - captured:  M365 se enciende y el token espera en la salida de la flecha;
-	*              VS Code sigue apagado (no responde).
-	* - connected: VS Code se enciende con un halo, la flecha fluye y el token
-	*              viaja hasta él una y otra vez.
-	* - warning:   token caducado o hace falta iniciar sesión: aviso sobre M365.
+	* - waiting:   los dos logos apagados (en gris) y los anillos girando en gris:
+	*              está buscando el token; M365 «respira».
+	* - captured:  M365 se enciende y los anillos giran con el degradado de la
+	*              marca: tiene el token y está buscando a VS Code, que sigue apagado.
+	* - connected: los anillos se paran y forman una señal de wifi que apunta a
+	*              VS Code, con una onda que viaja hacia él; VS Code se enciende.
+	* - warning:   token caducado o hace falta iniciar sesión: señal débil en
+	*              ámbar y aviso sobre M365.
 	*
 	* Los logos son los del proyecto (extensiones/vscode/logo/m365-vscode.svg y
 	* vscode.svg), incrustados aquí como <symbol>. Ojo: el icono de VS Code es una
@@ -395,6 +399,71 @@
 <path d="M23.244,29.747a1.745,1.745,0,0,1-1.989-.338A1.025,1.025,0,0,0,23,28.684V3.316a1.024,1.024,0,0,0-1.749-.724,1.744,1.744,0,0,1,1.989-.339l5.765,2.772A1.748,1.748,0,0,1,30,6.6V25.4a1.748,1.748,0,0,1-.991,1.576Z" fill="#1f9cf0"/>
 </symbol>`;
 	}
+	/**
+	* Los tres anillos del loader con las medidas del original (r = 40, 27 y 14
+	* sobre un centro común). Sus `stroke-dasharray` (un cuarto de cada
+	* circunferencia) y los `stroke-dashoffset` de la animación están calculados
+	* para esos radios, así que el conjunto se encoge con un `scale` en vez de
+	* tocar los números. `half` centra el arco en las 3 en punto: la señal de
+	* «conectado» apunta a VS Code.
+	*/
+	const RINGS = [
+		{
+			name: "outer",
+			r: 40,
+			dash: "62.75 188.25",
+			keys: [
+				25,
+				0,
+				301,
+				276
+			],
+			front: .15,
+			back: .3,
+			half: 31.375
+		},
+		{
+			name: "middle",
+			r: 27,
+			dash: "42.5 127.5",
+			keys: [
+				17,
+				0,
+				204,
+				187
+			],
+			front: .1,
+			back: .25,
+			half: 21.25
+		},
+		{
+			name: "inner",
+			r: 14,
+			dash: "22 66",
+			keys: [
+				9,
+				0,
+				106,
+				97
+			],
+			front: .05,
+			back: .2,
+			half: 11
+		}
+	];
+	/** Azul de marca de Fluent (botones, señal) y los colores de estado de Windows 11. */
+	const BRAND = "#0f6cbd";
+	const SUCCESS = "#107c10";
+	const WARNING = "#bc4b09";
+	function ringStyles() {
+		return RINGS.map(({ name, dash, keys: [k0, k1, k2, k3], front, back, half }) => [
+			`.m365-art .${name} { stroke-dasharray: ${dash}; }`,
+			`.m365-art .back.${name} { animation: m365-art-${name} 1.8s ease infinite ${back}s; }`,
+			`.m365-art .front.${name} { animation: m365-art-${name} 1.8s ease infinite ${front}s; }`,
+			`[data-state="connected"] .m365-art .front.${name}, [data-state="warning"] .m365-art .front.${name} { stroke-dashoffset: ${half}; }`,
+			`@keyframes m365-art-${name} { 0% { stroke-dashoffset: ${k0}; } 25% { stroke-dashoffset: ${k1}; } 65% { stroke-dashoffset: ${k2}; } 80%, 100% { stroke-dashoffset: ${k3}; } }`
+		].join("\n  ")).join("\n  ");
+	}
 	/** Marcado del SVG; el estado lo decide `data-state` en un elemento que lo contenga. */
 	function connectionArtSvg(options = {}) {
 		const id = (name) => `${options.idPrefix ?? "m365art"}-${name}`;
@@ -402,29 +471,30 @@
 		const right = escapeXml(options.rightLabel ?? "VS Code");
 		const title = escapeXml(options.title ?? `${options.leftLabel ?? "M365 Copilot"} → ${options.rightLabel ?? "VS Code"}`);
 		const use = (symbol, extra = "") => `<use href="#${id(symbol)}" xlink:href="#${id(symbol)}" width="64" height="64"${extra}/>`;
+		const rings = RINGS.map(({ name, r }) => `<circle class="ring back ${name}" r="${r}"/><circle class="ring front ${name}" r="${r}"/>`).join("");
 		return `<svg class="m365-art" viewBox="0 0 260 104" role="img" aria-label="${title}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <title>${title}</title>
 <defs>
   ${m365Symbol(id)}
   ${vscodeSymbol(id)}
-  <linearGradient id="${id("flow")}" x1="90" y1="0" x2="168" y2="0" gradientUnits="userSpaceOnUse">
-    <stop offset="0" stop-color="#b267ff"/><stop offset="1" stop-color="#1f9cf0"/>
-  </linearGradient>
   <filter id="${id("grey")}" color-interpolation-filters="sRGB"><feColorMatrix type="saturate" values="0"/></filter>
   <filter id="${id("blur")}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
 </defs>
 <style>
   .m365-art { display: block; width: 100%; height: auto; overflow: visible; }
-  .m365-art .layer, .m365-art .badge, .m365-art .wire, .m365-art .dot { transition: opacity .6s ease; }
-  .m365-art .on, .m365-art .badge, .m365-art .flow, .m365-art .warnwire, .m365-art .dot, .m365-art .halo { opacity: 0; }
-  .m365-art .off { opacity: .38; }
-  .m365-art .track { stroke: currentColor; stroke-opacity: .35; stroke-width: 3; stroke-dasharray: 1 8; stroke-linecap: round; fill: none; }
-  .m365-art .flow { stroke: url(#${id("flow")}); stroke-width: 4; stroke-dasharray: 12 8; stroke-linecap: round; fill: none; animation: m365-art-flow .9s linear infinite; }
-  .m365-art .warnwire { stroke: #d29922; stroke-width: 3; stroke-dasharray: 6 6; fill: none; }
-  .m365-art .head { fill: none; stroke: currentColor; stroke-opacity: .35; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; transition: stroke .6s ease, stroke-opacity .6s ease; }
-  .m365-art .label { fill: currentColor; opacity: .7; font: 600 11px -apple-system, 'Segoe UI', system-ui, sans-serif; text-anchor: middle; }
-  .m365-art .dot circle { fill: #fff; stroke: url(#${id("flow")}); stroke-width: 3; }
+  .m365-art .layer, .m365-art .badge, .m365-art .halo, .m365-art .core { transition: opacity .5s ease; }
+  .m365-art .on, .m365-art .badge, .m365-art .halo, .m365-art .core { opacity: 0; }
+  .m365-art .off { opacity: .4; }
+  .m365-art .label { fill: currentColor; font: 600 11px 'Segoe UI Variable Text', 'Segoe UI', -apple-system, system-ui, sans-serif; text-anchor: middle; }
+  .m365-art .signal { transition: transform .5s ease; }
+  .m365-art .ring { fill: none; stroke-width: 6px; stroke-linecap: round; transform-box: fill-box; transform-origin: center;
+    transform: rotate(-100deg); transition: transform .5s ease, opacity .4s ease, stroke .4s ease; }
+  .m365-art .back { stroke: currentColor; stroke-opacity: .18; }
+  .m365-art .front { stroke: ${BRAND}; }
+  .m365-art .core { fill: ${BRAND}; transition: opacity .5s ease, fill .4s ease; }
+  ${ringStyles()}
   [data-state="waiting"] .m365-art .m365 .off { animation: m365-art-breathe 2.4s ease-in-out infinite; }
+  [data-state="waiting"] .m365-art .front { stroke: #8a8886; }
   [data-state="captured"] .m365-art .m365 .on,
   [data-state="connected"] .m365-art .m365 .on,
   [data-state="warning"] .m365-art .m365 .on { opacity: 1; }
@@ -432,46 +502,42 @@
   [data-state="connected"] .m365-art .m365 .off,
   [data-state="warning"] .m365-art .m365 .off,
   [data-state="connected"] .m365-art .vscode .off { opacity: 0; }
-  [data-state="captured"] .m365-art .dot { opacity: 1; }
-  [data-state="captured"] .m365-art .dot circle { animation: m365-art-ready 1.4s ease-in-out infinite; transform-origin: 96px 46px; }
   [data-state="connected"] .m365-art .vscode .on,
-  [data-state="connected"] .m365-art .flow,
-  [data-state="connected"] .m365-art .badge.ok { opacity: 1; }
-  [data-state="connected"] .m365-art .halo { opacity: .6; animation: m365-art-glow 2.6s ease-in-out infinite; }
-  [data-state="connected"] .m365-art .head { stroke: #1f9cf0; stroke-opacity: 1; }
-  [data-state="connected"] .m365-art .dot { opacity: 1; animation: m365-art-travel 1.8s cubic-bezier(.45,0,.55,1) infinite; }
-  [data-state="warning"] .m365-art .warnwire,
-  [data-state="warning"] .m365-art .badge.warn { opacity: 1; }
-  [data-state="warning"] .m365-art .track,
-  [data-state="connected"] .m365-art .track { opacity: 0; }
-  @keyframes m365-art-flow { to { stroke-dashoffset: -20; } }
-  @keyframes m365-art-breathe { 0%, 100% { opacity: .28; } 50% { opacity: .6; } }
-  @keyframes m365-art-ready { 0%, 100% { transform: scale(.75); } 50% { transform: scale(1.1); } }
-  @keyframes m365-art-glow { 0%, 100% { opacity: .3; } 50% { opacity: .75; } }
-  @keyframes m365-art-travel {
-    0% { transform: translateX(0); opacity: 0; } 12% { opacity: 1; }
-    80% { transform: translateX(62px); opacity: 1; } 100% { transform: translateX(68px); opacity: 0; }
-  }
+  [data-state="connected"] .m365-art .badge.ok,
+  [data-state="warning"] .m365-art .badge.warn,
+  [data-state="connected"] .m365-art .core,
+  [data-state="warning"] .m365-art .core { opacity: 1; }
+  [data-state="connected"] .m365-art .halo { opacity: .35; }
+  [data-state="connected"] .m365-art .signal,
+  [data-state="warning"] .m365-art .signal { transform: translateX(-16px); }
+  [data-state="connected"] .m365-art .ring,
+  [data-state="warning"] .m365-art .ring { animation: none; transform: rotate(0deg); }
+  [data-state="connected"] .m365-art .back,
+  [data-state="warning"] .m365-art .back { opacity: 0; }
+  [data-state="connected"] .m365-art .front { animation: m365-art-wave 1.8s ease-in-out infinite; }
+  [data-state="connected"] .m365-art .front.middle { animation-delay: .2s; }
+  [data-state="connected"] .m365-art .front.outer { animation-delay: .4s; }
+  [data-state="warning"] .m365-art .front { stroke: ${WARNING}; }
+  [data-state="warning"] .m365-art .front.middle { opacity: .4; }
+  [data-state="warning"] .m365-art .front.outer { opacity: .16; }
+  [data-state="warning"] .m365-art .core { fill: ${WARNING}; }
+  @keyframes m365-art-breathe { 0%, 100% { opacity: .28; } 50% { opacity: .55; } }
+  @keyframes m365-art-wave { 0%, 100% { opacity: .25; } 35% { opacity: 1; } }
   @media (prefers-reduced-motion: reduce) {
-    .m365-art *, .m365-art { animation: none !important; transition: none !important; }
-    [data-state="connected"] .m365-art .dot { transform: translateX(62px); }
+    .m365-art, .m365-art * { animation: none !important; transition: none !important; }
   }
 </style>
 <g class="node m365" transform="translate(14 14)">
   <g class="layer off" filter="url(#${id("grey")})">${use("m365")}</g>
   <g class="layer on">${use("m365")}</g>
-  <g class="badge warn" transform="translate(62 2)"><circle r="10" fill="#d29922"/><path d="M0 -5V1.5M0 5.2V5.4" stroke="#fff" stroke-width="3" stroke-linecap="round"/></g>
+  <g class="badge warn" transform="translate(62 2)"><circle r="10" fill="${WARNING}"/><path d="M0 -5V1.5M0 5.2V5.4" stroke="#fff" stroke-width="3" stroke-linecap="round"/></g>
 </g>
-<path class="track wire" d="M92 46H162"/>
-<path class="flow wire" d="M92 46H162"/>
-<path class="warnwire wire" d="M92 46H162"/>
-<path class="head" d="M160 38L169 46L160 54"/>
-<g class="dot"><circle cx="98" cy="46" r="5.5"/></g>
+<g transform="translate(130 46)"><g class="signal"><g transform="scale(.8)">${rings}<circle class="core" r="5"/></g></g></g>
 <g class="node vscode" transform="translate(182 14)">
   <g class="halo" filter="url(#${id("blur")})">${use("vscode")}</g>
   <g class="layer off" filter="url(#${id("grey")})">${use("vscode")}</g>
   <g class="layer on">${use("vscode")}</g>
-  <g class="badge ok" transform="translate(62 2)"><circle r="10" fill="#2ea043"/><path d="M-4.5 0.5L-1.2 3.8L4.8 -3" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <g class="badge ok" transform="translate(62 2)"><circle r="10" fill="${SUCCESS}"/><path d="M-4.5 0.5L-1.2 3.8L4.8 -3" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></g>
 </g>
 <text class="label" x="46" y="98">${left}</text>
 <text class="label" x="214" y="98">${right}</text>
@@ -879,50 +945,58 @@
 		missingDelay = next.missingDelay;
 		setTimeout(tick, next.delay);
 	}
+	const FONT = `'Segoe UI Variable Text', 'Segoe UI', -apple-system, system-ui, sans-serif`;
 	const STYLE = `
 :host { all: initial; }
-.panel { position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; width: 280px; box-sizing: border-box;
-  padding: 12px 14px 14px; border-radius: 14px; background: #161b22; color: #e6edf3;
-  border: 1px solid #30363d; box-shadow: 0 10px 30px rgba(0,0,0,.45);
-  font: 12px/1.45 -apple-system, "Segoe UI", system-ui, sans-serif; }
-.head { display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 4px; }
+.panel, .mini { box-sizing: border-box; z-index: 2147483647; position: fixed; right: 16px; bottom: 16px;
+  background: #fff; color: #242424; border: 1px solid #e0e0e0; border-radius: 8px;
+  font: 13px/18px ${FONT}; -webkit-font-smoothing: antialiased; }
+.panel *, .mini * { box-sizing: border-box; }
+.panel { width: 296px; padding: 10px 16px 16px; box-shadow: 0 8px 16px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.12); }
+.head { display: flex; align-items: center; justify-content: space-between; margin: 0 -8px 4px 0;
+  color: #424242; font-size: 12px; font-weight: 600; }
 .icons { display: flex; gap: 2px; }
-.icon { cursor: pointer; background: none; border: 0; color: #9198a1; font-size: 14px; width: 24px; height: 24px; border-radius: 6px; }
-.icon:hover { background: #21262d; color: #e6edf3; }
-.art { color: #9198a1; margin: 2px 4px 6px; }
-.status { text-align: center; margin-bottom: 8px; }
-.status-title { font-weight: 600; font-size: 13px; }
-.status-sub { color: #9198a1; font-size: 11.5px; }
-[data-state="connected"] .status-title { color: #3fb950; }
-[data-state="warning"] .status-title { color: #d29922; }
-.rows { border: 1px solid #21262d; border-radius: 10px; padding: 2px 10px; margin-bottom: 10px; }
-.row { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; }
-.row + .row { border-top: 1px solid #21262d; }
-.row-label { color: #9198a1; }
-.row-value { font-variant-numeric: tabular-nums; }
-.buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-button.act { padding: 7px 10px; border: 0; border-radius: 8px; background: #1f6feb; color: #fff;
-  font: 600 12px -apple-system, "Segoe UI", system-ui, sans-serif; cursor: pointer; }
-button.act:hover:enabled { background: #388bfd; }
-button.act:disabled { background: #30363d; color: #6e7681; cursor: not-allowed; }
+.icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 4px; background: transparent; color: #616161; cursor: pointer; }
+.icon:hover { background: #f5f5f5; color: #242424; }
+.icon:active { background: #e0e0e0; }
+.art { color: #616161; margin: 4px 8px; }
+.status { text-align: center; margin: 4px 0 12px; }
+.status-title { font-size: 15px; line-height: 20px; font-weight: 600; }
+.status-title[data-busy] { background: linear-gradient(90deg, #242424 0 35%, #0f6cbd 50%, #242424 65% 100%);
+  background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: us-shimmer 2.6s ease-in-out infinite; }
+.status-sub { margin-top: 2px; color: #616161; font-size: 12px; line-height: 16px; }
+.rows { margin: 0 0 12px; padding: 0; border: 1px solid #ebebeb; border-radius: 8px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 34px; padding: 0 12px; }
+.row + .row { border-top: 1px solid #ebebeb; }
+.row dt { color: #424242; }
+.row dd { margin: 0; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #bdbdbd; }
+.dot[data-tone="ok"] { background: #107c10; }
+.dot[data-tone="warn"] { background: #bc4b09; }
+.dot[data-tone="bad"] { background: #c50f1f; }
+.buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+button.act { min-height: 32px; padding: 5px 12px; border: 1px solid #d1d1d1; border-radius: 4px; background: #fff;
+  color: #242424; font: 600 13px/18px ${FONT}; cursor: pointer; transition: background .1s, border-color .1s; }
+button.act:hover:enabled { background: #f5f5f5; border-color: #c7c7c7; }
+button.act:active:enabled { background: #e0e0e0; }
+button.primary { border-color: transparent; background: #0f6cbd; color: #fff; }
+button.primary:hover:enabled { background: #115ea3; border-color: transparent; }
+button.primary:active:enabled { background: #0c3b5e; }
+button.act:disabled { border-color: #f0f0f0; background: #f0f0f0; color: #bdbdbd; cursor: default; }
 button.wide { grid-column: 1 / -1; }
-button.ghost { background: transparent; border: 1px solid #30363d; color: #c9d1d9; }
-button.ghost:hover:enabled { background: #21262d; }
-.mini { position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; width: 132px; padding: 6px 8px 4px;
-  border-radius: 12px; background: #161b22; border: 1px solid #30363d; box-shadow: 0 6px 18px rgba(0,0,0,.4);
-  color: #9198a1; cursor: pointer; }
-.mini:hover { border-color: #1f6feb; }
+button:focus-visible { outline: 2px solid #242424; outline-offset: 1px; }
+.mini { width: 136px; padding: 8px 10px 6px; color: #616161; cursor: pointer;
+  box-shadow: 0 4px 8px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.12); transition: box-shadow .15s; }
+.mini:hover { box-shadow: 0 8px 16px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.12); }
 .hidden { display: none !important; }
-@media (prefers-color-scheme: light) {
-  .panel, .mini { background: #ffffff; color: #1f2328; border-color: #d1d9e0; box-shadow: 0 10px 30px rgba(31,35,40,.18); }
-  .art, .status-sub, .row-label, .icon, .mini { color: #59636e; }
-  .rows, .row + .row { border-color: #e4e8ec; }
-  .icon:hover, button.ghost:hover:enabled { background: #f6f8fa; color: #1f2328; }
-  button.ghost { border-color: #d1d9e0; color: #1f2328; }
-  button.act:disabled { background: #eff2f5; color: #818b98; }
-  [data-state="connected"] .status-title { color: #1a7f37; }
-  [data-state="warning"] .status-title { color: #9a6700; }
+@keyframes us-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .status-title[data-busy] { animation: none; background: none; color: #242424; }
 }`;
+	const ICON_MINIMIZE = "<svg width=\"12\" height=\"12\" viewBox=\"0 0 12 12\" aria-hidden=\"true\"><path d=\"M2 6h8\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-linecap=\"round\"/></svg>";
+	const ICON_CLOSE = "<svg width=\"12\" height=\"12\" viewBox=\"0 0 12 12\" aria-hidden=\"true\"><path d=\"M2.5 2.5l7 7M9.5 2.5l-7 7\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-linecap=\"round\"/></svg>";
 	function mountUi() {
 		if (!IS_TOP || document.getElementById("m365copilot-grabber")) return;
 		const host = document.createElement("div");
@@ -936,21 +1010,24 @@ button.ghost:hover:enabled { background: #21262d; }
 		mini.className = "mini";
 		panel.innerHTML = [
 			"<div class=\"head\"><span data-text=\"title\"></span><span class=\"icons\">",
-			"<button class=\"icon\" data-action=\"minimize\">–</button><button class=\"icon\" data-action=\"close\">✕</button></span></div>",
+			`<button class="icon" data-action="minimize">${ICON_MINIMIZE}</button>`,
+			`<button class="icon" data-action="close">${ICON_CLOSE}</button></span></div>`,
 			`<div class="art">${connectionArtSvg({
 				idPrefix: "us-art",
 				title: T.art
 			})}</div>`,
 			"<div class=\"status\"><div class=\"status-title\"></div><div class=\"status-sub\"></div></div>",
-			"<div class=\"rows\">",
-			"<div class=\"row\"><span class=\"row-label\" data-text=\"token\"></span><span class=\"row-value\" data-value=\"token\"></span></div>",
-			"<div class=\"row\"><span class=\"row-label\" data-text=\"vscode\"></span><span class=\"row-value\" data-value=\"vscode\"></span></div>",
-			"<div class=\"row\"><span class=\"row-label\" data-text=\"sync\"></span><span class=\"row-value\" data-value=\"sync\"></span></div>",
-			"</div>",
+			"<dl class=\"rows\">",
+			...[
+				"token",
+				"vscode",
+				"sync"
+			].map((row) => `<div class="row"><dt data-text="${row}"></dt><dd><span class="dot" data-dot="${row}"></span><span data-value="${row}"></span></dd></div>`),
+			"</dl>",
 			"<div class=\"buttons\">",
-			"<button class=\"act wide\" data-action=\"send\"></button>",
-			"<button class=\"act ghost\" data-action=\"token\"></button>",
-			"<button class=\"act ghost\" data-action=\"profile\"></button>",
+			"<button class=\"act primary wide\" data-action=\"send\"></button>",
+			"<button class=\"act\" data-action=\"token\"></button>",
+			"<button class=\"act\" data-action=\"profile\"></button>",
 			"</div>"
 		].join("");
 		mini.innerHTML = connectionArtSvg({
@@ -960,8 +1037,11 @@ button.ghost:hover:enabled { background: #21262d; }
 		mini.title = T.expand;
 		const q = (selector) => panel.querySelector(selector);
 		for (const node of Array.from(panel.querySelectorAll("[data-text]"))) node.textContent = T[node.getAttribute("data-text")];
-		q("[data-action=\"minimize\"]").title = T.minimize;
-		q("[data-action=\"close\"]").title = T.close;
+		for (const [action, label] of [["minimize", T.minimize], ["close", T.close]]) {
+			const button = q(`[data-action="${action}"]`);
+			button.title = label;
+			button.setAttribute("aria-label", label);
+		}
 		const sendButton = q("[data-action=\"send\"]");
 		const tokenButton = q("[data-action=\"token\"]");
 		const profileButton = q("[data-action=\"profile\"]");
@@ -997,6 +1077,7 @@ button.ghost:hover:enabled { background: #21262d; }
 				warning: [T.warningTitle, T.warningSub]
 			}[state];
 			q(".status-title").textContent = title;
+			q(".status-title").toggleAttribute("data-busy", state === "waiting");
 			q(".status-sub").textContent = sub;
 			const exp = store.claims?.exp;
 			const minutes = typeof exp === "number" ? Math.round((exp * 1e3 - Date.now()) / 6e4) : null;
@@ -1004,6 +1085,12 @@ button.ghost:hover:enabled { background: #21262d; }
 			q("[data-value=\"vscode\"]").textContent = sync.vscodeReachable === null ? T.vscodeChecking : sync.vscodeReachable ? T.vscodeOk : T.vscodeDown;
 			const ago = sync.lastSyncedAt ? Math.floor((Date.now() - sync.lastSyncedAt) / 6e4) : null;
 			q("[data-value=\"sync\"]").textContent = ago === null ? T.syncNever : ago < 1 ? T.syncJustNow : fill(T.syncAgo, ago);
+			const tones = {
+				token: !hasToken ? "neutral" : usable ? "ok" : "warn",
+				vscode: sync.vscodeReachable === null ? "neutral" : sync.vscodeReachable ? "ok" : "bad",
+				sync: ago === null ? "neutral" : "ok"
+			};
+			for (const [row, tone] of Object.entries(tones)) q(`[data-dot="${row}"]`).dataset.tone = tone;
 			if (!sendButton.dataset.flashing) sendButton.textContent = state === "warning" ? T.renew : T.send;
 			sendButton.disabled = !hasToken && state !== "warning";
 			tokenButton.disabled = !usable;

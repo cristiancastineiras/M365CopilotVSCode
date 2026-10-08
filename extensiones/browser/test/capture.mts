@@ -180,7 +180,15 @@ function testConnectionArt() {
   assert.match(svg, /id="p1-vscode"/);
   assert.match(svg, /href="#p1-vscode"/);
   assert.match(svg, /filter="url\(#p1-grey\)"/, 'the "off" logos are desaturated');
-  assert.match(svg, /url\(#p1-flow\)/);
+  // La señal: tres anillos (fondo + frente) con su animación y la versión
+  // quieta «apuntando a VS Code» cuando conecta.
+  for (const ring of ['outer', 'middle', 'inner']) {
+    assert.match(svg, new RegExp(`class="ring back ${ring}"`));
+    assert.match(svg, new RegExp(`class="ring front ${ring}"`));
+    assert.match(svg, new RegExp(`@keyframes m365-art-${ring}`));
+  }
+  assert.match(svg, /\[data-state="connected"\] \.m365-art \.ring,/);
+  assert.doesNotMatch(svg, /class="(track|flow|head)/, 'the old arrow is gone');
   assert.doesNotMatch(svg, /m365art-/, 'every id uses the prefix');
   assert.match(svg, /VS &#60;Code&#62;/, 'labels are escaped');
   assert.match(svg, /aria-label="a &#38; b"/);
@@ -188,7 +196,7 @@ function testConnectionArt() {
     assert.match(svg, new RegExp(`\\[data-state="${state}"\\]`), `styles for ${state}`);
   }
   assert.match(svg, /prefers-reduced-motion/);
-  console.log('  ✓ ilustración M365 → VS Code: estados, ids con prefijo, etiquetas escapadas y movimiento reducido');
+  console.log('  ✓ ilustración M365 → VS Code: estados, señal de tres anillos, ids con prefijo, etiquetas escapadas y movimiento reducido');
 }
 
 

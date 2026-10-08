@@ -89,10 +89,10 @@ The panel's illustration tells you where you are:
 
 <img src="imgs/connection-states.png" width="260" alt="Connection states: waiting for the token, token captured, connected to VS Code and token expired">
 
-1. **Waiting for the token**: both logos grey; the M365 one "breathes".
-2. **Token ready**: the M365 logo lights up, but VS Code stays grey because it is not answering yet (open it with the extension enabled).
-3. **Connected to VS Code**: the VS Code logo lights up and the token flows along the arrow. Done — it is sent again by itself every time it is renewed.
-4. **Token expired**: reload the page (the panel's button does it) or sign in again.
+1. **Waiting for the token**: both logos grey and the grey signal spinning; the M365 logo "breathes".
+2. **Token ready**: the M365 logo lights up and the signal spins in blue looking for VS Code, which stays grey because it is not answering yet (open it with the extension enabled).
+3. **Connected to VS Code**: the signal stops and points at VS Code, which lights up. Done — it is sent again by itself every time it is renewed.
+4. **Token expired**: a weak amber signal. Reload the page (the panel's button does it) or sign in again.
 
 The panel can be minimized (–) to a small icon, and the Tampermonkey menu has
 **Send token to VS Code now**, **Show panel** and the option to renew a hidden

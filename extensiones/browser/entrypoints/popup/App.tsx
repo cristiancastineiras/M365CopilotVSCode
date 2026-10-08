@@ -1,53 +1,44 @@
 import { useCallback, useEffect, useState } from 'react';
+import { connectionState, M365_CHAT_URL } from '@m365copilot/core';
+import { ext } from '@/utils/api';
 import { sendMessage } from '@/utils/messaging';
 import { getLocale, t, type MessageKey } from '@/utils/i18n';
-import { Pill, type Tone } from './components/Pill';
-import { StatusRow } from './components/StatusRow';
+import { StatusRow, type Tone } from './components/StatusRow';
 import { ConnectionArt } from './components/ConnectionArt';
-import { connectionState } from '@m365copilot/core';
 
 interface ProfileState {
   hasToken: boolean;
-  hasEndpoint: boolean;
-  hasFrame: boolean;
   minutesLeft: number | null;
   capturedAt: string | null;
-  upn: string | null;
   /** Última acción del auto-renovador (ver utils/refreshPolicy.ts). */
   refreshAction: string | null;
-  refreshReason: string | null;
 }
 
 const EMPTY: ProfileState = {
   hasToken: false,
-  hasEndpoint: false,
-  hasFrame: false,
   minutesLeft: null,
   capturedAt: null,
-  upn: null,
   refreshAction: null,
-  refreshReason: null,
 };
 
-/** Qué está haciendo el auto-renovador, en un par de palabras. */
-const REFRESH_LABEL: Record<string, MessageKey> = {
-  none: 'refresh.none',
-  captured: 'refresh.captured',
-  rescan: 'refresh.rescan',
-  reload: 'refresh.reload',
-  open: 'refresh.open',
-  wait: 'refresh.wait',
-  needsUser: 'refresh.needsUser',
+/** Qué está haciendo el auto-renovador, en un par de palabras, y con qué color. */
+const REFRESH: Record<string, { label: MessageKey; tone: Tone }> = {
+  none: { label: 'refresh.none', tone: 'ok' },
+  captured: { label: 'refresh.captured', tone: 'ok' },
+  rescan: { label: 'refresh.rescan', tone: 'warn' },
+  reload: { label: 'refresh.reload', tone: 'warn' },
+  open: { label: 'refresh.open', tone: 'warn' },
+  wait: { label: 'refresh.wait', tone: 'warn' },
+  needsUser: { label: 'refresh.needsUser', tone: 'bad' },
 };
 
 type VSCode = 'unknown' | 'connected' | 'disconnected';
-type Copied = 'token' | 'profile' | null;
 
 export default function App() {
   const [profile, setProfile] = useState<ProfileState>(EMPTY);
   const [vscode, setVscode] = useState<VSCode>('unknown');
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState<Copied>(null);
+  const [copied, setCopied] = useState(false);
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -57,13 +48,9 @@ export default function App() {
       const store = status.profile || {};
       setProfile({
         hasToken: Boolean(store.accessToken),
-        hasEndpoint: Boolean(store.endpoint),
-        hasFrame: Boolean(store.invocationTemplate),
         minutesLeft: status.minutesLeft,
         capturedAt: store.capturedAt || null,
-        upn: store.claims?.upn || null,
         refreshAction: status.refreshState.lastAction,
-        refreshReason: status.refreshState.lastReason,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -98,16 +85,8 @@ export default function App() {
     run(async () => {
       const { token } = await sendMessage('COPY_TOKEN', undefined);
       await navigator.clipboard.writeText(token);
-      setCopied('token');
-      setTimeout(() => setCopied(null), 1600);
-    });
-
-  const copyProfile = () =>
-    run(async () => {
-      const { text } = await sendMessage('COPY_PROFILE', undefined);
-      await navigator.clipboard.writeText(text);
-      setCopied('profile');
-      setTimeout(() => setCopied(null), 1600);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
     });
 
   const send = () =>
@@ -116,6 +95,13 @@ export default function App() {
       setVscode('connected');
       setSent(true);
       setTimeout(() => setSent(false), 2000);
+    });
+
+  /** Sin token no hay nada que enviar: lo útil es ir a M365 Copilot a capturarlo. */
+  const openM365 = () =>
+    run(async () => {
+      await ext().tabs.create({ url: M365_CHAT_URL });
+      window.close();
     });
 
   /** Fuerza el ciclo de renovación ya, sin esperar al latido ni al backoff. */
@@ -129,87 +115,85 @@ export default function App() {
     });
 
   const expired = profile.minutesLeft !== null && profile.minutesLeft <= 0;
-  const hero = deriveHero(profile.hasToken, expired, vscode, profile.refreshAction);
+  const needsUser = profile.refreshAction === 'needsUser';
+  const hero = deriveHero(profile.hasToken, expired, vscode, needsUser);
   const artState = connectionState({
     hasToken: profile.hasToken,
     expired,
     vscodeConnected: vscode === 'connected',
-    needsUser: profile.refreshAction === 'needsUser',
+    needsUser,
   });
-  const tokenValue = !profile.hasToken
-    ? t('token.none')
-    : expired
-      ? t('token.expired')
-      : profile.minutesLeft !== null
-        ? t('token.expiresIn', profile.minutesLeft)
-        : t('token.active');
-
-  const vsc = vscodePill(vscode);
+  const token = tokenStatus(profile.hasToken, expired, profile.minutesLeft);
+  const vsc = vscodeStatus(vscode);
+  const renewal = REFRESH[profile.refreshAction ?? 'none'] ?? REFRESH.none;
+  // El botón grande es siempre el paso siguiente: sin token o sin sesión,
+  // abrir M365 Copilot; con el token caducado, renovarlo (enviarlo fallaría);
+  // si no, enviarlo. El secundario no repite el principal.
+  const primary = !profile.hasToken || needsUser ? 'open' : expired ? 'renew' : 'send';
 
   return (
-    <div className="app">
-
-      <section className="hero" data-tone={hero.tone}>
+    <main className="app">
+      <section className="hero">
         <ConnectionArt state={artState} />
-        <div className="hero-text">
-          <div className="hero-title">{hero.title}</div>
-          <div className="hero-sub">{hero.sub}</div>
-        </div>
+        <h1 className="title" data-busy={hero.busy || undefined}>
+          {hero.title}
+        </h1>
+        <p className="subtitle">{hero.sub}</p>
       </section>
 
-      <div className="card">
-        <StatusRow label={t('row.token')} ok={profile.hasToken && !expired} value={tokenValue} />
-        <StatusRow
-          label={t('row.endpoint')}
-          ok={profile.hasEndpoint}
-          value={t(profile.hasEndpoint ? 'endpoint.captured' : 'endpoint.pending')}
-        />
-        <StatusRow
-          label={t('row.vscode')}
-          ok={vscode === 'connected'}
-          value={vsc.label}
-        />
-        <StatusRow
-          label={t('row.renewal')}
-          ok={profile.refreshAction !== 'needsUser'}
-          value={t(REFRESH_LABEL[profile.refreshAction ?? 'none'] ?? 'refresh.none')}
-        />
-      </div>
+      <dl className="list">
+        <StatusRow label={t('row.token')} tone={token.tone} value={token.label} />
+        <StatusRow label={t('row.vscode')} tone={vsc.tone} value={vsc.label} />
+        <StatusRow label={t('row.renewal')} tone={renewal.tone} value={t(renewal.label)} />
+      </dl>
 
-      {/* {profile.upn && (
-        <div className="user">
-          <span className="user-name">{profile.upn}</span>
+      {error && (
+        <div className="message" role="alert">
+          <ErrorIcon />
+          <span>{error}</span>
         </div>
-      )} */}
+      )}
 
       <div className="actions">
-        <button
-          className={`btn ${sent ? 'btn-ok' : 'btn-primary'}`}
-          disabled={!profile.hasToken || busy}
-          onClick={send}
-        >
-          {t(sent ? 'button.sent' : 'button.send')}
-        </button>
-        <div className="actions">
-          <button
-            className={`btn ${copied === 'token' ? 'btn-ok' : 'btn-ghost'}`}
-            disabled={!profile.hasToken || busy}
-            onClick={copyToken}
-          >
-            {t(copied === 'token' ? 'button.copied' : 'button.copyToken')}
+        {primary === 'open' && (
+          <button className="button primary" disabled={busy} onClick={openM365}>
+            {t('button.openM365')}
           </button>
-          <button className="btn btn-ghost" disabled={busy} onClick={renew}>
+        )}
+        {primary === 'renew' && (
+          <button className="button primary" disabled={busy} onClick={renew}>
             {t('button.renew')}
           </button>
+        )}
+        {primary === 'send' && (
+          <button className={`button ${sent ? 'done' : 'primary'}`} disabled={busy} onClick={send}>
+            {t(sent ? 'button.sent' : 'button.send')}
+          </button>
+        )}
+        <div className="actions-row">
+          <button
+            className={`button ${copied ? 'done' : ''}`}
+            disabled={!profile.hasToken || expired || busy}
+            onClick={copyToken}
+          >
+            {t(copied ? 'button.copied' : 'button.copyToken')}
+          </button>
+          {primary === 'renew' ? (
+            <button className="button" disabled={busy} onClick={openM365}>
+              {t('button.openM365')}
+            </button>
+          ) : (
+            <button className="button" disabled={busy} onClick={renew}>
+              {t('button.renew')}
+            </button>
+          )}
         </div>
       </div>
 
-      {error && <div className="alert">⚠️ {error}</div>}
-
-      <footer className="footer">
-        {profile.capturedAt ? t('footer.captured', relativeTime(profile.capturedAt)) : t('footer.hint')}
-      </footer>
-    </div>
+      {profile.capturedAt && (
+        <footer className="footer">{t('footer.captured', relativeTime(profile.capturedAt))}</footer>
+      )}
+    </main>
   );
 }
 
@@ -219,36 +203,37 @@ function deriveHero(
   hasToken: boolean,
   expired: boolean,
   vscode: VSCode,
-  refreshAction: string | null,
-): { tone: Tone; title: string; sub: string } {
+  needsUser: boolean,
+): { title: string; sub: string; busy: boolean } {
   // El auto-renovador agotó sus intentos: esto sí necesita al usuario.
-  if (refreshAction === 'needsUser') {
-    return { tone: 'bad', title: t('hero.needsUser.title'), sub: t('hero.needsUser.sub') };
-  }
-  if (!hasToken) {
-    return { tone: 'neutral', title: t('hero.noToken.title'), sub: t('hero.noToken.sub') };
-  }
-  if (expired) {
-    return { tone: 'warn', title: t('hero.expired.title'), sub: t('hero.expired.sub') };
-  }
-  if (vscode !== 'connected') {
-    return { tone: 'warn', title: t('hero.noVSCode.title'), sub: t('hero.noVSCode.sub') };
-  }
-  return { tone: 'ok', title: t('hero.ok.title'), sub: t('hero.ok.sub') };
+  if (needsUser) return { title: t('hero.needsUser.title'), sub: t('hero.needsUser.sub'), busy: false };
+  if (!hasToken) return { title: t('hero.noToken.title'), sub: t('hero.noToken.sub'), busy: true };
+  if (expired) return { title: t('hero.expired.title'), sub: t('hero.expired.sub'), busy: true };
+  if (vscode !== 'connected') return { title: t('hero.noVSCode.title'), sub: t('hero.noVSCode.sub'), busy: false };
+  return { title: t('hero.ok.title'), sub: t('hero.ok.sub'), busy: false };
 }
 
-function vscodePill(vscode: VSCode): { tone: Tone; label: string } {
+function tokenStatus(hasToken: boolean, expired: boolean, minutesLeft: number | null): { tone: Tone; label: string } {
+  if (!hasToken) return { tone: 'neutral', label: t('token.none') };
+  if (expired) return { tone: 'warn', label: t('token.expired') };
+  if (minutesLeft !== null) return { tone: 'ok', label: t('token.expiresIn', minutesLeft) };
+  return { tone: 'ok', label: t('token.active') };
+}
+
+function vscodeStatus(vscode: VSCode): { tone: Tone; label: string } {
   if (vscode === 'connected') return { tone: 'ok', label: t('vscode.connected') };
   if (vscode === 'disconnected') return { tone: 'bad', label: t('vscode.disconnected') };
   return { tone: 'neutral', label: t('vscode.checking') };
 }
 
-function initials(upn: string): string {
-  const name = upn.split('@')[0] || upn;
-  const parts = name.split(/[.\-_]/).filter(Boolean);
-  const first = parts[0]?.[0] ?? name[0] ?? '?';
-  const second = parts[1]?.[0] ?? '';
-  return (first + second).slice(0, 2);
+/** Icono «ErrorCircle» al estilo Fluent, 16 px. */
+function ErrorIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="8" cy="8" r="7" fill="currentColor" />
+      <path d="M8 4.5v4.2M8 11.2v.1" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 function relativeTime(iso: string): string {

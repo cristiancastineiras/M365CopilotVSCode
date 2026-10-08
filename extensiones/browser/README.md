@@ -15,10 +15,13 @@ sync with VS Code, so you never copy and paste a token by hand.
   for a fresh one, then reloads that tab, then opens one in the background if
   there is none — with back-off, and a red badge when you have to sign in.
 
-The popup shows an animated **M365 → VS Code** illustration — the VS Code logo
-stays grey until VS Code has the token, then lights up and the token flows along
-the arrow — plus the token, endpoint, VS Code connection and renewal state, and
-**Send to VS Code**, **Copy token** and **Renew now** buttons. The capture logic
+The popup — light and clean, in Segoe UI with the look of Windows 11 — shows an
+animated **M365 → VS Code** illustration: a three-ring signal between the logos
+spins while it looks for the token and for VS Code, and turns into a signal
+pointing at VS Code once it is connected (VS Code stays grey until then). Below,
+the token, VS Code connection and renewal state, and one main button that is
+always the next step (**Open M365 Copilot**, **Renew now** or **Send to VS
+Code**) plus **Copy token**. The capture logic
 and the illustration live in `@m365copilot/core` and are shared with the
 Tampermonkey userscript, so both behave the same. It is
 available in **English and Spanish** (following the browser's language), as are
