@@ -1,5 +1,55 @@
 # @m365copilot/core
 
+## 3.0.0
+
+### Major Changes
+
+- 823d551: **Everything is `m365` again — plus code review as comments, the Accounts menu and "Fix all problems".**
+
+  - **Rename:** `ms365` → `m365` everywhere, as in 1.0: the VS Code extension is `m365-copilot-vscode.m365-copilot-vscode`, its settings and commands `m365copilot.*`, its tools `m365_*`, its models `m365-copilot-*`, the shared package `@m365copilot/core`, the userscript `m365copilot-token.user.js` and the artifacts `m365-copilot-vscode-<version>.vsix`.
+  - **Migration:** the `ms365copilot.*` settings of 1.3–2.0 are copied to `m365copilot.*` once (user settings, and each workspace when opened; model ids renamed too, values you already set in the new keys win). If the old `ms365-copilot-vscode` extension is still installed, a notification offers to uninstall it — both would compete for the token port and `@m365`.
+  - **Code review as comments:** _Review code_ (editor context menu) reviews the selection or the file, and ☑ _Review changes with M365 Copilot_ (Source Control title bar) reviews every uncommitted change — modified files against HEAD plus untracked ones — commenting only on the changed lines. Findings appear as comment threads on the lines and in the Comments panel, each with _Apply fix_ (an inline edit under Keep/Undo) and _Dismiss_.
+  - **Accounts menu:** M365 Copilot is an authentication provider: the account shows in VS Code's Accounts menu, _Sign Out_ deletes the token, and without a token the menu offers _Sign in with M365 Copilot_ (opens M365 Copilot in the browser and waits for the token, or lets you paste it).
+  - **Fix all problems in this file** (lightbulb, when a file has two or more errors/warnings, and context menu): one inline edit per block with problems, from the bottom up, each under Keep/Undo.
+  - _Edit code…_ now offers common instructions (simplify, add types, clearer names…) after the recent ones.
+
+  ***
+
+  **Todo vuelve a ser `m365` — y además revisión de código como comentarios, el menú Cuentas y «Corregir todos los problemas».**
+
+  - **Renombrado:** `ms365` → `m365` en todo, como en la 1.0: la extensión de VS Code es `m365-copilot-vscode.m365-copilot-vscode`, sus ajustes y comandos `m365copilot.*`, sus herramientas `m365_*`, sus modelos `m365-copilot-*`, el paquete compartido `@m365copilot/core`, el userscript `m365copilot-token.user.js` y los artefactos `m365-copilot-vscode-<versión>.vsix`.
+  - **Migración:** los ajustes `ms365copilot.*` de la 1.3–2.0 se copian a `m365copilot.*` una vez (los de usuario, y los de cada workspace al abrirlo; también se renombran los ids de modelo, y lo que ya hayas puesto en las claves nuevas gana). Si sigue instalada la extensión antigua `ms365-copilot-vscode`, un aviso ofrece desinstalarla: las dos se pelearían por el puerto del token y por `@m365`.
+  - **Revisión de código como comentarios:** _Revisar código_ (menú contextual del editor) revisa la selección o el archivo, y ☑ _Revisar cambios con M365 Copilot_ (barra de título de Source Control) revisa todos los cambios sin commitear — archivos modificados respecto a HEAD y los nuevos sin seguimiento — comentando sólo las líneas cambiadas. Los hallazgos aparecen como hilos de comentarios en las líneas y en el panel Comentarios, cada uno con _Aplicar corrección_ (una edición en línea bajo Keep/Undo) y _Descartar_.
+  - **Menú Cuentas:** M365 Copilot es un proveedor de autenticación: la cuenta aparece en el menú Cuentas de VS Code, _Cerrar sesión_ borra el token y, sin token, el menú ofrece _Iniciar sesión con M365 Copilot_ (abre M365 Copilot en el navegador y espera el token, o te deja pegarlo).
+  - **Corregir todos los problemas del archivo** (bombilla, cuando un archivo tiene dos o más errores/avisos, y menú contextual): una edición en línea por bloque con problemas, de abajo arriba, cada una bajo Keep/Undo.
+  - _Editar código…_ ofrece ahora instrucciones habituales (simplificar, añadir tipos, nombres más claros…) después de las recientes.
+
+### Minor Changes
+
+- 52fae21: **A cleaner, native-looking popup and userscript panel, with a connection signal instead of the arrow.**
+
+  - The M365 → VS Code illustration (`connectionArtSvg`, shared by the browser popup and the Tampermonkey panel) replaces the arrow with a three-ring signal (based on the "wifi loader" by mobinkakei on Uiverse.io, MIT): it spins in grey while looking for the token, in blue while looking for VS Code, stops and points at VS Code once connected, and turns into a weak amber signal when the token expired or you have to sign in.
+  - Popup and panel are light and simple, in Segoe UI with Windows 11 (Fluent 2) colours and controls: a short status list with coloured dots, one main button and two secondary ones. In the popup the main button is always the next step — **Open M365 Copilot** without a token, **Renew now** when it expired, **Send to VS Code** otherwise — and **Copy token** is disabled for an expired token. The technical "Endpoint" row is gone.
+  - The guide's screenshots show the new design.
+
+- 823d551: **It understands your project (local RAG index) and can search the internet again.**
+
+  - **Project index:** a local index of the workspace — no embeddings service, nothing leaves the machine but what a request includes. It honours `.gitignore`, `files.exclude`, `search.exclude` and `m365copilot.index.exclude`, skips binaries, lock files and generated code, knows each file's symbols (TypeScript/JavaScript, Python, Go, Rust, Java/Kotlin/C#, C/C++, PHP, Ruby, shell, SQL, Markdown) and imports — resolved to files, monorepo packages and `@/` aliases included — and ranks code with BM25 over identifier-aware terms, with boosts for file and symbol names, query coverage and closeness to the active file. Questions in Spanish find English code. It builds in the background and updates file by file.
+  - **Automatic context:** every chat request (M365 models and `@m365`) carries a short project map and the most relevant code (`m365copilot.context.autoRetrieve`, `m365copilot.context.maxChars`); `@m365` commands add the code around the selection.
+  - **Agent tools:** `m365_search_project` (ranked code search) and `m365_project_map` (structure, packages, entry points, most imported modules; or a file's outline, imports and importers).
+  - **Commands:** _Search the project…_, _Show project map_, _Rebuild project index_ (also in the M365 menu). Settings `m365copilot.index.*`.
+  - **Web search:** chat turns from VS Code had no internet (the lean request has no web plugins). `m365_web_search` runs a separate turn the way the web app does — the request captured by the browser extension or the userscript, with web search — and returns the answer with its sources; requests without tools (Ask mode) go out that way directly and list the sources, falling back to a plain answer if BizChat rejects it. Setting `m365copilot.web.enabled`.
+
+  ***
+
+  **Entiende tu proyecto (índice RAG local) y vuelve a poder buscar en internet.**
+
+  - **Índice del proyecto:** un índice local del workspace — sin servicio de embeddings; no sale del equipo más que lo que incluye una petición. Respeta `.gitignore`, `files.exclude`, `search.exclude` y `m365copilot.index.exclude`, se salta binarios, lockfiles y código generado, conoce los símbolos de cada archivo (TypeScript/JavaScript, Python, Go, Rust, Java/Kotlin/C#, C/C++, PHP, Ruby, shell, SQL, Markdown) y sus imports — resueltos a archivos, incluidos los paquetes del monorepo y los alias `@/` — y ordena el código con BM25 sobre términos que entienden identificadores, puntuando más los nombres de archivo y de símbolo, la cobertura de la pregunta y la cercanía al archivo activo. Las preguntas en español encuentran código en inglés. Se construye en segundo plano y se actualiza archivo a archivo.
+  - **Contexto automático:** cada petición del chat (modelos M365 y `@m365`) lleva un mapa breve del proyecto y el código más relevante (`m365copilot.context.autoRetrieve`, `m365copilot.context.maxChars`); los comandos de `@m365` añaden el código de alrededor de la selección.
+  - **Herramientas del agente:** `m365_search_project` (búsqueda de código por relevancia) y `m365_project_map` (estructura, paquetes, puntos de entrada, módulos más importados; o el esquema, imports y quién importa un archivo).
+  - **Comandos:** _Buscar en el proyecto…_, _Ver el mapa del proyecto_, _Reconstruir el índice del proyecto_ (también en el menú M365). Ajustes `m365copilot.index.*`.
+  - **Búsqueda web:** los turnos de chat desde VS Code no tenían internet (la petición mínima no lleva los plugins web). `m365_web_search` hace un turno aparte como lo hace la web — con la petición capturada por la extensión de navegador o el userscript, con búsqueda web — y devuelve la respuesta con sus fuentes; las peticiones sin herramientas (modo Ask) salen así directamente y listan las fuentes, con una respuesta normal si BizChat la rechaza. Ajuste `m365copilot.web.enabled`.
+
 ## 2.0.0
 
 ### Major Changes
