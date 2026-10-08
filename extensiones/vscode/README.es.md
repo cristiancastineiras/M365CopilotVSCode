@@ -43,8 +43,8 @@ navegador y VS Code lo usa.
      cuando caduque. La búsqueda web necesita una de las dos capturas
      anteriores.
 2. **Chatea**: escribe **`@m365`** en el chat, o elige uno de los modelos **M365
-   Copilot** (`Auto`, `GPT`, `GPT 5.6`, `GPT 5.6 Reasoning`, `Claude Sonnet`,
-   `Reasoning`) en el selector de modelos.
+   Copilot** (`Auto`, `Quick response`, `Think deeper`, `GPT 5.6 Think deeper`,
+   `GPT 5.5`, `Claude Sonnet`…) en el selector de modelos.
 3. **Trabaja desde el editor**: selecciona código y pulsa **Ctrl+Mayús+Alt+I**
    para editarlo con una instrucción, clic derecho → **M365 Copilot**, o la
    bombilla sobre un error.
@@ -140,6 +140,48 @@ token — o cuando caduca — el menú muestra un aviso e **Iniciar sesión con 
 Copilot**, que abre M365 Copilot en el navegador y espera a que la extensión de
 navegador o el userscript envíen el token (o te deja pegarlo). Si alguna vez
 otra extensión pide esta cuenta, VS Code te pregunta antes.
+
+### Renovar de verdad: cerrar sesión y volver a entrar
+
+**`Cerrar sesión y volver a entrar`** (menú rápido y paleta de comandos) es la
+única renovación que vuelve a pedirte la sesión. Las demás renuevan el *token*,
+y el token nunca era el problema:
+
+- el token de Copilot lo entrega la **sesión de Microsoft del navegador**
+  (cookies de `login.microsoftonline.com` / `login.live.com` más la caché de
+  tokens de MSAL en `m365.cloud.microsoft`);
+- mientras esa sesión siga ahí, pedir otro token lo entrega **en silencio**,
+  sin mostrar ninguna pantalla de inicio de sesión. Por eso «renovar» no pedía
+  nada en ningún sitio.
+
+Así que la renovación de verdad es un cierre de sesión. El comando:
+
+1. borra el token guardado en VS Code;
+2. deja la petición en el servidor local y abre el navegador en M365 Copilot
+   con un identificador en la URL;
+3. la **extensión de navegador** lo reconoce, comprueba que ese identificador
+   sea el que VS Code tiene pendiente — una URL la puede enlazar cualquier web,
+   el identificador es lo que la hace fiable — y entonces pasa por los
+   endpoints de cierre de sesión de Microsoft (Entra ID, cuenta personal y
+   Office), cierra las pestañas de Microsoft abiertas, borra **todas las
+   cookies** de los dominios de Microsoft en todos los contenedores (incluidas
+   las particionadas) y vacía **localStorage, IndexedDB, Cache Storage,
+   service workers y FileSystem** de cada web de Microsoft — ahí vive la caché
+   de MSAL;
+4. te deja en la pantalla de inicio de sesión y le cuenta a VS Code lo que
+   borró: el editor lo resume («N cookies y los datos de M webs»), lo detalla
+   en el registro y se queda esperando el token nuevo, que llega solo en cuanto
+   entras.
+
+La caché HTTP global del navegador **no** se toca a propósito: no se puede
+limitar a unos dominios, así que borrarla vaciaría la de todas las webs sin
+hacer falta para volver a pedir la sesión.
+
+**Sin la extensión de navegador** (sólo con el userscript de Tampermonkey, que
+no puede tocar cookies) nadie confirma el borrado: pasados tres minutos VS Code
+lo dice y ofrece abrir a mano las páginas de cierre de sesión de Microsoft, que
+acaban con la mitad de la sesión que vive en el servidor — y eso ya basta para
+que te vuelva a pedir las credenciales.
 
 ### Barra de estado y menú rápido
 
@@ -295,8 +337,21 @@ Necesita la **sesión capturada por la extensión de navegador o el userscript**
 ## Modelos que siguen el ritmo de M365 Copilot
 
 Microsoft añade y retira modelos de M365 Copilot a menudo, y no hay ninguna API
-documentada que los liste. Por eso la lista de modelos no es fija: junta cuatro
+documentada que los liste. Tampoco se elige el modelo por un id: viaja en el
+campo `tone` de cada conversación (`magic` es Auto, `Chat` es «Respuesta
+rápida», `Reasoning` es «Pensar más a fondo», `Gpt_5_6_Reasoning` es GPT 5.6
+pensando más a fondo…). Por eso la lista de modelos no es fija: junta cuatro
 fuentes, y el selector de modelos del chat se actualiza solo cuando cambia.
+
+La lista de serie sigue el menú de la propia web, con sus nombres: **Auto**
+(M365 Copilot decide el modelo y cuánto pensar — recomendado), **Quick
+response** y **Think deeper** (M365 Copilot elige el modelo, rápido o a fondo),
+y después los modelos con nombre: GPT 5.6 Think deeper, GPT 5.5 Quick response /
+Think deeper, Claude Sonnet y Claude Sonnet Think deeper. Claude necesita que tu
+administrador tenga activados los modelos de Anthropic. Los más nuevos (GPT-6.1
+Sol, Claude Sonnet 5.5, Claude Opus 5.5…) llegan a las organizaciones por fases
+y sus `tone` no son públicos: úsalo una vez en M365 Copilot con la extensión de
+navegador o el userscript instalados y aparecerá en VS Code.
 
 | Fuente | Cómo funciona |
 |--------|---------------|
@@ -307,8 +362,17 @@ fuentes, y el selector de modelos del chat se actualiza solo cuando cambia.
 
 Los modelos nuevos se anuncian una vez con una notificación. **M365 Copilot:
 Actualizar modelos** (también en el menú) descarga el catálogo al momento y
-lista cada modelo con su origen. Si BizChat rechaza un modelo que no viene de
-serie, el error indica que puede no estar disponible en tu tenant y sugiere Auto.
+lista cada modelo con su origen.
+
+Que M365 Copilot conozca un modelo no quiere decir que tu cuenta pueda usarlo:
+el servicio puede rechazar la petición, o contestar con su propio «no puedo
+ayudarte con eso» en lugar del modelo. En los dos casos la extensión lo dice —
+con el motivo que da el servicio y sugiriendo Auto — en vez de mostrar esa
+respuesta como si fuera la contestación, y marca el modelo en el selector (⚠
+«no disponible en tu cuenta ahora mismo») durante 12 horas o hasta que vuelva a
+funcionar. **M365 Copilot: Comprobar modelos** (también la primera entrada de
+*Actualizar modelos*) manda un mensaje corto a cada modelo, una conversación por
+modelo, y te dice cuáles funcionan.
 
 | Ajuste | Por defecto | Para qué |
 |--------|-------------|----------|
@@ -486,9 +550,11 @@ paleta de comandos bajo **M365 Copilot**.
 | `Pegar perfil o token` | Guarda el token en SecretStorage (cifrado). |
 | `Estado / información del token` | Usuario, caducidad y hora de captura. |
 | `Borrar credenciales` | Borra el token guardado. |
+| `Cerrar sesión y volver a entrar` | Borra el token **y** la sesión de Microsoft del navegador (cookies, caché de MSAL, almacenamiento) para que te vuelva a pedir las credenciales. |
 | `Activar/desactivar autocompletado en línea` | Texto fantasma sí/no. |
 | `Cambiar idioma` | Inglés / español / automático. |
 | `Actualizar modelos` | Descarga el catálogo de modelos al momento y lista cada modelo con su origen. |
+| `Comprobar modelos` | Manda un mensaje corto a cada modelo y te dice cuáles funcionan en tu cuenta. |
 | `Buscar en el proyecto…` | Búsqueda por relevancia en el índice del proyecto; Intro abre el código. |
 | `Ver el mapa del proyecto` | El mapa del proyecto (estructura, paquetes, puntos de entrada, módulos más importados) como documento. |
 | `Reconstruir el índice del proyecto` | Vuelve a indexar el workspace. |

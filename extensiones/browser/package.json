@@ -13,7 +13,7 @@
     "zip:firefox": "wxt zip -b firefox -c wxt.config.firefox.ts && node scripts/rename-zip.mjs ../../releases/firefox firefox m365-copilot-vscode-extension-firefox.zip",
     "sign:firefox": "node scripts/sign-firefox.mjs",
     "postinstall": "wxt prepare",
-    "test": "node --experimental-strip-types --import ./test/register.mjs test/refreshPolicy.mts && node --experimental-strip-types --import ./test/register.mjs test/refreshCycle.mts && node --experimental-strip-types --import ./test/register.mjs test/capture.mts"
+    "test": "node --experimental-strip-types --import ./test/register.mjs test/refreshPolicy.mts && node --experimental-strip-types --import ./test/register.mjs test/refreshCycle.mts && node --experimental-strip-types --import ./test/register.mjs test/capture.mts && node --experimental-strip-types --import ./test/register.mjs test/hardReset.mts"
   },
   "dependencies": {
     "@m365copilot/core": "workspace:*",

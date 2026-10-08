@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import { foreignAudience, type CopilotProfile } from './profile';
+import { prettyTone } from './modelCatalog';
 import { RunawayRepetitionGuard } from './repetitionGuard';
 import { bizChatLocale, t } from './i18n';
 
@@ -78,6 +79,40 @@ export class CopilotAuthError extends CopilotClientError {
 	}
 }
 
+/** BizChat's own routing: the `tone` the web app sends for "Auto". */
+export const AUTO_TONE = 'magic';
+
+/**
+ * The service did not run the model (`tone`) that was asked for: it rejected
+ * the turn, or answered with its canned "I can't help with that" reply instead
+ * of the model — a message with `contentOrigin: "BotConnection"`, where a
+ * real answer comes from the model pipeline. A tone the service knows is not
+ * necessarily live for this account: new models roll out in phases, and the
+ * Anthropic/OpenAI ones need the tenant admin to enable them. Not retried —
+ * the same tone would fail again.
+ */
+export class CopilotModelUnavailableError extends CopilotClientError {
+	readonly tone: string;
+	readonly serverReply: string;
+	constructor(tone: string, serverReply: string) {
+		super(t('client.error.modelUnavailable', prettyTone(tone), truncate(serverReply, 200)));
+		this.tone = tone;
+		this.serverReply = serverReply;
+	}
+}
+
+/** Told whether each forced `tone` worked: the model registry flags the ones that do not. */
+export type ModelOutcomeListener = (tone: string, available: boolean, reason?: string) => void;
+let modelOutcomeListener: ModelOutcomeListener | undefined;
+
+/** Set (or clear, with undefined) the one listener for model outcomes. */
+export function onModelOutcome(listener: ModelOutcomeListener | undefined): void {
+	modelOutcomeListener = listener;
+}
+
+/** A rejection that says nothing about the model: retry later instead of flagging it. */
+const TRANSIENT_REJECTION = /thrott|rate.?limit|too many|capacity|busy|timeout|try again|429|503/i;
+
 /** Map a rejected WS upgrade status to an accurate, actionable client error. */
 function describeUpgradeFailure(status: number, statusMessage: string, token: string): CopilotClientError {
 	// A token for another service (pasted by hand) explains the rejection better
@@ -128,7 +163,7 @@ export async function streamCopilotTurn(options: {
 
 	log(t('log.newTurn'));
 	log(`endpoint: ${redactUrl(url)}`);
-	log(`invocationType=${invocationType}, tone=${tone ?? 'magic'}, mode=${mode}`);
+	log(`invocationType=${invocationType}, tone=${tone ?? AUTO_TONE}, mode=${mode}`);
 	log(`origin=${profile.origin}`);
 
 	const ws = new WebSocket(url, {
@@ -187,8 +222,22 @@ export async function streamCopilotTurn(options: {
 			settled = true;
 			if (error.message !== '__CANCELLED__') log(t('log.turnFailed', error.message));
 			else log(t('log.turnCancelled'));
+			if (error instanceof CopilotModelUnavailableError) modelOutcomeListener?.(error.tone, false, error.serverReply);
 			cleanup();
 			reject(error);
+		};
+
+		/**
+		 * The service turned the turn down. With a model forced and nothing shown
+		 * yet, that is the model not being available for this account — unless
+		 * the reason is plainly transient (throttling, capacity).
+		 */
+		const rejected = (error: CopilotClientError, reason: string) => {
+			if (tone && totalEmittedChars === 0 && !TRANSIENT_REJECTION.test(reason)) {
+				fail(new CopilotModelUnavailableError(tone, reason));
+			} else {
+				fail(error);
+			}
 		};
 
 		// Hard ceiling, started once and never reset — catches a turn that
@@ -215,6 +264,7 @@ export async function streamCopilotTurn(options: {
 			settled = true;
 			log(t('log.turnCompleted', totalEmittedChars));
 			if (totalEmittedChars === 0) log(t('log.turnEmpty'));
+			else if (tone) modelOutcomeListener?.(tone, true);
 			cleanup();
 			callbacks.onDone?.();
 			resolve();
@@ -363,6 +413,14 @@ export async function streamCopilotTurn(options: {
 					},
 					onComplete: succeed,
 					onError: fail,
+					onRejected: rejected,
+					onCannedReply: (text, messageId, emitText) => {
+						// The service's own canned reply instead of the forced
+						// model: that model did not run. With Auto, or after real
+						// text, it is just part of the answer.
+						if (tone && totalEmittedChars === 0) fail(new CopilotModelUnavailableError(tone, text));
+						else emitText(text, false, messageId);
+					},
 					respondPing: () => ws.send(JSON.stringify({ type: 6 }) + RS),
 					onSources: (sources) => callbacks.onSources?.(sources),
 				});
@@ -376,6 +434,10 @@ interface FrameHandlers {
 	emitText: (text: string, isDelta: boolean, messageId?: string) => void;
 	onComplete: () => void;
 	onError: (error: Error) => void;
+	/** The service turned the turn down; `reason` is its own words. */
+	onRejected: (error: CopilotClientError, reason: string) => void;
+	/** A reply written by the service itself (`contentOrigin: "BotConnection"`), not by the model. */
+	onCannedReply: (text: string, messageId: string | undefined, emitText: FrameHandlers['emitText']) => void;
 	respondPing: () => void;
 	onSources: (sources: readonly WebSource[]) => void;
 }
@@ -395,14 +457,14 @@ function handleFrame(
 	}
 	// Close frame.
 	if (type === 7) {
-		if (frame.error) h.onError(new CopilotClientError(String(frame.error)));
+		if (frame.error) h.onRejected(new CopilotClientError(String(frame.error)), String(frame.error));
 		else h.onComplete();
 		return;
 	}
 	// Completion of our StreamInvocation.
 	if (type === 3) {
 		if (frame.invocationId === invocationId || frame.invocationId === undefined) {
-			if (frame.error) h.onError(new CopilotClientError(String(frame.error)));
+			if (frame.error) h.onRejected(new CopilotClientError(String(frame.error)), String(frame.error));
 			else h.onComplete();
 		}
 		return;
@@ -424,9 +486,8 @@ function handleFrame(
 		// surface it instead of silently completing with no text.
 		const result = payload.result as { value?: string; message?: string } | undefined;
 		if (result && typeof result.value === 'string' && result.value !== 'Success') {
-			h.onError(
-				new CopilotClientError(t('client.error.rejected', result.value, result.message ? `: ${result.message}` : '')),
-			);
+			const detail = result.message ? `: ${result.message}` : '';
+			h.onRejected(new CopilotClientError(t('client.error.rejected', result.value, detail)), `${result.value}${detail}`);
 			return;
 		}
 
@@ -478,7 +539,8 @@ function consumeBotMessage(m: unknown, mode: TurnMode, h: FrameHandlers): 'text'
 
 	if (typeof msg.text === 'string' && msg.text) {
 		const messageId = typeof msg.messageId === 'string' ? msg.messageId : undefined;
-		h.emitText(msg.text, false, messageId);
+		if (msg.contentOrigin === 'BotConnection') h.onCannedReply(msg.text, messageId, h.emitText);
+		else h.emitText(msg.text, false, messageId);
 		return 'text';
 	}
 	return 'skip';
@@ -577,7 +639,7 @@ function buildInvocationArgs(
 	message.text = prompt;
 	message.author = 'user';
 
-	// Tone / model selection; defaultInvocationArgs() already set 'magic'.
+	// Tone / model selection; defaultInvocationArgs() already set Auto.
 	if (tone) base.tone = tone;
 
 	// Fresh conversation each turn (see messages.ts for why). The id MUST match
@@ -592,7 +654,7 @@ function buildInvocationArgs(
  * A web turn's `arguments[0]`: the M365 Copilot web app's own invocation (as
  * captured), with its plugins — web search — and options intact, but this
  * turn's text, a fresh conversation (no `previousMessages`), fresh request ids
- * and the extension's locale. `tone` overrides the captured model when given.
+ * and the extension's locale. `tone` is the model to use (null = Auto).
  */
 export function buildWebInvocationArgs(
 	template: Record<string, unknown>,
@@ -617,7 +679,9 @@ export function buildWebInvocationArgs(
 	for (const key of ['previousMessages', 'conversationSignature', 'gptId']) delete args[key];
 	if ('requestId' in args) args.requestId = randomUUID();
 	if ('traceId' in args) args.traceId = randomUUID().replace(/-/g, '');
-	if (tone) args.tone = tone;
+	// Auto is Auto here too: the captured template carries whichever model the
+	// user last picked in the web app, not the one chosen in VS Code.
+	args.tone = tone ?? AUTO_TONE;
 	args.conversationId = conversationId;
 	args.isStartOfSession = true;
 	return args;
@@ -626,7 +690,7 @@ export function buildWebInvocationArgs(
 function defaultInvocationArgs(): Record<string, unknown> {
 	return {
 		source: 'officeweb',
-		tone: 'magic',
+		tone: AUTO_TONE,
 		streamingMode: 'ConciseWithPadding',
 		isStartOfSession: true,
 		allowedMessageTypes: ['Chat', 'Suggestion', 'Progress', 'EndOfRequest'],
@@ -646,6 +710,7 @@ function defaultInvocationArgs(): Record<string, unknown> {
  */
 export function isRetryableClientError(error: unknown): boolean {
 	if (error instanceof CopilotAuthError) return false; // same bad token would fail again
+	if (error instanceof CopilotModelUnavailableError) return false; // same tone would fail again
 	if (!(error instanceof CopilotClientError)) return false;
 	if (error.message === '__CANCELLED__') return false;
 	return true;

@@ -1,13 +1,20 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'node:crypto';
-import { streamCopilotTurnWithRetry, CopilotClientError, CopilotAuthError, type TurnMode, type WebSource } from './client';
+import {
+	streamCopilotTurnWithRetry,
+	CopilotClientError,
+	CopilotAuthError,
+	CopilotModelUnavailableError,
+	type TurnMode,
+	type WebSource,
+} from './client';
 import { log } from './logger';
 
 import { MarkdownStreamFormatter } from './markdown';
 import { flattenMessages, latestUserText } from './messages';
 import { webSearchEnabled } from './webSearch';
 import { sourcesMarkdown } from './webSearchPrompt';
-import { allModels, findModel, toChatInformation, type TokenState } from './models';
+import { allModels, findModel, modelRegistry, toChatInformation, type TokenState } from './models';
 import { isTokenUsable, minutesUntilExpiry } from './profile';
 import { buildToolCatalog, ToolCallDecoder, type DuplicatePolicy } from './toolProtocol';
 import type { ProfileStore } from './secrets';
@@ -56,7 +63,8 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 	): Promise<vscode.LanguageModelChatInformation[]> {
 		const profile = await this.store.get();
 		const state: TokenState = !profile ? 'missing' : isTokenUsable(profile) ? 'ok' : 'expired';
-		return allModels().map((m) => toChatInformation(m, state));
+		const registry = modelRegistry();
+		return allModels().map((m) => toChatInformation(m, state, registry?.unavailability(m.tone)));
 	}
 
 	async provideLanguageModelChatResponse(
@@ -180,10 +188,12 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 			if (error instanceof CopilotAuthError) this.changeEmitter.fire();
 			// A model that did not ship with this version (catalog, detected or
 			// custom) may simply not exist in this tenant: say so instead of
-			// leaving a bare "rejected the request".
+			// leaving a bare "rejected the request". (A model the service refused
+			// already says all that.)
 			if (
 				error instanceof CopilotClientError &&
 				!(error instanceof CopilotAuthError) &&
+				!(error instanceof CopilotModelUnavailableError) &&
 				selected &&
 				selected.source !== 'builtin'
 			) {

@@ -172,6 +172,13 @@ From the editor itself:
   they are in progress. It never pushes; every auto-commit has **Undo**.
 - **Accounts menu** (person icon, bottom left): shows your M365 Copilot account,
   signs you out (deletes the token), and signs you in when there is no token.
+- **Sign out and sign in again** (quick menu, or the command palette): when you
+  want to sign in with another account, or renewal goes wrong, this also
+  deletes the **browser's Microsoft session** - cookies and MSAL's cache - and
+  asks for your credentials again. It is the only thing that does: asking for
+  another token reuses the same old session, which hands one out without asking
+  anything. It needs the browser extension (the userscript cannot delete
+  cookies).
 
 M365 Copilot also **knows your project**: a local index of the workspace adds
 the relevant code to each request, and **M365 Copilot: Search the project…**

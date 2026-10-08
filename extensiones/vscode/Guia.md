@@ -173,6 +173,12 @@ Desde el propio editor:
   **Deshacer**.
 - **Menú Cuentas** (icono de persona, abajo a la izquierda): muestra tu cuenta de
   M365 Copilot, cierra la sesión (borra el token) y la inicia cuando no hay token.
+- **Cerrar sesión y volver a entrar** (menú rápido, o la paleta de comandos):
+  cuando quieras entrar con otra cuenta, o el token se renueve mal, esto borra
+  además la **sesión de Microsoft del navegador** —cookies y caché de MSAL— y
+  te vuelve a pedir las credenciales. Es lo único que lo consigue: pedir otro
+  token reutiliza la sesión de siempre, que lo entrega sin preguntar nada.
+  Necesita la extensión de navegador (el userscript no puede borrar cookies).
 
 M365 Copilot además **conoce tu proyecto**: un índice local del workspace añade
 el código relevante a cada petición, y **M365 Copilot: Buscar en el proyecto…**

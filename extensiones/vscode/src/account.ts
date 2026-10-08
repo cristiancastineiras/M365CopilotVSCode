@@ -15,6 +15,7 @@ import * as vscode from 'vscode';
 import { accountOf, isTokenUsable, type CopilotProfile } from './profile';
 import type { ProfileStore } from './secrets';
 import { announceProfile, openM365, promptForProfile } from './commands';
+import { waitForUsableProfile } from './signOut';
 import { t } from './i18n';
 
 export const AUTH_PROVIDER_ID = 'm365copilot';
@@ -123,33 +124,16 @@ async function signIn(store: ProfileStore): Promise<CopilotProfile | undefined> 
 	}
 
 	await openM365();
-	return vscode.window.withProgress(
+	// Cancelling is the user saying "not now": only a real timeout is worth a
+	// warning, so the two cases are told apart instead of warning on both.
+	let cancelled = false;
+	const profile = await vscode.window.withProgress(
 		{ location: vscode.ProgressLocation.Notification, title: t('account.signIn.waiting'), cancellable: true },
-		(_progress, token) => waitForUsableProfile(store, token, BROWSER_SIGN_IN_TIMEOUT_MS),
+		(_progress, token) => {
+			token.onCancellationRequested(() => (cancelled = true));
+			return waitForUsableProfile(store, token, BROWSER_SIGN_IN_TIMEOUT_MS);
+		},
 	);
-}
-
-/** Resolves once the store holds a usable token (from the local server), or undefined on cancel/timeout. */
-function waitForUsableProfile(
-	store: ProfileStore,
-	token: vscode.CancellationToken,
-	timeoutMs: number,
-): Promise<CopilotProfile | undefined> {
-	return new Promise((resolve) => {
-		const finish = (profile: CopilotProfile | undefined) => {
-			clearTimeout(timer);
-			listener.dispose();
-			cancel.dispose();
-			resolve(profile);
-		};
-		const timer = setTimeout(() => {
-			void vscode.window.showWarningMessage(t('account.signIn.timeout'));
-			finish(undefined);
-		}, timeoutMs);
-		const cancel = token.onCancellationRequested(() => finish(undefined));
-		const listener = store.onDidChange(async () => {
-			const profile = await store.get();
-			if (profile && isTokenUsable(profile)) finish(profile);
-		});
-	});
+	if (!profile && !cancelled) void vscode.window.showWarningMessage(t('account.signIn.timeout'));
+	return profile;
 }

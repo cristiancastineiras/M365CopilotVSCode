@@ -49,7 +49,17 @@ const M365_TAB_PATTERNS = ['https://m365.cloud.microsoft/*', 'https://*.cloud.mi
 /** El background inyecta aquí su envío a VS Code, para no crear un ciclo de imports. */
 export type SyncToVSCode = (profile: unknown) => Promise<boolean>;
 
+/**
+ * Lo mismo para el otro sentido: VS Code deja una petición de cierre de sesión
+ * en su servidor local y es el latido el que la recoge. Es el camino de
+ * respaldo — cuando VS Code abre el navegador con el marcador en la URL, el
+ * content script lo pide al instante — y el único que funciona si esa pestaña
+ * no llega a cargar.
+ */
+export type SignOutPoll = () => Promise<void>;
+
 let syncToVSCode: SyncToVSCode = async () => false;
+let pollSignOutRequest: SignOutPoll = async () => {};
 
 /**
  * Inyecta el envío a VS Code. Separado de {@link setupTokenRefresher} para poder
@@ -57,6 +67,11 @@ let syncToVSCode: SyncToVSCode = async () => false;
  */
 export function setSyncHandler(sync: SyncToVSCode): void {
   syncToVSCode = sync;
+}
+
+/** Inyecta la recogida de peticiones de cierre de sesión (ver {@link SignOutPoll}). */
+export function setSignOutPoll(poll: SignOutPoll): void {
+  pollSignOutRequest = poll;
 }
 
 // --------------------------------------------------------------- utilidades
@@ -158,6 +173,15 @@ async function closeTab(tabId: number): Promise<void> {
  * Devuelve la decisión para poder afirmar sobre ella en el popup y en el log.
  */
 export async function runRefreshCycle(): Promise<RefreshDecision> {
+  // 0. ¿VS Code ha pedido cerrar la sesión? Va primero: no tiene sentido
+  //    renovar un token que estamos a punto de tirar. Aislado porque el
+  //    servidor local puede no estar escuchando, y eso no es un fallo.
+  try {
+    await pollSignOutRequest();
+  } catch (error) {
+    logger.debug('No se pudo comprobar si VS Code pide cerrar sesión:', error);
+  }
+
   const profile = await getStorage('currentProfile');
   const refreshState = await getStorage('refreshState');
   const syncState = await getStorage('syncState');
@@ -314,8 +338,9 @@ export async function forceRefreshNow(): Promise<RefreshDecision> {
  * que se llevaba por delante el resto del background — handlers de mensajes y
  * sincronización incluidos — y la extensión entera parecía muerta.
  */
-export function setupTokenRefresher(sync: SyncToVSCode): void {
+export function setupTokenRefresher(sync: SyncToVSCode, pollSignOut?: SignOutPoll): void {
   setSyncHandler(sync);
+  if (pollSignOut) setSignOutPoll(pollSignOut);
 
   const alarms = ext().alarms;
   if (!alarms) {

@@ -54,6 +54,44 @@ vuelve a descargarlo.
 
 Después abre <https://m365.cloud.microsoft/chat/> y envía un mensaje.
 
+## Cerrar sesión de Microsoft
+
+El botón **Cerrar sesión de Microsoft** del popup (confirma en el propio botón)
+es lo que hace posible renovar de verdad: borra la sesión de Microsoft de este
+navegador y te deja en la pantalla de inicio de sesión.
+
+Por qué hace falta: el token de Copilot lo entrega la sesión de Microsoft
+(cookies de `login.microsoftonline.com` más la caché de tokens de MSAL), así
+que mientras esa sesión siga ahí, pedir otro token lo entrega en silencio sin
+preguntar nada. El botón, por orden: pasa por los endpoints de cierre de sesión
+de Microsoft (Entra ID, cuenta personal y Office) **antes** de borrar nada
+—necesitan las cookies para saber qué sesión cerrar—, cierra las pestañas de
+Microsoft, borra todas las cookies de los dominios de Microsoft en todos los
+contenedores (incluidas las particionadas) y vacía localStorage, IndexedDB,
+Cache Storage, service workers y FileSystem de cada web de Microsoft.
+
+La extensión de VS Code puede pedir lo mismo con su comando **Cerrar sesión y
+volver a entrar**: abre esta web con un identificador en la URL, y la extensión
+sólo obedece si coincide con el que VS Code tiene pendiente en su servidor
+local, porque una URL la puede enlazar cualquier web. Si el navegador estaba
+cerrado, la petición se recoge en el siguiente latido (hasta un minuto).
+
+### Permisos
+
+| Permiso | Para qué |
+|---------|----------|
+| `storage` | El token capturado y el estado del auto-renovador. |
+| `tabs`, `activeTab` | Encontrar, recargar o abrir la pestaña de M365 Copilot. |
+| `alarms` | El latido de 1 min del auto-renovador (en MV3 el background se duerme). |
+| `cookies` | Borrar las cookies de sesión de Microsoft al cerrar sesión. |
+| `browsingData` | Vaciar la caché de MSAL y el almacenamiento de las webs de Microsoft. |
+| `http://localhost/*` | Enviar el token al servidor local de la extensión de VS Code. |
+| `*://*.microsoftonline.com/*` y el resto de dominios de Microsoft | Las dos APIs anteriores exigen permiso sobre cada cookie y cada origen que tocan. La lista la define `signOut.ts` en `packages/core`. |
+
+`cookies`, `browsingData` y los dominios de Microsoft son **nuevos**: al
+actualizar, el navegador los vuelve a pedir y la extensión queda desactivada
+hasta que los aceptes.
+
 ## Desarrollo
 
 ```bash

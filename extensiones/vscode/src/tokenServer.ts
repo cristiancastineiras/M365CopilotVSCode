@@ -1,4 +1,13 @@
 import * as http from 'http';
+import * as crypto from 'node:crypto';
+import * as vscode from 'vscode';
+import {
+	HEALTH_ENDPOINT_PATH,
+	SIGNOUT_ENDPOINT_PATH,
+	TOKEN_ENDPOINT_PATH,
+	TOKEN_SERVER_PORT,
+	type SignOutReport,
+} from '@m365copilot/core';
 import type { CopilotProfile } from './profile';
 import type { ProfileStore } from './secrets';
 import { log } from './logger';
@@ -35,12 +44,35 @@ function isAllowedOrigin(origin: string): boolean {
 const MAX_BODY_BYTES = 256 * 1024;
 
 /**
- * Servidor HTTP local que permite al userscript de Tampermonkey enviar
- * automáticamente el token renovado sin intervención manual del usuario.
+ * Cierre de sesión pedido desde VS Code y aún sin atender. Se publica en el
+ * health-check hasta que la extensión de navegador lo recoge: no podemos
+ * llamar al navegador (aquí somos el servidor, no el cliente), así que el
+ * canal de ida es dejarlo puesto y que el latido del otro lado lo lea.
  */
-export class TokenAutoRefreshServer {
+export interface PendingSignOut {
+	readonly id: string;
+	readonly requestedAt: number;
+}
+
+/** Lo que el navegador contesta al terminar: el informe de lo que borró. */
+export interface SignOutOutcome {
+	/** Id de la petición, o null si el cierre lo inició el propio navegador. */
+	readonly id: string | null;
+	readonly report: SignOutReport | undefined;
+}
+
+/**
+ * Servidor HTTP local que permite al userscript de Tampermonkey enviar
+ * automáticamente el token renovado sin intervención manual del usuario, y
+ * por donde se coordina el cierre de sesión completo con el navegador.
+ */
+export class TokenAutoRefreshServer implements vscode.Disposable {
 	private server: http.Server | null = null;
-	private readonly port = 51827; // Puerto fijo local para el userscript
+	private readonly port = TOKEN_SERVER_PORT; // Puerto fijo local para el userscript
+	private pendingSignOut: PendingSignOut | null = null;
+	private readonly signedOut = new vscode.EventEmitter<SignOutOutcome>();
+	/** Se dispara cuando el navegador confirma que ya cerró la sesión. */
+	readonly onDidSignOut = this.signedOut.event;
 
 	/**
 	 * @param onTokenReceived called after a profile pushed by the browser has
@@ -50,6 +82,24 @@ export class TokenAutoRefreshServer {
 		private readonly store: ProfileStore,
 		private readonly onTokenReceived?: (profile: CopilotProfile) => void,
 	) {}
+
+	/**
+	 * Deja pedido un cierre de sesión completo y devuelve su id. El id es el
+	 * que viaja en la URL con la que se abre el navegador: el otro lado sólo
+	 * obedece si coincide con éste, así que una web cualquiera no puede
+	 * provocar el cierre de sesión enlazando esa URL.
+	 */
+	requestSignOut(): PendingSignOut {
+		this.pendingSignOut = { id: crypto.randomUUID(), requestedAt: Date.now() };
+		log(t('log.server.signOutRequested', this.pendingSignOut.id));
+		return this.pendingSignOut;
+	}
+
+	/** Retira la petición (el usuario canceló, o se agotó la espera). */
+	cancelSignOut(id?: string): void {
+		if (id && this.pendingSignOut?.id !== id) return;
+		this.pendingSignOut = null;
+	}
 
 	start(): void {
 		if (this.server) return;
@@ -77,9 +127,10 @@ export class TokenAutoRefreshServer {
 				return;
 			}
 
-			if (req.method === 'POST' && req.url === '/token') {
+			if (req.method === 'POST' && (req.url === TOKEN_ENDPOINT_PATH || req.url === SIGNOUT_ENDPOINT_PATH)) {
+				const isSignOut = req.url === SIGNOUT_ENDPOINT_PATH;
 				if (typeof origin === 'string' && origin && !originAllowed) {
-					log(t('log.server.originRejected', origin));
+					log(t('log.server.originRejected', req.url ?? '?', origin));
 					res.writeHead(403, { 'Content-Type': 'application/json' });
 					// API errors stay in English on purpose: they are read by the
 					// browser extension / userscript, not shown as UI text.
@@ -105,6 +156,12 @@ export class TokenAutoRefreshServer {
 				req.on('end', async () => {
 					if (tooLarge) return;
 					try {
+						if (isSignOut) {
+							const outcome = this.acceptSignOut(body);
+							res.writeHead(200, { 'Content-Type': 'application/json' });
+							res.end(JSON.stringify({ success: true, id: outcome.id }));
+							return;
+						}
 						const profile = await this.store.setFromPaste(body);
 						log(t('log.server.renewed'));
 						this.onTokenReceived?.(profile);
@@ -125,10 +182,18 @@ export class TokenAutoRefreshServer {
 				return;
 			}
 
-			// Endpoint de health check para que el userscript verifique si VS Code está activo
-			if (req.method === 'GET' && req.url === '/health') {
+			// Endpoint de health check para que el userscript verifique si VS Code
+			// está activo. Lleva además el cierre de sesión pendiente, si hay
+			// alguno: es el único canal de ida hacia el navegador.
+			if (req.method === 'GET' && req.url === HEALTH_ENDPOINT_PATH) {
 				res.writeHead(200, { 'Content-Type': 'application/json' });
-				res.end(JSON.stringify({ status: 'ok', service: 'm365-copilot-vscode' }));
+				res.end(
+					JSON.stringify({
+						status: 'ok',
+						service: 'm365-copilot-vscode',
+						pendingSignOut: this.pendingSignOut,
+					}),
+				);
 				return;
 			}
 
@@ -149,7 +214,34 @@ export class TokenAutoRefreshServer {
 		});
 	}
 
+	/**
+	 * El navegador confirma que la sesión ya está cerrada. El token guardado
+	 * aquí se borra también: aunque el comando ya lo había borrado antes de
+	 * pedirlo, un cierre iniciado desde el navegador (su propio botón) llega
+	 * sin que este lado sepa nada, y dejar el token vivo sería mentir sobre el
+	 * estado de la sesión.
+	 */
+	private acceptSignOut(body: string): SignOutOutcome {
+		let id: string | null = null;
+		let report: SignOutReport | undefined;
+		try {
+			const parsed = JSON.parse(body || '{}') as { id?: unknown; report?: unknown };
+			if (typeof parsed.id === 'string' && parsed.id) id = parsed.id;
+			if (parsed.report && typeof parsed.report === 'object') report = parsed.report as SignOutReport;
+		} catch {
+			// Un cuerpo ilegible no invalida el cierre de sesión: lo que importa
+			// es que ocurrió. Se trata como uno sin id ni informe.
+		}
+		this.cancelSignOut(id ?? undefined);
+		void this.store.clear();
+		log(t('log.server.signedOut', id ?? '—'));
+		const outcome: SignOutOutcome = { id, report };
+		this.signedOut.fire(outcome);
+		return outcome;
+	}
+
 	dispose(): void {
+		this.signedOut.dispose();
 		if (this.server) {
 			this.server.close();
 			this.server = null;

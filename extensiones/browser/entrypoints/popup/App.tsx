@@ -41,6 +41,8 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** El cierre de sesión se confirma en el propio botón, sin diálogo nativo. */
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -112,6 +114,23 @@ export default function App() {
       // pestaña): se refresca un par de veces para reflejarla sin cerrar.
       await refresh();
       setTimeout(() => void refresh(), 3000);
+    });
+
+  /**
+   * Cierre de sesión completo: borra cookies, caché de MSAL y almacenamiento
+   * de las webs de Microsoft, y deja al usuario en el login. No se espera el
+   * informe: el borrado activa la pestaña de M365, y al perder el foco este
+   * popup se cierra solo.
+   */
+  const signOut = () =>
+    run(async () => {
+      if (!confirmSignOut) {
+        setConfirmSignOut(true);
+        return;
+      }
+      await sendMessage('HARD_RESET', { requestId: null });
+      setConfirmSignOut(false);
+      window.close();
     });
 
   const expired = profile.minutesLeft !== null && profile.minutesLeft <= 0;
@@ -188,6 +207,21 @@ export default function App() {
             </button>
           )}
         </div>
+      </div>
+
+      <div className="actions">
+        {confirmSignOut && (
+          <p className="note" role="status">
+            {t('signOut.warning')}
+          </p>
+        )}
+        <button
+          className={`button ${confirmSignOut ? 'danger' : 'subtle'}`}
+          disabled={busy}
+          onClick={signOut}
+        >
+          {busy && confirmSignOut ? t('button.signOut.running') : t(confirmSignOut ? 'button.signOut.confirm' : 'button.signOut')}
+        </button>
       </div>
 
       {profile.capturedAt && (

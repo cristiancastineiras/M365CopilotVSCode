@@ -48,6 +48,13 @@ const en = {
   'button.copied': '✓ Copied',
   'button.renew': 'Renew now',
   'button.openM365': 'Open M365 Copilot',
+  'button.signOut': 'Sign out of Microsoft',
+  'button.signOut.confirm': 'Delete the session and sign in again',
+  'button.signOut.running': 'Signing out…',
+  'signOut.warning':
+    'Deletes the Microsoft cookies and site data of this browser (M365 Copilot, Outlook, Teams, Office…), ' +
+    'closes the session on Microsoft’s side and asks you to sign in again. It is the only way to get a ' +
+    'genuinely new token: without it, M365 renews the old session in silence.',
   'footer.captured': 'Captured {0}',
   'time.justNow': 'just now',
   'time.minutesAgo': '{0} min ago',
@@ -57,6 +64,9 @@ const en = {
   'error.noToken': 'No token has been captured yet. Open M365 Copilot and send a message.',
   'error.tokenExpired': 'The saved token has expired. Press “Renew now”.',
   'error.vscodeUnreachable': 'VS Code is not answering. Is it open with the M365 Copilot extension enabled?',
+  'error.signOutNotRequested':
+    'This sign-out was not requested from VS Code, so it was refused. Use the extension’s own button, ' +
+    'or run “M365 Copilot: Sign out and sign in again” in VS Code.',
 };
 
 const es: Record<keyof typeof en, string> = {
@@ -95,6 +105,13 @@ const es: Record<keyof typeof en, string> = {
   'button.copied': '✓ Copiado',
   'button.renew': 'Renovar ahora',
   'button.openM365': 'Abrir M365 Copilot',
+  'button.signOut': 'Cerrar sesión de Microsoft',
+  'button.signOut.confirm': 'Borrar la sesión y volver a entrar',
+  'button.signOut.running': 'Cerrando la sesión…',
+  'signOut.warning':
+    'Borra las cookies y los datos de las webs de Microsoft en este navegador (M365 Copilot, Outlook, ' +
+    'Teams, Office…), cierra la sesión también en el servidor de Microsoft y te la vuelve a pedir. Es la ' +
+    'única forma de conseguir un token nuevo de verdad: si no, M365 renueva la sesión de siempre en silencio.',
   'footer.captured': 'Capturado {0}',
   'time.justNow': 'hace un momento',
   'time.minutesAgo': 'hace {0} min',
@@ -104,6 +121,9 @@ const es: Record<keyof typeof en, string> = {
   'error.noToken': 'Todavía no se ha capturado ningún token. Abre M365 Copilot y envía un mensaje.',
   'error.tokenExpired': 'El token guardado ha caducado. Pulsa «Renovar ahora».',
   'error.vscodeUnreachable': 'VS Code no responde. ¿Está abierto con la extensión M365 Copilot activa?',
+  'error.signOutNotRequested':
+    'Este cierre de sesión no lo ha pedido VS Code, así que se ha rechazado. Usa el botón de la propia ' +
+    'extensión o ejecuta «M365 Copilot: Cerrar sesión y volver a entrar» en VS Code.',
 };
 
 export type MessageKey = keyof typeof en;

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { onModelOutcome } from './client';
 import { getLocale, t } from './i18n';
 import {
 	BUILTIN_MODELS,
@@ -31,7 +32,19 @@ const FIRST_FETCH_DELAY_MS = 5_000;
 const CATALOG_CACHE_KEY = 'm365copilot.models.catalog';
 const OBSERVED_KEY = 'm365copilot.models.observed';
 const ANNOUNCED_KEY = 'm365copilot.models.announced';
+const UNAVAILABLE_KEY = 'm365copilot.models.unavailable';
 const MAX_OBSERVED = 20;
+/**
+ * How long a model the service refused stays flagged. Not for ever: new
+ * models reach a tenant in phases over days, and usage limits reset.
+ */
+const UNAVAILABLE_TTL_MS = 12 * 60 * 60_000;
+
+/** A model (tone) the service refused for this account, and its words. */
+export interface Unavailability {
+	readonly at: number;
+	readonly reason: string;
+}
 
 const MAX_INPUT_TOKENS = 128_000;
 const MAX_OUTPUT_TOKENS = 16_000;
@@ -132,6 +145,33 @@ export class ModelRegistry implements vscode.Disposable {
 		return this.memento.get<CatalogCache>(CATALOG_CACHE_KEY)?.fetchedAt;
 	}
 
+	/** Whether the service recently refused this model for this account (Auto never is). */
+	unavailability(tone: string | null): Unavailability | undefined {
+		if (!tone) return undefined;
+		const entry = this.memento.get<Record<string, Unavailability>>(UNAVAILABLE_KEY, {})[tone];
+		return entry && Date.now() - entry.at < UNAVAILABLE_TTL_MS ? entry : undefined;
+	}
+
+	/**
+	 * Record what a turn with a forced model showed: it ran (clears the flag) or
+	 * the service refused it (flags it). The picker is refreshed when the flag
+	 * flips, so the model shows its warning — or loses it — right away.
+	 */
+	async setAvailability(tone: string, available: boolean, reason = ''): Promise<void> {
+		const wasFlagged = Boolean(this.unavailability(tone));
+		const now = Date.now();
+		const next = Object.fromEntries(
+			Object.entries(this.memento.get<Record<string, Unavailability>>(UNAVAILABLE_KEY, {})).filter(
+				([key, entry]) => key !== tone && now - entry.at < UNAVAILABLE_TTL_MS,
+			),
+		);
+		if (!available) next[tone] = { at: now, reason: reason.replace(/\s+/g, ' ').trim().slice(0, 200) };
+		else if (!wasFlagged) return;
+		await this.memento.update(UNAVAILABLE_KEY, next);
+		this.log(t(available ? 'log.modelAvailable' : 'log.modelUnavailable', tone, reason));
+		if (wasFlagged !== !available) this.changed.fire();
+	}
+
 	/** Remember the tones the web app used (they come inside the profile). */
 	private async absorbProfile(): Promise<void> {
 		const profile = await this.store.get();
@@ -174,6 +214,7 @@ export class ModelRegistry implements vscode.Disposable {
 	dispose(): void {
 		// clearTimeout also clears an interval in Node.
 		if (this.timer) clearTimeout(this.timer);
+		if (registry === this) onModelOutcome(undefined);
 		this.changed.dispose();
 		for (const disposable of this.disposables) disposable.dispose();
 		if (registry === this) registry = undefined;
@@ -187,6 +228,15 @@ export function installModelRegistry(
 	log: (message: string) => void,
 ): ModelRegistry {
 	registry = new ModelRegistry(memento, store, log);
+	// Every turn with a forced model, from any feature (chat, inline edit,
+	// review, commit messages…), tells the registry whether that model ran.
+	const current = registry;
+	onModelOutcome((tone, available, reason) => void current.setAvailability(tone, available, reason));
+	return registry;
+}
+
+/** The registry, once installed: for the picker's "not available" flags. */
+export function modelRegistry(): ModelRegistry | undefined {
 	return registry;
 }
 
@@ -231,9 +281,18 @@ type PickerChatInformation = vscode.LanguageModelChatInformation & {
 /** Whether the stored token can be used right now — drives the picker's warning state. */
 export type TokenState = 'ok' | 'missing' | 'expired';
 
-/** Build the model information VS Code renders in the picker. */
-export function toChatInformation(model: CopilotModel, tokenState: TokenState): vscode.LanguageModelChatInformation {
+/**
+ * Build the model information VS Code renders in the picker. A model the
+ * service recently refused stays selectable — it may have arrived since — but
+ * says so, with the service's reason in the tooltip.
+ */
+export function toChatInformation(
+	model: CopilotModel,
+	tokenState: TokenState,
+	unavailable?: Unavailability,
+): vscode.LanguageModelChatInformation {
 	const detail = modelDetail(model);
+	const tone = model.tone ? ` (tone: ${model.tone})` : '';
 	const info: PickerChatInformation = {
 		id: model.id,
 		name: model.name,
@@ -242,13 +301,17 @@ export function toChatInformation(model: CopilotModel, tokenState: TokenState): 
 		maxInputTokens: MAX_INPUT_TOKENS,
 		maxOutputTokens: MAX_OUTPUT_TOKENS,
 		detail:
-			tokenState === 'ok' ? detail : t(tokenState === 'missing' ? 'model.needsToken' : 'model.tokenExpired'),
-		tooltip: model.tone ? `${detail} (tone: ${model.tone})` : detail,
+			tokenState !== 'ok'
+				? t(tokenState === 'missing' ? 'model.needsToken' : 'model.tokenExpired')
+				: unavailable
+					? t('model.unavailable')
+					: detail,
+		tooltip: unavailable ? `${t('model.unavailable')}${tone} — ${unavailable.reason}` : `${detail}${tone}`,
 		// This is what surfaces the model in the in-chat picker (not just in
 		// "Manage Models").
 		isUserSelectable: true,
 		isBYOK: true,
-		statusIcon: tokenState === 'ok' ? undefined : new vscode.ThemeIcon('warning'),
+		statusIcon: tokenState === 'ok' && !unavailable ? undefined : new vscode.ThemeIcon('warning'),
 		capabilities: {
 			// We advertise tool calling so the models also appear in the default
 			// Agent/Edit chat mode (which filters out models without it). BizChat
