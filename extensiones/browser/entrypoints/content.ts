@@ -1,4 +1,4 @@
-import { BRIDGE_MESSAGE_MARKER, signOutRequestId } from '@m365copilot/core';
+import { BRIDGE_MESSAGE_MARKER, COPILOT_CONTENT_MATCHES, signOutRequestId } from '@m365copilot/core';
 import { registerHandlers, sendMessage } from '@/utils/messaging';
 import { logger } from '@/utils/logger';
 
@@ -15,13 +15,12 @@ import { logger } from '@/utils/logger';
  * es la forma menos invasiva de conseguir uno nuevo (sin recargar nada).
  */
 export default defineContentScript({
-  matches: [
-    'https://m365.cloud.microsoft/*',
-    'https://*.cloud.microsoft/*',
-    'https://www.office.com/*',
-    'https://outlook.office.com/*',
-    'https://teams.microsoft.com/*',
-  ],
+  // Mismos dominios y mismo `allFrames` que el interceptor (mundo MAIN): cada
+  // frame necesita su puente en el mundo ISOLATED para poder hablar con el
+  // background. Si el interceptor corre en un iframe pero el puente no, el
+  // perfil capturado ahí no llega a ningún sitio.
+  matches: [...COPILOT_CONTENT_MATCHES],
+  allFrames: true,
   runAt: 'document_start',
   main() {
     logger.info('M365 Copilot bridge (ISOLATED) loaded on:', window.location.href);
