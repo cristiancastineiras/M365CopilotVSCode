@@ -551,11 +551,13 @@
           "type": "string",
           "enum": [
             "m365-copilot-auto",
-            "m365-copilot-gpt",
-            "m365-copilot-gpt56",
+            "m365-copilot-quick",
+            "m365-copilot-think-deeper",
             "m365-copilot-gpt56-reasoning",
+            "m365-copilot-gpt",
+            "m365-copilot-reasoning",
             "m365-copilot-claude",
-            "m365-copilot-reasoning"
+            "m365-copilot-claude-think-deeper"
           ],
           "default": "m365-copilot-auto",
           "markdownDescription": "%config.editor.model%"
@@ -729,11 +731,13 @@
           "type": "string",
           "enum": [
             "m365-copilot-auto",
-            "m365-copilot-gpt",
-            "m365-copilot-gpt56",
+            "m365-copilot-quick",
+            "m365-copilot-think-deeper",
             "m365-copilot-gpt56-reasoning",
+            "m365-copilot-gpt",
+            "m365-copilot-reasoning",
             "m365-copilot-claude",
-            "m365-copilot-reasoning"
+            "m365-copilot-claude-think-deeper"
           ],
           "default": "m365-copilot-auto",
           "description": "%config.subagents.model%"
@@ -781,11 +785,13 @@
           "type": "string",
           "enum": [
             "m365-copilot-auto",
-            "m365-copilot-gpt",
-            "m365-copilot-gpt56",
+            "m365-copilot-quick",
+            "m365-copilot-think-deeper",
             "m365-copilot-gpt56-reasoning",
+            "m365-copilot-gpt",
+            "m365-copilot-reasoning",
             "m365-copilot-claude",
-            "m365-copilot-reasoning"
+            "m365-copilot-claude-think-deeper"
           ],
           "default": "m365-copilot-auto",
           "description": "%config.inlineCompletions.model%"
@@ -911,6 +917,12 @@
         "category": "M365 Copilot"
       },
       {
+        "command": "m365copilot.signOut",
+        "title": "%command.signOut%",
+        "category": "M365 Copilot",
+        "icon": "$(sign-out)"
+      },
+      {
         "command": "m365copilot.showStatus",
         "title": "%command.showStatus%",
         "category": "M365 Copilot"
@@ -926,6 +938,12 @@
         "title": "%command.refreshModels%",
         "category": "M365 Copilot",
         "icon": "$(sync)"
+      },
+      {
+        "command": "m365copilot.checkModels",
+        "title": "%command.checkModels%",
+        "category": "M365 Copilot",
+        "icon": "$(beaker)"
       },
       {
         "command": "m365copilot.searchProject",

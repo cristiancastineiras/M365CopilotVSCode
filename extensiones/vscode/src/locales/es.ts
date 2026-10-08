@@ -38,6 +38,30 @@ export const es: Record<keyof typeof en, string> = {
 		'En m365.cloud.microsoft/chat abre DevTools (F12) → Red, escribe chathub en el filtro, envía un mensaje, clic derecho ' +
 		'en la petición que aparece → Copiar → Copiar URL, y pega esa URL aquí.',
 	'paste.foreignAudience.useAnyway': 'Usarlo igualmente',
+	// ------------------------------------- cerrar sesión / renovación de verdad
+	'signOut.confirm': '¿Cerrar la sesión de Microsoft y volver a entrar?',
+	'signOut.confirm.detail':
+		'Borra el token guardado Y la sesión de Microsoft del navegador: las cookies de login.microsoftonline.com, ' +
+		'la caché de tokens de MSAL y los datos de las webs de M365 Copilot, Outlook, Teams, Office y Bing. Cierra ' +
+		'además la sesión en el servidor de Microsoft, así que la próxima visita pedirá tus credenciales.\n\n' +
+		'Es la única renovación que renueva de verdad: pedir otro token reutiliza la misma sesión, que lo entrega en ' +
+		'silencio sin volver a mostrar ninguna pantalla de inicio de sesión.\n\n' +
+		'Quien borra es la extensión de navegador — el userscript de Tampermonkey no puede tocar las cookies.',
+	'signOut.confirm.button': 'Cerrar sesión',
+	'signOut.progress': 'Cerrando la sesión de Microsoft en el navegador…',
+	'signOut.done': 'Sesión de Microsoft cerrada: {0} cookies y los datos de {1} webs de Microsoft borrados.',
+	'signOut.partial': '{0} Hubo {1} cosa(s) que no se pudieron borrar; la sesión queda cerrada igualmente.',
+	'signOut.signInAnyway': 'Volver a entrar',
+	'signOut.showLog': 'Ver el registro',
+	'signOut.waitingToken': 'Inicia sesión en M365 Copilot en el navegador: el token nuevo llega solo…',
+	'signOut.tokenPending': 'M365 Copilot: inicia sesión en el navegador y el token nuevo llegará por su cuenta.',
+	'signOut.timeout': 'El navegador no ha confirmado el cierre de sesión.',
+	'signOut.timeout.detail':
+		'El token guardado se ha borrado, pero nadie ha limpiado la sesión del navegador: instala la extensión de ' +
+		'navegador de M365 Copilot (el userscript no puede borrar cookies) o usa su botón «Cerrar sesión de ' +
+		'Microsoft».\n\nLas propias páginas de cierre de sesión de Microsoft también acaban con la sesión, y eso ya ' +
+		'basta para que te vuelva a pedir las credenciales:\n{0}',
+	'signOut.openLogout': 'Abrir el cierre de sesión de Microsoft',
 	'clear.confirm': '¿Borrar el token de M365 Copilot guardado?',
 	'clear.confirmButton': 'Borrar',
 	'clear.done': 'Token de M365 Copilot borrado.',
@@ -93,6 +117,8 @@ export const es: Record<keyof typeof en, string> = {
 	'menu.log': 'Mostrar registro (diagnóstico)',
 	'menu.walkthrough': 'Primeros pasos',
 	'menu.openM365': 'Abrir M365 Copilot en el navegador',
+	'menu.signOut': 'Cerrar sesión y volver a entrar',
+	'menu.signOut.detail': 'Borra también la sesión de Microsoft del navegador, para que te pida las credenciales',
 	'menu.clear': 'Borrar credenciales',
 	'menu.section.session': 'Sesión',
 	'menu.section.editor': 'Editor',
@@ -120,13 +146,17 @@ export const es: Record<keyof typeof en, string> = {
 	'completion.prompt.codeEnd': '--- fin ---',
 
 	// ------------------------------------------------------------ modelos
-	'model.auto.detail': 'Enrutado automático de Microsoft 365 Copilot (recomendado).',
-	'model.gpt.detail': 'Fuerza el modelo GPT del backend de Copilot.',
-	'model.gpt56.detail': 'GPT 5.6 (respuestas rápidas) — el modelo preferido de M365 Copilot desde julio de 2026.',
-	'model.gpt56Reasoning.detail':
-		'GPT 5.6 en modo razonamiento («Think deeper»): respuestas más elaboradas para trabajo difícil.',
-	'model.claude.detail': 'Fuerza Claude Sonnet en el backend de Copilot.',
-	'model.reasoning.detail': 'Modo de razonamiento (más lento, respuestas más elaboradas).',
+	'model.auto.detail': 'M365 Copilot decide el modelo y cuánto pensar (recomendado).',
+	'model.quick.detail': '«Respuesta rápida»: contesta enseguida con el modelo que elija M365 Copilot.',
+	'model.thinkDeeper.detail':
+		'«Pensar más a fondo»: piensa más para dar mejores respuestas, con el modelo que elija M365 Copilot. Más lento.',
+	'model.gpt.detail': 'GPT 5.5, respuesta rápida.',
+	'model.gpt56Reasoning.detail': 'GPT 5.6 pensando más a fondo: respuestas más elaboradas para trabajo difícil. Más lento.',
+	'model.reasoning.detail': 'GPT 5.5 pensando más a fondo. Más lento.',
+	'model.claude.detail': 'Claude Sonnet de Anthropic. Tu administrador tiene que tener activados los modelos de Anthropic.',
+	'model.claudeThinkDeeper.detail':
+		'Claude Sonnet pensando más a fondo. Tu administrador tiene que tener activados los modelos de Anthropic. Más lento.',
+	'model.unavailable': 'No disponible en tu cuenta ahora mismo — usa Auto, o vuelve a comprobar los modelos más tarde.',
 	'model.needsToken': 'Pega tu token de M365 Copilot para activarlo.',
 	'model.tokenExpired': 'Token caducado — pega uno nuevo para usarlo.',
 	'models.new': 'M365 Copilot: nuevo modelo disponible — {0}. Elígelo en el selector de modelos del chat.',
@@ -141,6 +171,17 @@ export const es: Record<keyof typeof en, string> = {
 	'models.label.catalog': 'catálogo en línea',
 	'models.label.observed': 'detectado en la web de M365 Copilot',
 	'models.label.custom': 'tus ajustes',
+	'models.check.action': 'Comprobar qué modelos funcionan en tu cuenta',
+	'models.check.actionDetail':
+		'Envía un mensaje corto a cada modelo (una conversación por modelo) y marca los que el servicio rechace.',
+	'models.check.noToken': 'M365 Copilot: pega antes un token válido para comprobar los modelos.',
+	'models.check.title': 'Comprobando los modelos de M365 Copilot',
+	'models.check.progress': '{0} ({1}/{2})',
+	'models.check.empty': 'No contestó nada.',
+	'models.check.works': 'Funciona en tu cuenta.',
+	'models.check.summary': '{0} de {1} modelos funcionan en tu cuenta',
+	'log.modelAvailable': 'el modelo {0} contestó: ya no se marca como no disponible',
+	'log.modelUnavailable': 'el modelo {0} queda marcado como no disponible en esta cuenta: {1}',
 	'models.rejectedHint': ' — puede que «{0}» no esté (ya) disponible en tu tenant; prueba M365 Copilot (Auto) u otro modelo.',
 	'menu.models': 'Modelos: actualizar y ver la lista',
 	'log.modelsCatalog': 'catálogo de modelos descargado: {0} entradas',
@@ -178,6 +219,10 @@ export const es: Record<keyof typeof en, string> = {
 	'client.error.closed': 'Copilot cerró la conexión (código {0}).',
 	'client.error.handshakeRejected': 'Handshake rechazado: {0}',
 	'client.error.rejected': 'El servicio rechazó la petición ({0}){1}',
+	'client.error.modelUnavailable':
+		'M365 Copilot no ha ejecutado «{0}» en tu cuenta ({1}). Los modelos nuevos llegan a las organizaciones por ' +
+		'fases, y los de Anthropic y OpenAI necesitan que tu administrador los active. Elige «M365 Copilot (Auto)», o ' +
+		'ejecuta «M365 Copilot: Comprobar modelos» para ver cuáles tienes.',
 	'client.filtered': '\n\n_(Microsoft 365 Copilot no generó respuesta para esta petición.)_',
 
 	// ------------------------------------------------------------ registro (canal de salida)
@@ -210,10 +255,20 @@ export const es: Record<keyof typeof en, string> = {
 	'log.server.portInUse': '⚠️ Puerto {0} ya en uso. El servidor de auto-renovación no está disponible.',
 	'log.server.error': '❌ Error en servidor de auto-renovación: {0}',
 	'log.server.stopped': '🔌 Servidor de auto-renovación detenido',
-	'log.server.originRejected': '⚠️ Solicitud a /token rechazada: origen no permitido ({0})',
+	'log.server.originRejected': '⚠️ Solicitud a {0} rechazada: origen no permitido ({1})',
 	'log.server.readError': '❌ Error leyendo la petición del navegador: {0}',
 	'log.server.renewed': '🔄 Token auto-renovado desde el navegador',
 	'log.server.processError': '❌ Error al procesar el token enviado por el navegador: {0}',
+	'log.server.signOutRequested': '🚪 Cierre de sesión pedido desde el editor (id {0}); esperando al navegador',
+	'log.server.signedOut': '🚪 El navegador ha confirmado el cierre de sesión (id {0}); token guardado borrado',
+	'log.signOut.browserNotOpened': '⚠️ No se pudo abrir el navegador para cerrar la sesión de Microsoft',
+	'log.signOut.report':
+		'🚪 Cierre de sesión: {0} cookies borradas ({1} rechazadas), {2} orígenes vaciados, ' +
+		'{3} pestañas cerradas, {4} endpoints de logout visitados',
+	'log.signOut.dataTypes': '🚪 Datos borrados por origen: {0}',
+	'log.signOut.skippedDataTypes': '🚪 Tipos de datos que este navegador no admite: {0}',
+	'log.signOut.error': '⚠️ Cierre de sesión: {0}',
+	'log.signOut.timeout': '⚠️ Nadie confirmó el cierre de sesión. Endpoints de Microsoft: {0}',
 
 	// ------------------------------------------------------------ prompt (proveedor del chat)
 	'prompt.tone': [

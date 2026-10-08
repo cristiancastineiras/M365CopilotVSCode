@@ -16,7 +16,9 @@ import {
 } from './profile';
 import type { ProfileStore } from './secrets';
 import type { WorkspaceEditManager } from '../tools/writeFile';
-import type { ModelRegistry } from './models';
+import type { CopilotModel, ModelRegistry } from './models';
+import { CopilotClientError, CopilotModelUnavailableError, streamCopilotTurn } from './client';
+import { log } from './logger';
 import type { IndexStatus } from './projectIndex';
 import { getLocale, resolveLocale, t, type LanguageSetting, type Locale } from './i18n';
 
@@ -48,6 +50,11 @@ export async function showMenu(
 		},
 		{ label: `$(info) ${t('menu.status')}`, description: tokenSummary(profile), run: command('m365copilot.showStatus') },
 		{ label: `$(link-external) ${t('menu.openM365')}`, run: () => openM365() },
+		{
+			label: `$(sign-out) ${t('menu.signOut')}`,
+			detail: t('menu.signOut.detail'),
+			run: command('m365copilot.signOut'),
+		},
 		{ label: t('menu.section.editor'), kind: vscode.QuickPickItemKind.Separator },
 		{ label: `$(comment-discussion) ${t('menu.openChat')}`, run: command('m365copilot.openChat') },
 		{
@@ -208,10 +215,11 @@ export async function showStatus(store: ProfileStore): Promise<void> {
 
 /**
  * "Update models": download the catalog now and list every model with where
- * it comes from. Picking one opens the chat with it (when VS Code supports
- * choosing the model from the command; otherwise just the chat).
+ * it comes from and whether the service refused it lately. Picking one opens
+ * the chat with it (when VS Code supports choosing the model from the
+ * command; otherwise just the chat); the first entry checks them all.
  */
-export async function refreshModels(registry: ModelRegistry): Promise<void> {
+export async function refreshModels(registry: ModelRegistry, store: ProfileStore): Promise<void> {
 	const updated = await vscode.window.withProgress(
 		{ location: vscode.ProgressLocation.Notification, title: t('models.updating') },
 		() => registry.refreshCatalog(),
@@ -225,19 +233,115 @@ export async function refreshModels(registry: ModelRegistry): Promise<void> {
 		observed: t('models.label.observed'),
 		custom: t('models.label.custom'),
 	};
+	const check = { label: `$(beaker) ${t('models.check.action')}`, detail: t('models.check.actionDetail'), id: '' };
 	const picked = await vscode.window.showQuickPick(
-		registry.models.map((model) => ({
-			label: model.name,
-			description: model.tone ?? 'auto',
-			detail: sourceLabel[model.source],
-			id: model.id,
-		})),
+		[
+			check,
+			{ label: '', kind: vscode.QuickPickItemKind.Separator, id: '' },
+			...registry.models.map((model) => {
+				const unavailable = registry.unavailability(model.tone);
+				return {
+					label: `${unavailable ? '$(warning) ' : ''}${model.name}`,
+					description: model.tone ?? 'auto',
+					detail: unavailable ? `${sourceLabel[model.source]} · ${t('model.unavailable')}` : sourceLabel[model.source],
+					id: model.id,
+				};
+			}),
+		],
 		{ title: t('models.title', registry.models.length), placeHolder: t('models.placeholder'), matchOnDescription: true },
 	);
 	if (!picked) return;
+	if (picked === check) {
+		await checkModels(registry, store);
+		return;
+	}
+	await openChatWith(picked.id);
+}
+
+async function openChatWith(modelId: string): Promise<void> {
 	await vscode.commands.executeCommand('workbench.action.chat.open', {
-		modelSelector: { vendor: 'm365copilot', id: picked.id },
+		modelSelector: { vendor: 'm365copilot', id: modelId },
 	});
+}
+
+/** What the check asks each model: short, so a reasoning model does not think for long. */
+const CHECK_PROMPT = 'Reply with just the word OK.';
+
+interface CheckResult {
+	readonly model: CopilotModel;
+	readonly ok: boolean;
+	readonly reason?: string;
+}
+
+/**
+ * "Check models": one short turn per model (not Auto) to see which ones this
+ * account can really use — new models reach a tenant in phases, and the
+ * Anthropic/OpenAI ones need the admin. Each check is a conversation of its
+ * own, one after another; the registry records every outcome (the client
+ * reports them), so the picker flags the ones that failed.
+ */
+export async function checkModels(registry: ModelRegistry, store: ProfileStore): Promise<void> {
+	const profile = await store.get();
+	if (!profile || !isTokenUsable(profile)) {
+		void vscode.window.showWarningMessage(t('models.check.noToken'));
+		return;
+	}
+	const models = registry.models.filter((model) => model.tone !== null);
+	const results = await vscode.window.withProgress(
+		{ location: vscode.ProgressLocation.Notification, title: t('models.check.title'), cancellable: true },
+		async (progress, token) => {
+			const done: CheckResult[] = [];
+			for (const [index, model] of models.entries()) {
+				if (token.isCancellationRequested) break;
+				progress.report({
+					message: t('models.check.progress', shortName(model), index + 1, models.length),
+					increment: 100 / models.length,
+				});
+				const controller = new AbortController();
+				const cancel = token.onCancellationRequested(() => controller.abort());
+				try {
+					let answered = false;
+					await streamCopilotTurn({
+						profile,
+						prompt: CHECK_PROMPT,
+						tone: model.tone,
+						signal: controller.signal,
+						log,
+						callbacks: { onText: (text) => (answered ||= Boolean(text.trim())) },
+					});
+					done.push(answered ? { model, ok: true } : { model, ok: false, reason: t('models.check.empty') });
+				} catch (error) {
+					if (token.isCancellationRequested || (error instanceof CopilotClientError && error.message === '__CANCELLED__')) break;
+					const reason =
+						error instanceof CopilotModelUnavailableError
+							? error.serverReply
+							: error instanceof Error
+								? error.message
+								: String(error);
+					done.push({ model, ok: false, reason });
+				} finally {
+					cancel.dispose();
+				}
+			}
+			return done;
+		},
+	);
+	if (results.length === 0) return;
+	const working = results.filter((result) => result.ok).length;
+	const picked = await vscode.window.showQuickPick(
+		results.map((result) => ({
+			label: `${result.ok ? '$(pass-filled)' : '$(error)'} ${shortName(result.model)}`,
+			description: result.model.tone ?? '',
+			detail: result.ok ? t('models.check.works') : result.reason,
+			id: result.model.id,
+		})),
+		{ title: t('models.check.summary', working, results.length), placeHolder: t('models.placeholder') },
+	);
+	if (picked) await openChatWith(picked.id);
+}
+
+function shortName(model: CopilotModel): string {
+	return model.name.replace(/^M365 Copilot · /, '');
 }
 
 export async function toggleInlineCompletions(): Promise<void> {

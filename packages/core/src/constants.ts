@@ -15,6 +15,13 @@ export const TOKEN_SERVER_URL = `http://${TOKEN_SERVER_HOST}:${TOKEN_SERVER_PORT
 export const TOKEN_ENDPOINT_PATH = '/token';
 /** Ruta de health-check para saber si VS Code está escuchando (GET). */
 export const HEALTH_ENDPOINT_PATH = '/health';
+/**
+ * Ruta por la que la extensión de navegador avisa de que ya ha cerrado la
+ * sesión de Microsoft (POST). El health-check es además el canal de ida: ahí
+ * VS Code publica la petición pendiente, y el navegador la recoge en su
+ * siguiente latido (ver signOut.ts).
+ */
+export const SIGNOUT_ENDPOINT_PATH = '/signout';
 
 /**
  * Web de M365 Copilot: donde se captura el token. La extensión de navegador

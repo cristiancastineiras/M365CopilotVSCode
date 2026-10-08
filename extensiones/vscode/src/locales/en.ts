@@ -36,6 +36,29 @@ export const en = {
 		'At m365.cloud.microsoft/chat open DevTools (F12) → Network, type chathub in the filter, send a message, right-click ' +
 		'the request that appears → Copy → Copy URL, and paste that URL here.',
 	'paste.foreignAudience.useAnyway': 'Use it anyway',
+	// ------------------------------------------------- sign out / real renewal
+	'signOut.confirm': 'Sign out of Microsoft and sign in again?',
+	'signOut.confirm.detail':
+		'Deletes the saved token AND the Microsoft session of your browser: cookies of login.microsoftonline.com, ' +
+		'MSAL’s token cache and the site data of M365 Copilot, Outlook, Teams, Office and Bing. It also closes the ' +
+		'session on Microsoft’s side, so the next visit asks for your credentials.\n\n' +
+		'This is the only renewal that really renews: asking for another token reuses the same session, which hands ' +
+		'one out in silence without ever showing a sign-in page.\n\n' +
+		'The browser extension is what does the deleting — the Tampermonkey userscript cannot touch cookies.',
+	'signOut.confirm.button': 'Sign out',
+	'signOut.progress': 'Closing the Microsoft session in the browser…',
+	'signOut.done': 'Microsoft session closed: {0} cookies and the data of {1} Microsoft sites deleted.',
+	'signOut.partial': '{0} {1} thing(s) could not be deleted; the session is closed anyway.',
+	'signOut.signInAnyway': 'Sign in again',
+	'signOut.showLog': 'View log',
+	'signOut.waitingToken': 'Sign in to M365 Copilot in the browser — the new token arrives by itself…',
+	'signOut.tokenPending': 'M365 Copilot: sign in in the browser and the new token will arrive on its own.',
+	'signOut.timeout': 'The browser did not confirm the sign-out.',
+	'signOut.timeout.detail':
+		'The saved token has been deleted, but nobody cleared the browser session: install the M365 Copilot browser ' +
+		'extension (the userscript cannot delete cookies) or use its “Sign out of Microsoft” button.\n\n' +
+		'Microsoft’s own sign-out pages also end the session, which is enough to be asked for credentials again:\n{0}',
+	'signOut.openLogout': 'Open Microsoft sign-out',
 	'clear.confirm': 'Delete the saved M365 Copilot token?',
 	'clear.confirmButton': 'Delete',
 	'clear.done': 'M365 Copilot token deleted.',
@@ -91,6 +114,8 @@ export const en = {
 	'menu.log': 'Show log (diagnostics)',
 	'menu.walkthrough': 'Get started',
 	'menu.openM365': 'Open M365 Copilot in the browser',
+	'menu.signOut': 'Sign out and sign in again',
+	'menu.signOut.detail': 'Deletes the browser’s Microsoft session too, so it asks for your credentials again',
 	'menu.clear': 'Delete credentials',
 	'menu.section.session': 'Session',
 	'menu.section.editor': 'Editor',
@@ -118,12 +143,15 @@ export const en = {
 	'completion.prompt.codeEnd': '--- end ---',
 
 	// ------------------------------------------------------------ models
-	'model.auto.detail': 'Microsoft 365 Copilot automatic routing (recommended).',
-	'model.gpt.detail': 'Forces the GPT model of the Copilot backend.',
-	'model.gpt56.detail': 'GPT 5.6 (fast answers) — M365 Copilot’s preferred model since July 2026.',
-	'model.gpt56Reasoning.detail': 'GPT 5.6 in reasoning mode (“Think deeper”): more elaborate answers for hard work.',
-	'model.claude.detail': 'Forces Claude Sonnet on the Copilot backend.',
-	'model.reasoning.detail': 'Reasoning mode (slower, more elaborate answers).',
+	'model.auto.detail': 'M365 Copilot decides the model and how long to think (recommended).',
+	'model.quick.detail': '“Quick response”: answers right away with the model M365 Copilot picks.',
+	'model.thinkDeeper.detail': '“Think deeper”: thinks longer for better answers, with the model M365 Copilot picks. Slower.',
+	'model.gpt.detail': 'GPT 5.5, quick response.',
+	'model.gpt56Reasoning.detail': 'GPT 5.6 thinking deeper: more elaborate answers for hard work. Slower.',
+	'model.reasoning.detail': 'GPT 5.5 thinking deeper. Slower.',
+	'model.claude.detail': 'Anthropic’s Claude Sonnet. Your admin must have Anthropic models enabled.',
+	'model.claudeThinkDeeper.detail': 'Claude Sonnet thinking deeper. Your admin must have Anthropic models enabled. Slower.',
+	'model.unavailable': 'Not available on your account right now — use Auto, or check the models again later.',
 	'model.needsToken': 'Paste your M365 Copilot token to enable it.',
 	'model.tokenExpired': 'Token expired — paste a new one to use it.',
 	'models.new': 'M365 Copilot: new model available — {0}. Pick it in the chat model picker.',
@@ -138,6 +166,16 @@ export const en = {
 	'models.label.catalog': 'online catalog',
 	'models.label.observed': 'detected in the M365 Copilot web app',
 	'models.label.custom': 'your settings',
+	'models.check.action': 'Check which models work on your account',
+	'models.check.actionDetail': 'Sends a short message to each model (a conversation each) and flags the ones the service refuses.',
+	'models.check.noToken': 'M365 Copilot: paste a valid token first to check the models.',
+	'models.check.title': 'Checking the M365 Copilot models',
+	'models.check.progress': '{0} ({1}/{2})',
+	'models.check.empty': 'It answered with nothing.',
+	'models.check.works': 'Works on your account.',
+	'models.check.summary': '{0} of {1} models work on your account',
+	'log.modelAvailable': 'model {0} answered: no longer flagged as unavailable',
+	'log.modelUnavailable': 'model {0} flagged as unavailable for this account: {1}',
 	'models.rejectedHint': ' — “{0}” may not be available in your tenant (any more); try M365 Copilot (Auto) or another model.',
 	'menu.models': 'Models: update and list',
 	'log.modelsCatalog': 'model catalog downloaded: {0} entries',
@@ -174,6 +212,10 @@ export const en = {
 	'client.error.closed': 'Copilot closed the connection (code {0}).',
 	'client.error.handshakeRejected': 'Handshake rejected: {0}',
 	'client.error.rejected': 'The service rejected the request ({0}){1}',
+	'client.error.modelUnavailable':
+		'M365 Copilot did not run “{0}” for your account ({1}). New models reach organisations in phases, and the ' +
+		'Anthropic and OpenAI ones need your admin to enable them. Pick “M365 Copilot (Auto)”, or run ' +
+		'“M365 Copilot: Check models” to see which ones you have.',
 	'client.filtered': '\n\n_(Microsoft 365 Copilot did not generate an answer for this request.)_',
 
 	// ------------------------------------------------------------ logs (output channel)
@@ -206,10 +248,20 @@ export const en = {
 	'log.server.portInUse': '⚠️ Port {0} already in use. The auto-refresh server is not available.',
 	'log.server.error': '❌ Auto-refresh server error: {0}',
 	'log.server.stopped': '🔌 Auto-refresh server stopped',
-	'log.server.originRejected': '⚠️ Request to /token rejected: origin not allowed ({0})',
+	'log.server.originRejected': '⚠️ Request to {0} rejected: origin not allowed ({1})',
 	'log.server.readError': '❌ Error reading the request from the browser: {0}',
 	'log.server.renewed': '🔄 Token auto-renewed from the browser',
 	'log.server.processError': '❌ Error processing the token sent by the browser: {0}',
+	'log.server.signOutRequested': '🚪 Sign-out requested from the editor (id {0}); waiting for the browser',
+	'log.server.signedOut': '🚪 The browser confirmed the sign-out (id {0}); saved token deleted',
+	'log.signOut.browserNotOpened': '⚠️ The browser could not be opened to close the Microsoft session',
+	'log.signOut.report':
+		'🚪 Sign-out: {0} cookies deleted ({1} refused), {2} origins cleared, {3} tabs closed, ' +
+		'{4} logout endpoints visited',
+	'log.signOut.dataTypes': '🚪 Data deleted per origin: {0}',
+	'log.signOut.skippedDataTypes': '🚪 Data types this browser does not support: {0}',
+	'log.signOut.error': '⚠️ Sign-out: {0}',
+	'log.signOut.timeout': '⚠️ Nobody confirmed the sign-out. Microsoft’s own endpoints: {0}',
 
 	// ------------------------------------------------------------ prompt (chat provider)
 	'prompt.tone': [

@@ -41,8 +41,8 @@ browser and VS Code uses it.
      warns about it). It lasts about an hour; repeat when it expires. Web search
      needs one of the two captures above.
 2. **Chat**: type **`@m365`** in the chat, or pick one of the **M365 Copilot**
-   models (`Auto`, `GPT`, `GPT 5.6`, `GPT 5.6 Reasoning`, `Claude Sonnet`,
-   `Reasoning`) in the model picker.
+   models (`Auto`, `Quick response`, `Think deeper`, `GPT 5.6 Think deeper`,
+   `GPT 5.5`, `Claude Sonnet`…) in the model picker.
 3. **Work from the editor**: select code and press **Ctrl+Shift+Alt+I** to edit
    it with an instruction, right-click → **M365 Copilot**, or use the lightbulb
    on an error.
@@ -136,6 +136,46 @@ Without a token — or once it expires — the menu shows a badge and **Sign in
 with M365 Copilot**, which opens M365 Copilot in the browser and waits for the
 browser extension or the userscript to send the token (or lets you paste it).
 If another extension ever asks for this account, VS Code asks you first.
+
+### The renewal that really renews: sign out and sign in again
+
+**`Sign out and sign in again`** (quick menu and command palette) is the only
+renewal that asks for your credentials again. The others renew the *token*, and
+the token was never the problem:
+
+- the Copilot token is handed out by the **browser’s Microsoft session**
+  (cookies of `login.microsoftonline.com` / `login.live.com` plus MSAL’s token
+  cache in `m365.cloud.microsoft`);
+- while that session is there, asking for another token gets one **in
+  silence**, without ever showing a sign-in page. That is why “renew” never
+  asked for anything, anywhere.
+
+So the real renewal is a sign-out. The command:
+
+1. deletes the token stored in VS Code;
+2. leaves the request on the local server and opens the browser at M365 Copilot
+   with an id in the URL;
+3. the **browser extension** recognises it, checks that the id is the one VS
+   Code has pending — any site can link a URL, the id is what makes it
+   trustworthy — and then walks Microsoft’s own sign-out endpoints (Entra ID,
+   personal account and Office), closes the open Microsoft tabs, deletes
+   **every cookie** of Microsoft’s domains in every cookie container
+   (partitioned ones included) and clears **localStorage, IndexedDB, Cache
+   Storage, service workers and FileSystem** of every Microsoft site — which is
+   where MSAL’s cache lives;
+4. leaves you on the sign-in page and tells VS Code what it deleted: the editor
+   summarises it (“N cookies and the data of M sites”), details it in the log,
+   and waits for the new token, which arrives by itself once you are in.
+
+The browser’s global HTTP cache is **not** touched on purpose: it cannot be
+limited to a few domains, so clearing it would empty every site’s cache without
+being needed to be asked for the session again.
+
+**Without the browser extension** (only the Tampermonkey userscript, which
+cannot touch cookies) nobody confirms the deletion: after three minutes VS Code
+says so and offers to open Microsoft’s sign-out pages by hand, which end the
+half of the session that lives server-side — and that alone is enough to be
+asked for credentials again.
 
 ### Status bar and quick menu
 
@@ -282,8 +322,21 @@ It needs the **session captured by the browser extension or the userscript**
 ## Models that keep up with M365 Copilot
 
 Microsoft adds and retires M365 Copilot models often, and there is no
-documented API that lists them. The model list is therefore not fixed: it merges
-four sources, and the chat's model picker updates by itself when it changes.
+documented API that lists them. M365 Copilot does not take a model id either:
+the model travels in the `tone` field of each conversation (`magic` is Auto,
+`Chat` is Quick response, `Reasoning` is Think deeper, `Gpt_5_6_Reasoning` is
+GPT 5.6 Think deeper…). The model list is therefore not fixed: it merges four
+sources, and the chat's model picker updates by itself when it changes.
+
+The built-in list follows the web app's own menu and labels: **Auto** (M365
+Copilot decides the model and how long to think — recommended), **Quick
+response** and **Think deeper** (M365 Copilot picks the model, fast or
+thorough), then the named models: GPT 5.6 Think deeper, GPT 5.5 Quick response
+/ Think deeper, Claude Sonnet and Claude Sonnet Think deeper. Claude needs your
+admin to have Anthropic models enabled. The newest models (GPT-6.1 Sol, Claude
+Sonnet 5.5, Claude Opus 5.5…) reach organisations in phases and their `tone`s
+are not public: use one once on M365 Copilot with the browser extension or the
+userscript installed and it appears in VS Code.
 
 | Source | How it works |
 |--------|--------------|
@@ -294,8 +347,16 @@ four sources, and the chat's model picker updates by itself when it changes.
 
 New models are announced once with a notification. **M365 Copilot: Update
 models** (also in the menu) downloads the catalog right away and lists every
-model with its source. If BizChat rejects a model that is not built in, the
-error says it may not be available in your tenant and suggests Auto.
+model with its source.
+
+A model M365 Copilot knows is not necessarily one your account can use: the
+service may turn the request down, or answer with its own canned "I can't help
+with that" instead of the model. Either way the extension says so — with the
+service's reason, and suggesting Auto — instead of showing that reply as the
+answer, and flags the model in the picker (⚠ "not available on your account
+right now") for 12 hours or until it works again. **M365 Copilot: Check
+models** (also the first entry of *Update models*) sends a short message to
+each model, one conversation each, and lists which ones work for you.
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
@@ -462,9 +523,11 @@ palette under **M365 Copilot**.
 | `Paste profile or token` | Stores the token in SecretStorage (encrypted). |
 | `Token status` | User, expiry and capture time. |
 | `Delete credentials` | Deletes the stored token. |
+| `Sign out and sign in again` | Deletes the token **and** the browser’s Microsoft session (cookies, MSAL’s cache, site storage) so it asks for your credentials again. |
 | `Toggle inline completions` | Ghost text on/off. |
 | `Change language` | English / Spanish / automatic. |
 | `Update models` | Downloads the model catalog now and lists every model with its source. |
+| `Check models` | Sends a short message to each model and lists which ones work on your account. |
 | `Search the project…` | Ranked search in the project index; Enter opens the code. |
 | `Show project map` | The project map (structure, packages, entry points, most imported modules) as a document. |
 | `Rebuild project index` | Indexes the workspace again. |

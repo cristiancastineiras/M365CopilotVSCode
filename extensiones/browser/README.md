@@ -51,6 +51,43 @@ zip is 2.0.0 or older (it had no add-on ID): download it again.
 
 Then open <https://m365.cloud.microsoft/chat/> and send a message.
 
+## Signing out of Microsoft
+
+The popup’s **Sign out of Microsoft** button (it confirms in the button itself)
+is what makes a real renewal possible: it deletes this browser’s Microsoft
+session and leaves you on the sign-in page.
+
+Why it is needed: the Copilot token is handed out by the Microsoft session
+(cookies of `login.microsoftonline.com` plus MSAL’s token cache), so while that
+session is there, asking for another token gets one in silence without asking
+anything. The button, in order: walks Microsoft’s sign-out endpoints (Entra ID,
+personal account and Office) **before** deleting anything — they need the
+cookies to know which session to end —, closes the Microsoft tabs, deletes
+every cookie of Microsoft’s domains in every cookie container (partitioned ones
+included) and clears localStorage, IndexedDB, Cache Storage, service workers
+and FileSystem of every Microsoft site.
+
+The VS Code extension can ask for the same thing with its **Sign out and sign
+in again** command: it opens this site with an id in the URL, and the extension
+only obeys if it matches the one VS Code has pending on its local server, since
+any site can link a URL. If the browser was closed, the request is picked up on
+the next heartbeat (up to a minute).
+
+### Permissions
+
+| Permission | What for |
+|------------|----------|
+| `storage` | The captured token and the auto-renewer’s state. |
+| `tabs`, `activeTab` | Finding, reloading or opening the M365 Copilot tab. |
+| `alarms` | The auto-renewer’s 1-min heartbeat (in MV3 the background sleeps). |
+| `cookies` | Deleting Microsoft’s session cookies on sign-out. |
+| `browsingData` | Clearing MSAL’s cache and the site storage of Microsoft’s sites. |
+| `http://localhost/*` | Sending the token to the VS Code extension’s local server. |
+| `*://*.microsoftonline.com/*` and Microsoft’s other domains | The two APIs above require permission over every cookie and origin they touch. The list is defined by `signOut.ts` in `packages/core`. |
+
+`cookies`, `browsingData` and Microsoft’s domains are **new**: on update the
+browser asks for them again and the extension stays disabled until you accept.
+
 ## Development
 
 ```bash

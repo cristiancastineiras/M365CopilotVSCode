@@ -14,6 +14,9 @@ import {
 	streamCopilotTurn,
 	streamCopilotTurnWithRetry,
 	CopilotAuthError,
+	CopilotClientError,
+	CopilotModelUnavailableError,
+	onModelOutcome,
 	buildWebInvocationArgs,
 	capturedVariants,
 	sourcesOf,
@@ -915,6 +918,122 @@ async function testAuthErrorNotRetried() {
 	assert.equal(server.attempts(), 1, 'un CopilotAuthError no debe disparar un reintento');
 	server.close();
 	console.log('  ✓ streamCopilotTurnWithRetry NO reintenta un error de autenticación');
+}
+
+/**
+ * Mock BizChat whose answer depends on the `tone` of the chat invocation, the
+ * way the real service treats a model: it runs it (`DeepLeo`), turns the turn
+ * down (a completion frame with an error) or answers with its own canned
+ * reply (`BotConnection`) instead of the model.
+ */
+function startToneServer(): Promise<{ port: number; close: () => void; tones: string[] }> {
+	const tones: string[] = [];
+	return new Promise((resolve) => {
+		const wss = new WebSocketServer({ port: 0 }, () => {
+			const addr = wss.address();
+			const port = typeof addr === 'object' && addr ? addr.port : 0;
+			resolve({ port, close: () => wss.close(), tones });
+		});
+		wss.on('connection', (socket) => {
+			let handshaken = false;
+			socket.on('message', (data) => {
+				for (const chunk of data.toString().split(RS)) {
+					if (!chunk) continue;
+					const frame = JSON.parse(chunk);
+					if (!handshaken) {
+						handshaken = true;
+						socket.send('{}' + RS);
+						continue;
+					}
+					if (frame.target !== 'chat') continue;
+					const tone = String(frame.arguments[0].tone);
+					tones.push(tone);
+					const id = frame.invocationId;
+					if (tone === 'Gpt_9_Chat') {
+						socket.send(JSON.stringify({ type: 3, invocationId: id, error: 'InvalidRequest: tone is not supported' }) + RS);
+					} else if (tone === 'Gpt_9_Result') {
+						socket.send(JSON.stringify({ type: 2, invocationId: id, item: { result: { value: 'UnsupportedTone', message: 'no such model' } } }) + RS);
+					} else if (tone === 'Gpt_Throttled') {
+						socket.send(JSON.stringify({ type: 3, invocationId: id, error: 'Throttled: too many requests' }) + RS);
+					} else if (tone === 'Claude_Dead' || tone === 'magic') {
+						socket.send(botUpdate([{ author: 'bot', contentOrigin: 'BotConnection', text: 'Sorry, I can’t help with that.' }]));
+						socket.send(botUpdate([{ author: 'bot', messageType: 'EndOfRequest' }]));
+					} else {
+						socket.send(botUpdate([{ author: 'bot', contentOrigin: 'DeepLeo', text: 'OK' }]));
+						socket.send(botUpdate([{ author: 'bot', messageType: 'EndOfRequest' }]));
+					}
+				}
+			});
+		});
+	});
+}
+
+async function testModelAvailability() {
+	const server = await startToneServer();
+	const outcomes: string[] = [];
+	onModelOutcome((tone, available) => outcomes.push(`${tone}:${available ? 'ok' : 'unavailable'}`));
+	const turn = (tone: string | null, retry = false) => {
+		let text = '';
+		const options = {
+			profile: makeProfile(server.port),
+			endpointBase: mockBase(server.port),
+			prompt: 'PROMPT',
+			tone,
+			signal: new AbortController().signal,
+			callbacks: { onText: (delta: string) => (text += delta) },
+			retryDelayMs: 1,
+		};
+		return (retry ? streamCopilotTurnWithRetry(options) : streamCopilotTurn(options)).then(() => text);
+	};
+	try {
+		// A model the service runs: its answer, and the registry hears it works.
+		assert.equal(await turn('Gpt_5_6_Reasoning'), 'OK');
+		// Turned down with a model forced: the model is not available, said in
+		// the web app's words, with the service's reason.
+		await assert.rejects(turn('Gpt_9_Chat'), (error: unknown) => {
+			assert.ok(error instanceof CopilotModelUnavailableError, 'expected CopilotModelUnavailableError');
+			assert.equal(error.tone, 'Gpt_9_Chat');
+			assert.match(error.message, /GPT 9 Quick response/);
+			assert.match(error.message, /tone is not supported/);
+			assert.match(error.message, /Auto/);
+			return true;
+		});
+		// The same through the `result` channel.
+		await assert.rejects(turn('Gpt_9_Result'), (error: unknown) => {
+			assert.ok(error instanceof CopilotModelUnavailableError);
+			assert.match(error.serverReply, /UnsupportedTone: no such model/);
+			return true;
+		});
+		// The service's canned reply instead of the model: not shown as the answer.
+		await assert.rejects(turn('Claude_Dead'), (error: unknown) => {
+			assert.ok(error instanceof CopilotModelUnavailableError);
+			assert.match(error.serverReply, /can’t help/);
+			return true;
+		});
+		// Throttling says nothing about the model: a plain error, nothing flagged.
+		await assert.rejects(turn('Gpt_Throttled'), (error: unknown) => {
+			assert.ok(error instanceof CopilotClientError && !(error instanceof CopilotModelUnavailableError));
+			return true;
+		});
+		// Auto is never "unavailable": it sends `magic`, and a canned reply there is just the answer.
+		assert.equal(await turn(null), 'Sorry, I can’t help with that.');
+		assert.equal(server.tones.at(-1), 'magic');
+		// Not retried: the same model would be refused again.
+		const before = server.tones.length;
+		await assert.rejects(turn('Gpt_9_Chat', true), CopilotModelUnavailableError);
+		assert.equal(server.tones.length - before, 1, 'a refused model is not retried');
+		assert.deepEqual(outcomes, [
+			'Gpt_5_6_Reasoning:ok',
+			'Gpt_9_Chat:unavailable',
+			'Gpt_9_Result:unavailable',
+			'Claude_Dead:unavailable',
+			'Gpt_9_Chat:unavailable',
+		]);
+	} finally {
+		onModelOutcome(undefined);
+		server.close();
+	}
+	console.log('  ✓ modelos no disponibles: rechazo y respuesta enlatada → error claro, sin reintento; Auto manda magic');
 }
 
 // ---- subagents.ts -----------------------------------------------------
@@ -2460,7 +2579,8 @@ function testWebHelpers() {
 	assert.notEqual(message.requestId, 'r1');
 	assert.equal('attachments' in message, false);
 	assert.equal(template.message.text, 'what the user typed on the web', 'la plantilla no se toca');
-	assert.equal(buildWebInvocationArgs(template, 'P', null, 'c').tone, 'Gpt_5_5_Chat', 'sin tone, el capturado');
+	// Auto también es Auto en la web: no el último modelo elegido allí.
+	assert.equal(buildWebInvocationArgs(template, 'P', null, 'c').tone, 'magic', 'sin tone, Auto');
 
 	assert.equal(capturedVariants('wss://substrate.office.com/m365Copilot/Chathub/o@t?access_token=x&variants=feature.a,feature.b&source=officeweb'), 'feature.a,feature.b');
 	assert.equal(capturedVariants('wss://x/y?access_token=x'), undefined);
@@ -2567,11 +2687,16 @@ async function testWebTurn() {
 // ---- modelCatalog.ts (dynamic models) ---------------------------------------
 
 function testModelCatalog() {
-	assert.equal(prettyTone('Gpt_5_6_Reasoning'), 'GPT 5.6 Reasoning');
-	assert.equal(prettyTone('Gpt_5_7_Chat'), 'GPT 5.7');
+	// The web app's labels for the mode, whatever the model.
+	assert.equal(prettyTone('Gpt_5_6_Reasoning'), 'GPT 5.6 Think deeper');
+	assert.equal(prettyTone('Gpt_5_7_Chat'), 'GPT 5.7 Quick response');
+	assert.equal(prettyTone('Gpt_Quick'), 'GPT Quick response');
+	assert.equal(prettyTone('Gpt_6_1_Sol'), 'GPT 6.1 Sol');
+	assert.equal(prettyTone('Claude_Sonnet_5_5_Reasoning'), 'Claude Sonnet 5.5 Think deeper');
 	assert.equal(prettyTone('Claude_Opus_4_1'), 'Claude Opus 4.1');
 	assert.equal(prettyTone('Claude_Sonnet'), 'Claude Sonnet');
-	assert.equal(prettyTone('magic'), 'Magic');
+	assert.equal(prettyTone('Reasoning'), 'Think deeper');
+	assert.equal(prettyTone('magic'), 'Auto');
 	assert.equal(modelIdForTone('Gpt_5_7_Chat'), 'm365-copilot-tone-gpt-5-7-chat');
 
 	// models.json: shape validated, junk dropped, detail as text or {en, es}.
@@ -2612,7 +2737,7 @@ function testModelCatalog() {
 			{ tone: 'Gpt_5_5_Chat', hidden: true },
 			{ tone: 'Claude_Sonnet', name: 'Claude Sonnet 5' },
 		],
-		observed: ['Gpt_5_6_Chat', 'Claude_Opus_4_1', 'Gpt_5_7_Chat', 'not valid!'],
+		observed: ['Gpt_5_6_Reasoning', 'Claude_Opus_4_1', 'Gpt_5_7_Chat', 'not valid!'],
 		custom: [{ tone: 'Gpt_5_5_Chat', name: 'GPT 5.5 (mine)' }, { tone: 'Exp_Model' }],
 	});
 	const byTone = new Map(merged.map((model) => [model.tone, model]));
@@ -2626,7 +2751,8 @@ function testModelCatalog() {
 	// Detected in the web app: readable name; already-known tones are not duplicated.
 	assert.equal(byTone.get('Claude_Opus_4_1')?.name, 'M365 Copilot · Claude Opus 4.1');
 	assert.equal(byTone.get('Claude_Opus_4_1')?.source, 'observed');
-	assert.equal(merged.filter((model) => model.tone === 'Gpt_5_6_Chat').length, 1);
+	assert.equal(merged.filter((model) => model.tone === 'Gpt_5_6_Reasoning').length, 1);
+	assert.equal(byTone.get('Gpt_5_6_Reasoning')?.source, 'builtin');
 	assert.equal(byTone.has('not valid!'), false);
 	// Hidden by the catalog, but the user listed it: custom wins, with its name.
 	assert.equal(byTone.get('Gpt_5_5_Chat')?.name, 'M365 Copilot · GPT 5.5 (mine)');
@@ -2649,7 +2775,19 @@ function testModelCatalog() {
 	// The catalog published in the repository parses and only lists valid tones.
 	const published = parseModelCatalog(JSON.parse(readFileSync(new URL('../../../models.json', import.meta.url), 'utf8')));
 	assert.ok(published && published.length > 0, 'models.json must parse');
-	for (const entry of published!) assert.ok(entry.name, `${entry.tone} needs a name`);
+	for (const entry of published!) if (!entry.hidden) assert.ok(entry.name, `${entry.tone} needs a name`);
+	// Installed versions take names and retirements from it: it lists every
+	// built-in model (so they read the same everywhere) and retires the tone
+	// 2.0 shipped that the web app does not offer.
+	const visible = new Set(published!.filter((entry) => !entry.hidden).map((entry) => entry.tone));
+	for (const model of BUILTIN_MODELS) if (model.tone) assert.ok(visible.has(model.tone), `models.json lists ${model.tone}`);
+	assert.ok(published!.some((entry) => entry.tone === 'Gpt_5_6_Chat' && entry.hidden));
+	// The built-ins follow the web app's menu: its three modes, then the models.
+	assert.deepEqual(
+		BUILTIN_MODELS.slice(0, 3).map((model) => model.tone),
+		[null, 'Chat', 'Reasoning'],
+	);
+	assert.equal(BUILTIN_MODELS.some((model) => model.tone === 'Gpt_5_6_Chat'), false);
 
 	// The profile the browser side sends keeps the observed tones (and only valid ones).
 	const profile = parsePastedProfile(
@@ -2691,6 +2829,7 @@ async function main() {
 	await testMultiMessageToolCall();
 	await test429Retry();
 	await testAuthErrorNotRetried();
+	await testModelAvailability();
 	console.log('subagents.ts');
 	await testConcurrencyLimiter();
 	await testSubagentLoop();

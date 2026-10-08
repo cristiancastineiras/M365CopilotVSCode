@@ -1,47 +1,70 @@
 {
-  "$comment": "Online catalog of M365 Copilot models, downloaded by the VS Code extension on start and every 12 h (setting m365copilot.models.updateFromCatalog). Add an entry to offer a new model to every user without a release; set \"hidden\": true to retire one. 'tone' is the BizChat tone the web app sends (the browser extension and userscript also detect them automatically). 'name' is shown after 'M365 Copilot · '.",
+  "$comment": "Online catalog of M365 Copilot models, downloaded by the VS Code extension on start and every 12 h (setting m365copilot.models.updateFromCatalog). Add an entry to offer a new model to every user without a release; set \"hidden\": true to retire one (also for installed versions that ship it). 'tone' is the BizChat tone the web app sends (the browser extension and userscript also detect them automatically). 'name' is shown after 'M365 Copilot · ' — use the web app's own labels. Only list tones seen working: a tone the service knows can still be refused, or answered with a canned reply instead of the model.",
   "version": 1,
-  "updated": "2026-10-07",
+  "updated": "2026-10-08",
   "models": [
     {
-      "tone": "Gpt_5_6_Chat",
-      "name": "GPT 5.6",
+      "tone": "Chat",
+      "name": "Quick response",
       "detail": {
-        "en": "GPT 5.6 (fast answers) — M365 Copilot’s preferred model since July 2026.",
-        "es": "GPT 5.6 (respuestas rápidas) — el modelo preferido de M365 Copilot desde julio de 2026."
+        "en": "“Quick response”: answers right away with the model M365 Copilot picks.",
+        "es": "«Respuesta rápida»: contesta enseguida con el modelo que elija M365 Copilot."
+      }
+    },
+    {
+      "tone": "Reasoning",
+      "name": "Think deeper",
+      "detail": {
+        "en": "“Think deeper”: thinks longer for better answers, with the model M365 Copilot picks. Slower.",
+        "es": "«Pensar más a fondo»: piensa más para dar mejores respuestas, con el modelo que elija M365 Copilot. Más lento."
       }
     },
     {
       "tone": "Gpt_5_6_Reasoning",
-      "name": "GPT 5.6 Reasoning",
+      "name": "GPT 5.6 Think deeper",
       "detail": {
-        "en": "GPT 5.6 in reasoning mode (“Think deeper”): more elaborate answers for hard work.",
-        "es": "GPT 5.6 en modo razonamiento («Think deeper»): respuestas más elaboradas para trabajo difícil."
+        "en": "GPT 5.6 thinking deeper: more elaborate answers for hard work. Slower.",
+        "es": "GPT 5.6 pensando más a fondo: respuestas más elaboradas para trabajo difícil. Más lento."
       }
     },
     {
       "tone": "Gpt_5_5_Chat",
-      "name": "GPT",
+      "name": "GPT 5.5 Quick response",
       "detail": {
-        "en": "Forces the GPT model of the Copilot backend.",
-        "es": "Fuerza el modelo GPT del backend de Copilot."
+        "en": "GPT 5.5, quick response.",
+        "es": "GPT 5.5, respuesta rápida."
       }
     },
     {
       "tone": "Gpt_5_5_Reasoning",
-      "name": "Reasoning",
+      "name": "GPT 5.5 Think deeper",
       "detail": {
-        "en": "Reasoning mode (slower, more elaborate answers).",
-        "es": "Modo de razonamiento (más lento, respuestas más elaboradas)."
+        "en": "GPT 5.5 thinking deeper. Slower.",
+        "es": "GPT 5.5 pensando más a fondo. Más lento."
       }
     },
     {
       "tone": "Claude_Sonnet",
       "name": "Claude Sonnet",
       "detail": {
-        "en": "Forces Claude Sonnet on the Copilot backend.",
-        "es": "Fuerza Claude Sonnet en el backend de Copilot."
+        "en": "Anthropic’s Claude Sonnet. Your admin must have Anthropic models enabled.",
+        "es": "Claude Sonnet de Anthropic. Tu administrador tiene que tener activados los modelos de Anthropic."
       }
-    }
+    },
+    {
+      "tone": "Claude_Sonnet_Reasoning",
+      "name": "Claude Sonnet Think deeper",
+      "detail": {
+        "en": "Claude Sonnet thinking deeper. Your admin must have Anthropic models enabled. Slower.",
+        "es": "Claude Sonnet pensando más a fondo. Tu administrador tiene que tener activados los modelos de Anthropic. Más lento."
+      }
+    },
+    { "tone": "Gpt_5_6_Chat", "hidden": true },
+    { "tone": "Gpt_5_4_Reasoning", "hidden": true },
+    { "tone": "Gpt_5_4_Quick", "hidden": true },
+    { "tone": "Gpt_5_3_Reasoning", "hidden": true },
+    { "tone": "Gpt_5_3_Quick", "hidden": true },
+    { "tone": "Gpt_5_2_Reasoning", "hidden": true },
+    { "tone": "Gpt_5_2_Quick", "hidden": true }
   ]
 }

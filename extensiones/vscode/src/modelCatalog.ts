@@ -48,18 +48,41 @@ const MAX_MODELS = 30;
 const MAX_NAME_CHARS = 60;
 const MAX_DETAIL_CHARS = 200;
 
+/**
+ * What the M365 Copilot web app's model menu offers, with its own labels: the
+ * three modes that let M365 pick the model (Auto = `magic`, Quick response =
+ * `Chat`, Think deeper = `Reasoning`) and the named models. The tones come from
+ * the web app's own menu and from tones seen answering live; `Gpt_5_6_Chat`
+ * (offered until 2.0) is not among them and is gone. Newer models (GPT-6.1 Sol,
+ * Claude Sonnet 5.5…) arrive in phases per tenant and their tones are not
+ * public: they show up by themselves once the web app uses them (observed).
+ * The ids of models kept from earlier versions do not change: settings and
+ * the chat's picker refer to them.
+ */
 const BUILTIN_SPECS: readonly Omit<CatalogModel, 'family' | 'source'>[] = [
 	{ id: 'm365-copilot-auto', name: 'M365 Copilot (Auto)', tone: null, detailKey: 'model.auto.detail' },
-	{ id: 'm365-copilot-gpt', name: `${PREFIX}GPT`, tone: 'Gpt_5_5_Chat', detailKey: 'model.gpt.detail' },
-	{ id: 'm365-copilot-gpt56', name: `${PREFIX}GPT 5.6`, tone: 'Gpt_5_6_Chat', detailKey: 'model.gpt56.detail' },
+	{ id: 'm365-copilot-quick', name: `${PREFIX}Quick response`, tone: 'Chat', detailKey: 'model.quick.detail' },
+	{ id: 'm365-copilot-think-deeper', name: `${PREFIX}Think deeper`, tone: 'Reasoning', detailKey: 'model.thinkDeeper.detail' },
 	{
 		id: 'm365-copilot-gpt56-reasoning',
-		name: `${PREFIX}GPT 5.6 Reasoning`,
+		name: `${PREFIX}GPT 5.6 Think deeper`,
 		tone: 'Gpt_5_6_Reasoning',
 		detailKey: 'model.gpt56Reasoning.detail',
 	},
+	{ id: 'm365-copilot-gpt', name: `${PREFIX}GPT 5.5 Quick response`, tone: 'Gpt_5_5_Chat', detailKey: 'model.gpt.detail' },
+	{
+		id: 'm365-copilot-reasoning',
+		name: `${PREFIX}GPT 5.5 Think deeper`,
+		tone: 'Gpt_5_5_Reasoning',
+		detailKey: 'model.reasoning.detail',
+	},
 	{ id: 'm365-copilot-claude', name: `${PREFIX}Claude Sonnet`, tone: 'Claude_Sonnet', detailKey: 'model.claude.detail' },
-	{ id: 'm365-copilot-reasoning', name: `${PREFIX}Reasoning`, tone: 'Gpt_5_5_Reasoning', detailKey: 'model.reasoning.detail' },
+	{
+		id: 'm365-copilot-claude-think-deeper',
+		name: `${PREFIX}Claude Sonnet Think deeper`,
+		tone: 'Claude_Sonnet_Reasoning',
+		detailKey: 'model.claudeThinkDeeper.detail',
+	},
 ];
 
 export const BUILTIN_MODELS: readonly CatalogModel[] = BUILTIN_SPECS.map((model) => ({
@@ -68,14 +91,24 @@ export const BUILTIN_MODELS: readonly CatalogModel[] = BUILTIN_SPECS.map((model)
 	source: 'builtin' as const,
 }));
 
+/** The web app's names for its modes, which also end the named tones. */
+const MODE_LABELS: Readonly<Record<string, string>> = {
+	chat: 'Quick response',
+	quick: 'Quick response',
+	reasoning: 'Think deeper',
+	magic: 'Auto',
+};
+
 /**
- * A readable name for a tone: `Gpt_5_6_Reasoning` → "GPT 5.6 Reasoning",
- * `Claude_Opus_4_1` → "Claude Opus 4.1", `Gpt_5_7_Chat` → "GPT 5.7" (the
- * "Chat" suffix is the default flavour, not worth showing).
+ * A readable name for a tone, with the web app's labels for the mode:
+ * `Gpt_5_6_Reasoning` → "GPT 5.6 Think deeper", `Gpt_5_5_Chat` → "GPT 5.5
+ * Quick response", `Gpt_6_1_Sol` → "GPT 6.1 Sol", `Claude_Opus_4_1` →
+ * "Claude Opus 4.1", `Reasoning` → "Think deeper".
  */
 export function prettyTone(tone: string): string {
 	const tokens = tone.split(/[_\-\s]+/).filter(Boolean);
-	if (tokens.length > 1 && tokens[tokens.length - 1].toLowerCase() === 'chat') tokens.pop();
+	const mode = tokens.length > 0 ? MODE_LABELS[tokens[tokens.length - 1].toLowerCase()] : undefined;
+	if (mode) tokens.pop();
 	const words: string[] = [];
 	for (const token of tokens) {
 		const previous = words[words.length - 1];
@@ -89,6 +122,7 @@ export function prettyTone(tone: string): string {
 			words.push(token.charAt(0).toUpperCase() + token.slice(1));
 		}
 	}
+	if (mode) words.push(mode);
 	return words.join(' ') || tone;
 }
 

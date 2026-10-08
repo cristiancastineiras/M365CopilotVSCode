@@ -4,6 +4,7 @@
  */
 
 import { ext } from './api';
+import type { HardResetReport } from './hardReset';
 import type { RefreshState, SyncState } from './storage';
 
 /** Lo que el popup necesita para explicar en una pantalla qué está pasando. */
@@ -31,6 +32,21 @@ export interface MessageMap {
   FORCE_REFRESH: { request: void; response: { action: string; reason: string } };
   /** Permitir o no que la extensión abra una pestaña de M365 por su cuenta. */
   SET_AUTO_OPEN: { request: boolean; response: { autoOpenTab: boolean } };
+  /**
+   * Cerrar la sesión de Microsoft entera (cookies, MSAL, almacenamiento) y
+   * dejar al usuario en el login. Lo piden tres sitios: el botón del popup
+   * (sin `requestId`), el content script cuando VS Code abre la web con el
+   * marcador de cierre de sesión, y el propio latido cuando VS Code deja una
+   * petición pendiente en su servidor local.
+   *
+   * Con `requestId`, el background sólo obedece si ese id es el que VS Code
+   * tiene pendiente: el marcador viaja en una URL, y cualquier web podría
+   * enlazarla.
+   */
+  HARD_RESET: {
+    request: { requestId?: string | null; driveTabId?: number | null } | void;
+    response: HardResetReport;
+  };
   /**
    * background → content script: vuelve a mirar la caché de MSAL. La web renueva
    * su propio token sola; muchas veces basta con recogerlo, sin recargar nada.

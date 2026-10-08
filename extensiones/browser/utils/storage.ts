@@ -58,6 +58,12 @@ export interface StorageSchema {
   hasEverCaptured: boolean;
   /** Permitir abrir una pestaña en segundo plano cuando no hay ninguna. */
   autoOpenTab: boolean;
+  /**
+   * Id del último cierre de sesión que ya se atendió. VS Code publica su
+   * petición en el health-check y la deja ahí hasta que alguien la recoge, así
+   * que sin esto el latido volvería a cerrar la sesión cada minuto.
+   */
+  handledSignOutId: string | null;
 }
 
 const DEFAULTS: StorageSchema = {
@@ -70,6 +76,7 @@ const DEFAULTS: StorageSchema = {
   syncState: EMPTY_SYNC_STATE,
   hasEverCaptured: false,
   autoOpenTab: true,
+  handledSignOutId: null,
 };
 
 const isStorageAvailable = (): boolean => Boolean(ext()?.storage?.local);

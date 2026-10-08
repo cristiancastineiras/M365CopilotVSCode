@@ -1,4 +1,4 @@
-import { BRIDGE_MESSAGE_MARKER } from '@m365copilot/core';
+import { BRIDGE_MESSAGE_MARKER, signOutRequestId } from '@m365copilot/core';
 import { registerHandlers, sendMessage } from '@/utils/messaging';
 import { logger } from '@/utils/logger';
 
@@ -63,5 +63,23 @@ export default defineContentScript({
     // mundos no está garantizado: pedir el perfil al cargar evita depender de
     // que el interceptor publique justo cuando este listener ya existe.
     askInterceptor('REQUEST_PROFILE');
+
+    // Cuando VS Code pide cerrar la sesión abre esta web con el marcador en la
+    // URL (`?m365copilot-signout=<id>`). Llegar por aquí es lo que hace que el
+    // cierre sea inmediato: el camino de respaldo es el latido del background,
+    // que tarda hasta un minuto en mirar el servidor local.
+    //
+    // Esto NO autoriza nada por sí solo: el background comprueba que ese id sea
+    // el que VS Code tiene pendiente antes de borrar nada, porque una URL la
+    // puede enlazar cualquiera.
+    const signOutId = signOutRequestId(location.href);
+    if (signOutId) {
+      logger.info('VS Code pide cerrar la sesión de Microsoft desde esta pestaña');
+      sendMessage('HARD_RESET', { requestId: signOutId }).catch((err) => {
+        // Lo normal es acabar aquí: el cierre de sesión navega esta misma
+        // pestaña, así que el puerto muere antes de que llegue la respuesta.
+        logger.debug('Sin respuesta al cierre de sesión (la pestaña ya navegó):', err);
+      });
+    }
   },
 });

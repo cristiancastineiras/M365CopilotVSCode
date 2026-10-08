@@ -1,4 +1,5 @@
 import type { ConfigEnv, UserManifest } from 'wxt';
+import { MICROSOFT_HOST_PERMISSIONS } from '@m365copilot/core';
 
 /**
  * Piezas compartidas por wxt.config.ts (Chrome) y wxt.config.firefox.ts:
@@ -22,10 +23,23 @@ export const sharedManifest: UserManifest = {
   // token es una alarma. Sin este permiso `chrome.alarms` es `undefined` y la
   // primera llamada tumbaba el background entero — con él, los handlers de
   // mensajes y la sincronización con VS Code.
-  permissions: ['storage', 'tabs', 'activeTab', 'alarms'],
-  // Necesario para que el background pueda hacer fetch al servidor local de
-  // la extensión de VS Code (http://localhost:51827) sin bloqueo de CORS.
-  host_permissions: ['http://localhost/*'],
+  // `cookies` y `browsingData` son lo que hace posible el cierre de sesión de
+  // verdad: la sesión de Microsoft no vive en el token que captura esta
+  // extensión, sino en las cookies de login.microsoftonline.com y en la caché
+  // de MSAL (localStorage/IndexedDB) de cada web de M365. Sin estos dos
+  // permisos, «renovar» sólo podía pedir otro token — y MSAL lo daba en
+  // silencio con la sesión de siempre, sin volver a preguntar nada.
+  permissions: ['storage', 'tabs', 'activeTab', 'alarms', 'cookies', 'browsingData'],
+  host_permissions: [
+    // Necesario para que el background pueda hacer fetch al servidor local de
+    // la extensión de VS Code (http://localhost:51827) sin bloqueo de CORS.
+    'http://localhost/*',
+    // La API `cookies` exige permiso sobre la URL de cada cookie que se lee o
+    // se borra, y `browsingData` sobre cada origen: la lista sale de
+    // signOut.ts en @m365copilot/core, que es la única fuente de verdad de
+    // qué dominios sostienen la sesión.
+    ...MICROSOFT_HOST_PERMISSIONS,
+  ],
   icons: {
     16: '/favicon-16x16.png',
     32: '/favicon-32x32.png',

@@ -25,10 +25,12 @@ import { M365AuthenticationProvider } from './account';
 import { registerReview, ReviewComments } from './review';
 import { migrateFromLegacy } from './migration';
 import { setTestEndpointBase } from './client';
+import { signOutAndSignIn } from './signOut';
 import { ProjectIndexService } from './projectIndex';
 import { registerWebSearchTool } from './webSearch';
 import type { Hunk } from '../tools/lineDiff';
 import {
+	checkModels,
 	clearProfile,
 	currentLanguageSetting,
 	languageName,
@@ -180,9 +182,11 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
 		vscode.commands.registerCommand('m365copilot.toggleInlineCompletions', () => toggleInlineCompletions()),
 		vscode.commands.registerCommand('m365copilot.pasteProfile', () => pasteProfile(store)),
 		vscode.commands.registerCommand('m365copilot.clearProfile', () => clearProfile(store)),
+		vscode.commands.registerCommand('m365copilot.signOut', () => signOutAndSignIn(store, tokenServer)),
 		vscode.commands.registerCommand('m365copilot.showStatus', () => showStatus(store)),
 		vscode.commands.registerCommand('m365copilot.selectLanguage', () => selectLanguage()),
-		vscode.commands.registerCommand('m365copilot.refreshModels', () => refreshModels(modelRegistry)),
+		vscode.commands.registerCommand('m365copilot.refreshModels', () => refreshModels(modelRegistry, store)),
+		vscode.commands.registerCommand('m365copilot.checkModels', () => checkModels(modelRegistry, store)),
 		vscode.commands.registerCommand('m365copilot.openWalkthrough', () => openWalkthrough()),
 		vscode.commands.registerCommand('m365copilot.showLog', () => showLog()),
 		vscode.commands.registerCommand('m365copilot.reviewPendingEdits', () => workspaceEdits.reviewPendingEdits()),

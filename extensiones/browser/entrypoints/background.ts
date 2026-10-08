@@ -2,13 +2,21 @@ import {
   TOKEN_SERVER_URL,
   TOKEN_ENDPOINT_PATH,
   HEALTH_ENDPOINT_PATH,
+  SIGNOUT_ENDPOINT_PATH,
   isTokenUsable,
   profileFromCapture,
   type CopilotProfile,
 } from '@m365copilot/core';
 import { ext } from '@/utils/api';
 import { registerHandlers } from '@/utils/messaging';
-import { getStorage, patchStorage, setStorage } from '@/utils/storage';
+import {
+  EMPTY_REFRESH_STATE,
+  EMPTY_SYNC_STATE,
+  getStorage,
+  patchStorage,
+  setStorage,
+} from '@/utils/storage';
+import { hardResetMicrosoftSession, type HardResetReport } from '@/utils/hardReset';
 import { logger } from '@/utils/logger';
 import { t } from '@/utils/i18n';
 import {
@@ -78,12 +86,87 @@ export default defineBackground(() => {
 
   // ¿Está el servidor local de VS Code escuchando?
   async function isVSCodeReachable(): Promise<boolean> {
+    return (await readHealth()) !== null;
+  }
+
+  /** El health-check es además por donde VS Code pide cerrar la sesión. */
+  interface Health {
+    status?: string;
+    /** Cierre de sesión pedido desde VS Code y todavía sin atender. */
+    pendingSignOut?: { id?: string } | null;
+  }
+
+  async function readHealth(): Promise<Health | null> {
     try {
       const res = await fetch(`${TOKEN_SERVER_URL}${HEALTH_ENDPOINT_PATH}`, { method: 'GET' });
-      return res.ok;
+      if (!res.ok) return null;
+      return (await res.json()) as Health;
     } catch {
-      return false;
+      return null;
     }
+  }
+
+  /** Id del cierre de sesión que VS Code tiene pendiente, si hay alguno. */
+  async function pendingSignOutId(): Promise<string | null> {
+    const health = await readHealth();
+    const id = health?.pendingSignOut?.id;
+    return typeof id === 'string' && id ? id : null;
+  }
+
+  /**
+   * Avisa a VS Code de que la sesión ya está cerrada, con el informe de lo que
+   * se borró: es lo que cierra el aviso de progreso del editor y lo que hace
+   * que borre también el token que tenía guardado. Si no está escuchando no
+   * pasa nada — su token lo borró antes de pedirlo.
+   */
+  async function reportSignOutToVSCode(id: string | null, report: HardResetReport): Promise<void> {
+    try {
+      await fetch(`${TOKEN_SERVER_URL}${SIGNOUT_ENDPOINT_PATH}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, report }),
+      });
+    } catch (err) {
+      logger.debug('VS Code no recogió el aviso de cierre de sesión:', err);
+    }
+  }
+
+  /**
+   * Cierra la sesión de Microsoft y deja la extensión como recién instalada.
+   *
+   * El estado guardado se limpia ANTES de borrar el navegador: así, si algo
+   * del borrado falla a medias, lo que queda es «no hay token» (que el
+   * renovador sabe manejar) y no un token válido con la sesión ya cerrada.
+   * `hasEverCaptured` vuelve a false a propósito — es lo que impide que el
+   * siguiente latido se ponga a abrir pestañas mientras el usuario está
+   * escribiendo su contraseña.
+   */
+  async function hardReset(options: { requestId?: string | null; driveTabId?: number | null } = {}) {
+    const requestId = options.requestId ?? null;
+    await setStorage('currentProfile', null);
+    await setStorage('lastSyncedAt', null);
+    await setStorage('hasEverCaptured', false);
+    await setStorage('refreshState', { ...EMPTY_REFRESH_STATE, lastAction: 'needsUser', lastReason: 'sesión cerrada a petición' });
+    await setStorage('syncState', { ...EMPTY_SYNC_STATE });
+    if (requestId) await setStorage('handledSignOutId', requestId);
+
+    const report = await hardResetMicrosoftSession({ driveTabId: options.driveTabId ?? null });
+    await reportSignOutToVSCode(requestId, report);
+    return report;
+  }
+
+  /**
+   * Recoge la petición que VS Code haya dejado en su servidor local. Es el
+   * camino de respaldo del marcador en la URL (ver content.ts): si esa pestaña
+   * no llega a cargar — el navegador estaba cerrado, la web no responde —, el
+   * cierre de sesión llega igual en el siguiente latido.
+   */
+  async function pollSignOutRequest(): Promise<void> {
+    const id = await pendingSignOutId();
+    if (!id) return;
+    if ((await getStorage('handledSignOutId')) === id) return;
+    logger.info(`VS Code pide cerrar la sesión (${id}); atendiéndolo`);
+    await hardReset({ requestId: id });
   }
 
   // Los handlers se registran ANTES de arrancar nada más: si el arranque del
@@ -159,6 +242,20 @@ export default defineBackground(() => {
       return { token: data.accessToken };
     },
 
+    HARD_RESET: async (payload, sender) => {
+      const requestId = payload?.requestId ?? null;
+      // El marcador viaja en una URL, así que el content script que lo ve no
+      // prueba nada por sí mismo: cualquier web podría enlazarla. Sólo se
+      // obedece si ese id es el que VS Code tiene pendiente de verdad.
+      if (requestId && (await pendingSignOutId()) !== requestId) {
+        throw new Error(t('error.signOutNotRequested'));
+      }
+      return hardReset({
+        requestId,
+        driveTabId: payload?.driveTabId ?? sender.tab?.id ?? null,
+      });
+    },
+
     SEND_TO_VSCODE: async () => {
       const data = await getStorage('currentProfile');
       if (!buildProfile(data)) {
@@ -200,7 +297,7 @@ export default defineBackground(() => {
 
   // Lo último, y aislado: mantiene la sesión viva sin que nadie la toque.
   try {
-    setupTokenRefresher(sendProfileToVSCode);
+    setupTokenRefresher(sendProfileToVSCode, pollSignOutRequest);
   } catch (error) {
     logger.error('No se pudo arrancar el auto-renovador de token:', error);
   }
