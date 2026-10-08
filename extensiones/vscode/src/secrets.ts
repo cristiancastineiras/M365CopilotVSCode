@@ -47,7 +47,11 @@ export class ProfileStore {
 
 	/** Parse and store a pasted profile/token. Returns the normalized profile. */
 	async setFromPaste(pasted: string): Promise<CopilotProfile> {
-		const profile = parsePastedProfile(pasted);
+		return this.set(parsePastedProfile(pasted));
+	}
+
+	/** Store an already parsed profile (see {@link parsePastedProfile}). */
+	async set(profile: CopilotProfile): Promise<CopilotProfile> {
 		await this.secrets.store(SECRET_KEY, JSON.stringify(profile));
 		this.cached = profile;
 		this.changeEmitter.fire();

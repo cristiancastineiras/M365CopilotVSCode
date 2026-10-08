@@ -31,6 +31,15 @@ browser and VS Code uses it.
      when VS Code has the token. Without that permission, **Copy token** in the
      panel and **M365 Copilot: Paste profile or token** still work (the token in
      the clipboard is detected, so Enter is enough).
+   - *Without installing anything (e.g. a managed browser):* open
+     <https://m365.cloud.microsoft/chat/>, open DevTools (F12) → **Network**,
+     type `chathub` in the filter, send a message, right-click the request that
+     appears → **Copy** → **Copy URL**, and run **M365 Copilot: Paste profile or token** (the URL in
+     the clipboard is detected). The Copilot token travels as `access_token` in
+     that URL, not in an `Authorization: Bearer` header: a bearer copied from any
+     other request is for another service and fails with 401 (the paste command
+     warns about it). It lasts about an hour; repeat when it expires. Web search
+     needs one of the two captures above.
 2. **Chat**: type **`@m365`** in the chat, or pick one of the **M365 Copilot**
    models (`Auto`, `GPT`, `GPT 5.6`, `GPT 5.6 Reasoning`, `Claude Sonnet`,
    `Reasoning`) in the model picker.

@@ -1,6 +1,6 @@
 import { defineConfig } from 'wxt';
 import { fileURLToPath } from 'node:url';
-import { sharedManifest } from './wxt.config.base';
+import { manifestFor } from './wxt.config.base';
 
 export default defineConfig({
   extensionApi: 'chrome',
@@ -13,7 +13,7 @@ export default defineConfig({
   },
   // Sin `version`: WXT usa la de package.json, que Changesets sube en cada
   // release junto con las de los otros dos paquetes.
-  manifest: sharedManifest,
+  manifest: manifestFor,
   vite: () => ({
     build: {
       target: 'esnext',

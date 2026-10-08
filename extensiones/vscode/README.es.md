@@ -32,6 +32,16 @@ navegador y VS Code lo usa.
      enciende cuando VS Code tiene el token. Sin ese permiso siguen funcionando
      **Copiar token** del panel y **M365 Copilot: Pegar perfil o token** (detecta
      el token en el portapapeles, así que basta con pulsar Intro).
+   - *Sin instalar nada (p. ej. un navegador corporativo bloqueado):* abre
+     <https://m365.cloud.microsoft/chat/>, abre DevTools (F12) → **Red**,
+     escribe `chathub` en el filtro, envía un mensaje, clic derecho en la
+     petición que aparece → **Copiar** → **Copiar URL**, y ejecuta **M365 Copilot: Pegar perfil o
+     token** (detecta la URL en el portapapeles). El token de Copilot viaja como
+     `access_token` en esa URL, no en una cabecera `Authorization: Bearer`: un
+     bearer copiado de cualquier otra petición es de otro servicio y falla con
+     401 (el comando de pegar avisa). Dura alrededor de una hora; repítelo
+     cuando caduque. La búsqueda web necesita una de las dos capturas
+     anteriores.
 2. **Chatea**: escribe **`@m365`** en el chat, o elige uno de los modelos **M365
    Copilot** (`Auto`, `GPT`, `GPT 5.6`, `GPT 5.6 Reasoning`, `Claude Sonnet`,
    `Reasoning`) en el selector de modelos.

@@ -23,6 +23,13 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Credenciales de la API de AMO (addons.mozilla.org → Developer Hub → Manage
+    # API Keys) guardadas como secrets AMO_JWT_ISSUER / AMO_JWT_SECRET. Si no
+    # están, la release sale igual, sin el .xpi firmado. Aquí sólo va si
+    # existen (`secrets` no se puede usar en el `if:` de un step); las claves
+    # en sí sólo las ve el step que firma, no los postinstall de `pnpm install`.
+    env:
+      HAS_AMO_KEYS: ${{ secrets.AMO_JWT_ISSUER != '' && secrets.AMO_JWT_SECRET != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -58,3 +65,21 @@ jobs:
             releases/m365-copilot-vscode-${{ env.VERSION }}.vsix
             releases/chrome/m365-copilot-vscode-extension-chrome.zip
             releases/firefox/m365-copilot-vscode-extension-firefox.zip
+
+      # Firefox Release sólo instala de forma permanente complementos firmados
+      # por Mozilla: sin firma, el .zip sólo sirve como complemento temporal.
+      # Canal «unlisted»: AMO lo firma pero no lo publica en la tienda.
+      - name: Firmar la extensión de Firefox en AMO
+        if: env.HAS_AMO_KEYS == 'true'
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: pnpm --filter m365-copilot-vscode-extension sign:firefox
+
+      - name: Añadir el .xpi firmado a la release
+        if: env.HAS_AMO_KEYS == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          fail_on_unmatched_files: true
+          files: releases/firefox/m365-copilot-vscode-extension-firefox.xpi

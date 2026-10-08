@@ -6,6 +6,7 @@ import {
   profileFromCapture,
   type CopilotProfile,
 } from '@m365copilot/core';
+import { ext } from '@/utils/api';
 import { registerHandlers } from '@/utils/messaging';
 import { getStorage, patchStorage, setStorage } from '@/utils/storage';
 import { logger } from '@/utils/logger';
@@ -22,7 +23,7 @@ import {
 const TOKEN_EXPIRED_SYNC_ERROR = 'token-expired';
 
 export default defineBackground(() => {
-  logger.info('M365 Copilot Background Script loaded', { id: chrome.runtime.id });
+  logger.info('M365 Copilot Background Script loaded', { id: ext().runtime.id });
 
   // Construye un perfil completo a partir del store crudo (misma forma que el userscript).
   function buildProfile(store: any): CopilotProfile | null {
@@ -172,7 +173,7 @@ export default defineBackground(() => {
     },
   });
 
-  chrome.runtime.onInstalled.addListener((details) => {
+  ext().runtime.onInstalled.addListener((details) => {
     logger.info('Extension installed:', details.reason);
     if (details.reason === 'install') {
       void setStorage('installedAt', new Date().toISOString());
@@ -183,12 +184,12 @@ export default defineBackground(() => {
 
   // Al abrir el navegador el service worker despierta aquí: un ciclo inmediato
   // deja la sesión lista antes de que llegue el primer latido de la alarma.
-  chrome.runtime.onStartup?.addListener(() => {
+  ext().runtime.onStartup?.addListener(() => {
     void runRefreshCycle().catch((error) => logger.error('Ciclo de arranque fallido:', error));
   });
 
   // Si el usuario cierra a mano la pestaña que abrimos para renovar, olvidarla.
-  chrome.tabs.onRemoved.addListener((tabId) => {
+  ext().tabs.onRemoved.addListener((tabId) => {
     void (async () => {
       const state = await getStorage('refreshState');
       if (state.openedTabId === tabId) {

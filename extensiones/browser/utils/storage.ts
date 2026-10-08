@@ -6,6 +6,7 @@
  * segundos: TODO el estado del auto-renovador vive aquí, nunca en variables de
  * módulo, porque esas no sobreviven al siguiente despertar.
  */
+import { ext } from './api';
 
 /** Estado del auto-renovador entre despertares del service worker. */
 export interface RefreshState {
@@ -71,8 +72,7 @@ const DEFAULTS: StorageSchema = {
   autoOpenTab: true,
 };
 
-const isStorageAvailable = (): boolean =>
-  typeof chrome !== 'undefined' && Boolean(chrome.storage?.local);
+const isStorageAvailable = (): boolean => Boolean(ext()?.storage?.local);
 
 export async function getStorage<K extends keyof StorageSchema>(
   key: K,
@@ -80,7 +80,7 @@ export async function getStorage<K extends keyof StorageSchema>(
   if (!isStorageAvailable()) return DEFAULTS[key];
 
   try {
-    const result = await chrome.storage.local.get({ [key]: DEFAULTS[key] });
+    const result = await ext().storage.local.get({ [key]: DEFAULTS[key] });
     return result[key] as StorageSchema[K];
   } catch (error) {
     console.error(`[storage] get("${key}") failed:`, error);
@@ -95,7 +95,7 @@ export async function setStorage<K extends keyof StorageSchema>(
   if (!isStorageAvailable()) return;
 
   try {
-    await chrome.storage.local.set({ [key]: value });
+    await ext().storage.local.set({ [key]: value });
   } catch (error) {
     console.error(`[storage] set("${key}") failed:`, error);
   }
