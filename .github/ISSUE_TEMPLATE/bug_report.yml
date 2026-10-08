@@ -1,0 +1,89 @@
+name: Informe de error
+description: Comunica un comportamiento incorrecto o inesperado
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        No incluyas tokens, credenciales, datos personales ni vulnerabilidades de seguridad.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Componente afectado
+      options:
+        - Extensión de Visual Studio Code
+        - Extensión de navegador
+        - Paquete core
+        - Compilación o publicación
+        - Documentación
+        - Otro
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Descripción
+      description: Explica qué ocurre y cuál es el impacto.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducirlo
+      placeholder: |
+        1. Abre...
+        2. Ejecuta...
+        3. Observa...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamiento esperado
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Comportamiento actual
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Versión
+      placeholder: "Ejemplo: 1.2.3"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Entorno
+      description: Sistema operativo, versión de VS Code o navegador, Node.js y pnpm.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Registros o información adicional
+      description: Elimina cualquier secreto, token o dato personal.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Comprobaciones
+      options:
+        - label: He comprobado que no existe una incidencia equivalente.
+          required: true
+        - label: He eliminado secretos, tokens y datos personales.
+          required: true

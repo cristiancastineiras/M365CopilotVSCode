@@ -1,0 +1,55 @@
+name: Solicitud de funcionalidad
+description: Propón una mejora o una nueva capacidad
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Componente
+      options:
+        - Extensión de Visual Studio Code
+        - Extensión de navegador
+        - Paquete core
+        - Compilación o publicación
+        - Documentación
+        - Otro
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema o necesidad
+      description: Describe el problema que quieres resolver.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Solución propuesta
+      description: Explica el comportamiento esperado.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Contexto adicional
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Comprobaciones
+      options:
+        - label: He comprobado que no existe una solicitud equivalente.
+          required: true
+        - label: La propuesta no contiene secretos, tokens ni datos personales.
+          required: true
