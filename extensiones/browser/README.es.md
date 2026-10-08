@@ -29,12 +29,26 @@ navegador), igual que el nombre y la descripción de la extensión.
 
 ## Instalación
 
-Descarga `m365-copilot-vscode-extension-chrome.zip` o `…-firefox.zip` desde las
-[releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases),
-descomprímelo y:
+Descárgala desde las
+[releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases):
 
-- **Chrome / Edge:** `chrome://extensions` → *Modo de desarrollador* → *Cargar descomprimida*.
-- **Firefox:** `about:debugging` → *Este Firefox* → *Cargar complemento temporal*.
+- **Chrome / Edge:** descomprime `m365-copilot-vscode-extension-chrome.zip` →
+  `chrome://extensions` → *Modo de desarrollador* → *Cargar descomprimida*.
+- **Firefox (permanente):** abre `m365-copilot-vscode-extension-firefox.xpi` en
+  Firefox (o arrástralo a `about:addons`). Es el build firmado por Mozilla, el
+  único que Firefox Release instala de forma permanente; las releases sin
+  `.xpi` no se firmaron.
+- **Firefox (temporal, sin firma):** `about:debugging` → *Este Firefox* →
+  *Cargar complemento temporal* → elige
+  `m365-copilot-vscode-extension-firefox.zip` (no hace falta descomprimirlo).
+  Firefox lo quita al cerrarse.
+- **Firefox Developer Edition / Nightly / ESR:** pon
+  `xpinstall.signatures.required` a `false` en `about:config` y luego
+  `about:addons` → ⚙ → *Instalar complemento desde archivo* con el `.zip`.
+
+Firefox 128 o posterior. Si Firefox dice que el complemento «parece estar
+dañado», el zip es de la 2.0.0 o anterior (no llevaba ID de complemento):
+vuelve a descargarlo.
 
 Después abre <https://m365.cloud.microsoft/chat/> y envía un mensaje.
 
@@ -46,6 +60,7 @@ pnpm dev                # Chrome/Edge con HMR
 pnpm dev:firefox
 pnpm build              # → ../../releases/chrome
 pnpm zip && pnpm zip:firefox
+pnpm sign:firefox       # .xpi firmado por Mozilla (AMO, unlisted): requiere WEB_EXT_API_KEY / WEB_EXT_API_SECRET
 pnpm typecheck
 pnpm test               # política y ciclo de renovación contra un `chrome` falso
 ```

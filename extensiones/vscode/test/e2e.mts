@@ -37,7 +37,7 @@ import { analyzeFile, bestWindow, SearchIndex } from '../src/rag/searchIndex.ts'
 import { formatAutoContext, formatSearchResults, renderFileDetail, renderFolderDetail, renderHits, renderProjectMap, renderSummary } from '../src/rag/projectMap.ts';
 
 import { MarkdownStreamFormatter } from '../src/markdown.ts';
-import { accountOf, looksLikeProfile, parsePastedProfile } from '../src/profile.ts';
+import { accountOf, foreignAudience, looksLikeProfile, parsePastedProfile } from '../src/profile.ts';
 import { LEGACY_EXTENSION_ID, legacySettingKey, migrateLegacyValue, shouldMigrate } from '../src/legacy.ts';
 import {
 	buildReviewPrompt,
@@ -147,7 +147,28 @@ function testProfileParsing() {
 	assert.equal((full.invocationTemplate as Record<string, unknown>).tone, 'magic');
 
 	assert.throws(() => parsePastedProfile('not a token'));
-	console.log('  ✓ profile parsing (bare JWT, full JSON, rejects garbage)');
+
+	// Copiado a mano de DevTools: `Bearer …`, o la URL del WebSocket del chat,
+	// que es donde viaja de verdad el token de Copilot.
+	assert.equal(parsePastedProfile(`Bearer ${fakeJwt()}`).claims?.oid, 'user-oid');
+	const fromUrl = parsePastedProfile(
+		`wss://substrate.office.com/m365Copilot/Chathub/user-oid@tenant-tid?clientrequestid=c1&X-SessionId=s1` +
+			`&access_token=${fakeJwt()}&variants=feature.a,feature.b&source=officeweb`,
+	);
+	assert.equal(fromUrl.claims?.upn, 'someone@contoso.com');
+	assert.doesNotMatch(fromUrl.endpoint ?? '', /access_token|clientrequestid|X-SessionId/, 'el endpoint guardado no lleva el token');
+	assert.match(fromUrl.endpoint ?? '', /variants=feature\.a/);
+	assert.throws(
+		() => parsePastedProfile('wss://substrate.office.com/m365Copilot/Chathub/o@t?source=officeweb'),
+		/access_token/,
+	);
+
+	// Un token de otro servicio se decodifica y no ha caducado (todo parece
+	// conectado), pero el chat lo rechaza con 401: hay que reconocerlo.
+	assert.equal(foreignAudience(fakeJwt()), null);
+	assert.equal(foreignAudience(fakeJwt({ aud: 'https://graph.microsoft.com' })), 'https://graph.microsoft.com');
+	assert.equal(foreignAudience(fakeJwt({ aud: undefined })), '?');
+	console.log('  ✓ profile parsing (bare JWT, Bearer, Chathub URL, full JSON, rejects garbage, foreign audience)');
 }
 
 // ---- markdown.ts ----------------------------------------------------------
@@ -1104,6 +1125,28 @@ async function test401FastFail() {
 	);
 	const elapsed = Date.now() - startedAt;
 	assert.ok(elapsed < 5000, `expected a fast fail, took ${elapsed}ms`);
+
+	// Con un token de otro servicio (pegado a mano) el error dice cuál es, en
+	// vez de «ha caducado»: recapturar no lo arreglaría.
+	const graph = makeProfile(server.port);
+	graph.accessToken = fakeJwt({ aud: 'https://graph.microsoft.com' });
+	await assert.rejects(
+		streamCopilotTurn({
+			profile: graph,
+			endpointBase: mockBase(server.port),
+			prompt: 'PROMPT',
+			tone: null,
+			signal: new AbortController().signal,
+			callbacks: { onText: () => {} },
+		}),
+		(err: unknown) => {
+			assert.ok(err instanceof CopilotAuthError, 'expected CopilotAuthError');
+			assert.equal(err.statusCode, 401);
+			assert.match(err.message, /graph\.microsoft\.com/);
+			assert.match(err.message, /chathub/i);
+			return true;
+		},
+	);
 	server.close();
 	console.log(`  ✓ streamCopilotTurn falla rápido con 401 (${elapsed}ms, sin esperar al timeout)`);
 }
@@ -1906,6 +1949,9 @@ function testClipboardDetection() {
 	assert.equal(looksLikeProfile(fakeJwt()), true);
 	assert.equal(looksLikeProfile(`  ${fakeJwt()}\n`), true);
 	assert.equal(looksLikeProfile(JSON.stringify({ accessToken: fakeJwt(), endpoint: 'wss://x' }, null, 2)), true);
+	assert.equal(looksLikeProfile(`Bearer ${fakeJwt()}`), true);
+	assert.equal(looksLikeProfile(`wss://substrate.office.com/m365Copilot/Chathub/o@t?access_token=${fakeJwt()}`), true);
+	assert.equal(looksLikeProfile('https://m365.cloud.microsoft/chat/?auth=2'), false);
 	assert.equal(looksLikeProfile('just some copied text'), false);
 	assert.equal(looksLikeProfile('{"accessToken": 42}'), false);
 	assert.equal(looksLikeProfile(''), false);

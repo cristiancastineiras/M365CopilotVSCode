@@ -20,9 +20,11 @@ Hay dos formas de llevar el token de Microsoft 365 Copilot a VS Code:
 
 1. Descarga la extensión para tu navegador desde las
    [releases del repositorio](https://github.com/cristiancastineiras/M365CopilotVSCode/releases)
-   (Chrome/Edge o Firefox), descomprímela y cárgala (en Chrome/Edge:
+   (Chrome/Edge o Firefox) y cárgala (en Chrome/Edge: descomprímela y
    `chrome://extensions` → *Modo de desarrollador* → *Cargar descomprimida*; en
-   Firefox: `about:debugging` → *Este Firefox* → *Cargar complemento temporal*).
+   Firefox: abre el `.xpi` firmado o, si no lo hay, `about:debugging` → *Este
+   Firefox* → *Cargar complemento temporal* con el `.zip` — más detalle en el
+   [README de la extensión de navegador](https://github.com/cristiancastineiras/M365CopilotVSCode/blob/main/extensiones/browser/README.es.md#instalación)).
 2. Entra en [Microsoft 365 Copilot](https://m365.cloud.microsoft/chat/) y envía
    cualquier mensaje.
 3. Abre el popup de la extensión: cuando todo está en verde, el token ya está en

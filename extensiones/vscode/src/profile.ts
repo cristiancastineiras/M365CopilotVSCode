@@ -10,7 +10,17 @@
  * viven en `@m365copilot/core`; aquí sólo queda el parseo de lo pegado, que
  * es específico de VS Code.
  */
-import { extractClaims, isTokenUsable, TONE_PATTERN, type CopilotProfile, type TokenClaims } from '@m365copilot/core';
+import {
+	decodeJwtPayload,
+	extractClaims,
+	isSydneyToken,
+	isTokenUsable,
+	normalizeEndpoint,
+	tokenInSocketUrl,
+	TONE_PATTERN,
+	type CopilotProfile,
+	type TokenClaims,
+} from '@m365copilot/core';
 import { t } from './i18n';
 
 export type { CopilotProfile, TokenClaims } from '@m365copilot/core';
@@ -22,24 +32,49 @@ const DEFAULT_UA =
 
 export class ProfileParseError extends Error {}
 
-/** A bare JWT or a JSON profile with an access token — what the browser side copies. */
+const BARE_JWT = /^ey[\w-]+\.[\w-]+\.[\w-]+$/;
+/** `Bearer eyJ…`, as copied from an `Authorization` header. */
+const BEARER_JWT = /^bearer\s+(ey[\w-]+\.[\w-]+\.[\w-]+)$/i;
+/** The chat WebSocket URL copied from DevTools (`wss://…/Chathub/…?access_token=…`). */
+const SOCKET_URL = /^(wss?|https?):\/\//i;
+
+/**
+ * Something the paste command can use: a bare JWT, `Bearer <JWT>`, the chat
+ * WebSocket URL with its `access_token`, or a JSON profile with an access
+ * token — what the browser side copies or what DevTools shows.
+ */
 export function looksLikeProfile(text: string): boolean {
 	const value = text.trim();
-	if (/^ey[\w-]+\.[\w-]+\.[\w-]+$/.test(value)) return true;
+	if (BARE_JWT.test(value) || BEARER_JWT.test(value)) return true;
+	if (SOCKET_URL.test(value)) return /[?&]access_token=ey/.test(value);
 	return value.startsWith('{') && /"(accessToken|access_token|token)"\s*:\s*"ey/.test(value);
 }
 
 /**
  * Parsea lo que el usuario pegó en un {@link CopilotProfile} normalizado.
- * Acepta un perfil JSON completo o un JWT pelado.
+ * Acepta un perfil JSON completo, un JWT pelado (con o sin `Bearer `) o la
+ * URL del WebSocket del chat: el token de Copilot no viaja en ninguna
+ * cabecera `Authorization`, sino en el `access_token` de esa URL, así que
+ * para capturarlo a mano lo más fácil es DevTools → Red, filtro `chathub` →
+ * Copiar URL.
  */
 export function parsePastedProfile(input: string): CopilotProfile {
 	const text = input.trim();
 	if (!text) throw new ProfileParseError(t('profile.error.empty'));
 
 	// ¿JWT pelado?
-	if (/^ey[\w-]+\.[\w-]+\.[\w-]+$/.test(text)) {
+	if (BARE_JWT.test(text)) {
 		return normalize({ accessToken: text });
+	}
+	const bearer = BEARER_JWT.exec(text);
+	if (bearer) {
+		return normalize({ accessToken: bearer[1] });
+	}
+	if (SOCKET_URL.test(text)) {
+		const token = tokenInSocketUrl(text);
+		if (!token) throw new ProfileParseError(t('profile.error.urlWithoutToken'));
+		// Sin el token ni los ids de esa sesión; conserva las `variants`.
+		return normalize({ accessToken: token, endpoint: normalizeEndpoint(text) || undefined });
 	}
 
 	let obj: unknown;
@@ -91,6 +126,20 @@ function normalize(record: Record<string, unknown>, token?: string): CopilotProf
 			typeof record.capturedAt === 'string' ? record.capturedAt : new Date().toISOString(),
 		...observedTonesOf(record),
 	};
+}
+
+/**
+ * The audience of a token that is NOT the M365 Copilot (Substrate/Sydney) one,
+ * or null when it is. The browser extension and the userscript only ever
+ * capture Copilot's token, but a token copied by hand from DevTools is often
+ * the `Authorization: Bearer` of another request on the page (Graph, search…):
+ * it decodes fine and has not expired — so everything looks connected — yet
+ * the chat rejects it with 401. `?` when the token has no readable audience.
+ */
+export function foreignAudience(token: string): string | null {
+	if (isSydneyToken(token)) return null;
+	const aud = decodeJwtPayload(token)?.aud;
+	return typeof aud === 'string' && aud ? aud : '?';
 }
 
 /** The models the web app used (sent by the browser side), kept only if they look like tones. */

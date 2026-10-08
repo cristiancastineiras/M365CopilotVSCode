@@ -3,6 +3,7 @@
  * Evita strings mágicos y respuestas sin validar.
  */
 
+import { ext } from './api';
 import type { RefreshState, SyncState } from './storage';
 
 /** Lo que el popup necesita para explicar en una pantalla qué está pasando. */
@@ -67,8 +68,8 @@ export async function sendMessage<T extends MessageType>(
   try {
     response =
       tabId !== undefined
-        ? await chrome.tabs.sendMessage(tabId, envelope)
-        : await chrome.runtime.sendMessage(envelope);
+        ? await ext().tabs.sendMessage(tabId, envelope)
+        : await ext().runtime.sendMessage(envelope);
   } catch (error) {
     throw new Error(
       `[messaging] Failed to send "${type}": ${error instanceof Error ? error.message : String(error)}`,
@@ -102,7 +103,7 @@ type Handler<T extends MessageType> = (
 export function registerHandlers(handlers: {
   [K in MessageType]?: Handler<K>;
 }): void {
-  chrome.runtime.onMessage.addListener((rawMessage, sender, sendResponse) => {
+  ext().runtime.onMessage.addListener((rawMessage, sender, sendResponse) => {
     if (!isEnvelope(rawMessage)) return false;
 
     const handler = handlers[rawMessage.type];

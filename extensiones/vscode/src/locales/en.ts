@@ -23,13 +23,19 @@ export const en = {
 	// ------------------------------------------------------------ profile / token
 	'paste.title': 'M365 Copilot — paste profile or token',
 	'paste.prompt':
-		'Paste the token captured by the browser extension or the userscript (the full JSON profile also works: only its accessToken is used).',
-	'paste.placeholder': 'eyJ…  or  { "accessToken": "eyJ…" }',
+		'Paste the token captured by the browser extension or the userscript, or the URL of the “Chathub” WebSocket copied from DevTools (the full JSON profile also works: only its accessToken is used).',
+	'paste.placeholder': 'eyJ…  or  wss://…/Chathub/…?access_token=eyJ…',
 	'paste.validFor': ', valid for ~{0} min',
 	'paste.fromClipboard': 'A token was found in the clipboard — press Enter to use it, or paste a different one.',
 	'paste.ready': 'M365 Copilot is ready{0}{1}. Pick an “M365 Copilot” model in the chat, or type @m365.',
 	'paste.openChat': 'Open chat',
 	'paste.failed': 'Could not save the profile: {0}',
+	'paste.foreignAudience': 'This is not the M365 Copilot token: it is for {0}. With it every message fails with 401.',
+	'paste.foreignAudience.detail':
+		'The Copilot token does not travel in an “Authorization: Bearer” header but in the URL of the chat WebSocket. ' +
+		'At m365.cloud.microsoft/chat open DevTools (F12) → Network, type chathub in the filter, send a message, right-click ' +
+		'the request that appears → Copy → Copy URL, and paste that URL here.',
+	'paste.foreignAudience.useAnyway': 'Use it anyway',
 	'clear.confirm': 'Delete the saved M365 Copilot token?',
 	'clear.confirmButton': 'Delete',
 	'clear.done': 'M365 Copilot token deleted.',
@@ -49,6 +55,8 @@ export const en = {
 	'profile.error.notObject': 'The pasted JSON is not a profile object.',
 	'profile.error.noToken': 'The profile does not contain any accessToken.',
 	'profile.error.invalidJwt': 'The accessToken does not look like a valid JWT.',
+	'profile.error.urlWithoutToken':
+		'That URL has no access_token. Copy the URL of the chat WebSocket (DevTools → Network, filter: chathub), which carries the token.',
 
 	// ------------------------------------------------------------ status bar
 	'statusbar.tooltip.title': 'M365 Copilot',
@@ -149,6 +157,9 @@ export const en = {
 	'client.error.403':
 		'M365 Copilot denied access (403 Forbidden). Your account may not have a Copilot license, or the captured token is ' +
 		'not allowed on this endpoint. Capture the profile again and retry.',
+	'client.error.foreignAudience':
+		'M365 Copilot rejected the token ({0}): the saved token is for {1}, not for Copilot. Copy the URL of the chat ' +
+		'WebSocket (DevTools → Network, filter: chathub, at m365.cloud.microsoft/chat) and paste it with “M365 Copilot: Paste profile or token”.',
 	'client.error.429': 'M365 Copilot is rate limiting requests (429 Too Many Requests). Wait a few seconds and retry.',
 	'client.error.upgrade': 'M365 Copilot rejected the WebSocket connection (HTTP {0}).',
 	'client.error.turnTimeout':

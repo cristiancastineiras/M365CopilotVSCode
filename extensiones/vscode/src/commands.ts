@@ -5,7 +5,15 @@
  */
 import * as vscode from 'vscode';
 import { M365_CHAT_URL } from '@m365copilot/core';
-import { isTokenUsable, looksLikeProfile, minutesUntilExpiry, ProfileParseError, type CopilotProfile } from './profile';
+import {
+	foreignAudience,
+	isTokenUsable,
+	looksLikeProfile,
+	minutesUntilExpiry,
+	parsePastedProfile,
+	ProfileParseError,
+	type CopilotProfile,
+} from './profile';
 import type { ProfileStore } from './secrets';
 import type { WorkspaceEditManager } from '../tools/writeFile';
 import type { ModelRegistry } from './models';
@@ -138,7 +146,20 @@ export async function promptForProfile(store: ProfileStore): Promise<CopilotProf
 	if (pasted === undefined) return undefined;
 
 	try {
-		return await store.setFromPaste(pasted);
+		const profile = parsePastedProfile(pasted);
+		// A token for another service would show as connected and then fail
+		// every message with 401: say so now, while the user is still in DevTools.
+		const audience = foreignAudience(profile.accessToken);
+		if (audience) {
+			const useAnyway = t('paste.foreignAudience.useAnyway');
+			const picked = await vscode.window.showWarningMessage(
+				t('paste.foreignAudience', audience),
+				{ modal: true, detail: t('paste.foreignAudience.detail') },
+				useAnyway,
+			);
+			if (picked !== useAnyway) return undefined;
+		}
+		return await store.set(profile);
 	} catch (error) {
 		const msg = error instanceof ProfileParseError ? error.message : String(error);
 		void vscode.window.showErrorMessage(t('paste.failed', msg));

@@ -20,6 +20,7 @@
  *    sola) → recargar la pestaña → abrir una en segundo plano.
  */
 import { M365_CHAT_URL } from '@m365copilot/core';
+import { ext } from './api';
 import { logger } from './logger';
 import {
   getStorage,
@@ -62,7 +63,7 @@ export function setSyncHandler(sync: SyncToVSCode): void {
 
 async function findM365Tabs(): Promise<chrome.tabs.Tab[]> {
   try {
-    return await chrome.tabs.query({ url: M365_TAB_PATTERNS });
+    return await ext().tabs.query({ url: M365_TAB_PATTERNS });
   } catch (error) {
     logger.warn('No se pudieron listar las pestañas de M365:', error);
     return [];
@@ -89,8 +90,10 @@ export function describeMinutesLeft(profile: any, now = Date.now()): number | nu
  */
 async function setBadge(text: string, color: string): Promise<void> {
   try {
-    await chrome.action.setBadgeText({ text });
-    await chrome.action.setBadgeBackgroundColor({ color });
+    // Firefox MV2 no tiene `action`: el mismo badge vive en `browserAction`.
+    const action = ext().action ?? ext().browserAction;
+    await action.setBadgeText({ text });
+    await action.setBadgeBackgroundColor({ color });
   } catch {
     /* el badge es cosmético: nunca debe tumbar el ciclo */
   }
@@ -111,7 +114,7 @@ async function requestRescan(tabs: readonly chrome.tabs.Tab[]): Promise<void> {
   for (const tab of tabs) {
     if (!tab.id) continue;
     try {
-      await chrome.tabs.sendMessage(tab.id, { type: 'RESCAN_TOKEN', payload: undefined });
+      await ext().tabs.sendMessage(tab.id, { type: 'RESCAN_TOKEN', payload: undefined });
     } catch {
       // La pestaña puede estar cargando todavía o sin content script; el
       // siguiente latido volverá a intentarlo (o subirá a recargar).
@@ -124,14 +127,14 @@ async function reloadTab(tabs: readonly chrome.tabs.Tab[]): Promise<void> {
   const tab = tabs.find((candidate) => Boolean(candidate.id));
   if (!tab?.id) return;
   logger.info(`Recargando la pestaña ${tab.id} para renovar el token`);
-  await chrome.tabs.reload(tab.id);
+  await ext().tabs.reload(tab.id);
   await setStorage('lastRefreshedAt', new Date().toISOString());
 }
 
 /** Abre M365 en segundo plano. Se cierra sola en cuanto el token entra. */
 async function openBackgroundTab(): Promise<number | null> {
   try {
-    const tab = await chrome.tabs.create({ url: M365_CHAT_URL, active: false });
+    const tab = await ext().tabs.create({ url: M365_CHAT_URL, active: false });
     logger.info(`Pestaña de M365 abierta en segundo plano (${tab.id}) para renovar el token`);
     return tab.id ?? null;
   } catch (error) {
@@ -142,7 +145,7 @@ async function openBackgroundTab(): Promise<number | null> {
 
 async function closeTab(tabId: number): Promise<void> {
   try {
-    await chrome.tabs.remove(tabId);
+    await ext().tabs.remove(tabId);
   } catch {
     /* ya la cerró el usuario */
   }
@@ -314,7 +317,8 @@ export async function forceRefreshNow(): Promise<RefreshDecision> {
 export function setupTokenRefresher(sync: SyncToVSCode): void {
   setSyncHandler(sync);
 
-  if (!chrome.alarms) {
+  const alarms = ext().alarms;
+  if (!alarms) {
     logger.error(
       'chrome.alarms no está disponible: falta el permiso "alarms" en el manifest. ' +
         'El token NO se renovará solo.',
@@ -322,9 +326,9 @@ export function setupTokenRefresher(sync: SyncToVSCode): void {
     return;
   }
 
-  chrome.alarms.create(ALARM_NAME, { periodInMinutes: ALARM_PERIOD_MINUTES });
+  alarms.create(ALARM_NAME, { periodInMinutes: ALARM_PERIOD_MINUTES });
 
-  chrome.alarms.onAlarm.addListener((alarm) => {
+  alarms.onAlarm.addListener((alarm) => {
     if (alarm.name !== ALARM_NAME) return;
     void runRefreshCycle().catch((error) => logger.error('Ciclo de renovación fallido:', error));
   });
@@ -338,6 +342,6 @@ export function setupTokenRefresher(sync: SyncToVSCode): void {
 
 /** Detiene el auto-renovador (debug). */
 export async function stopTokenRefresher(): Promise<void> {
-  await chrome.alarms?.clear(ALARM_NAME);
+  await ext().alarms?.clear(ALARM_NAME);
   logger.info('Auto-renovación detenida');
 }

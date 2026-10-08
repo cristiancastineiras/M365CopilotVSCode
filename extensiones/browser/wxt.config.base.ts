@@ -1,4 +1,4 @@
-import type { UserManifest } from 'wxt';
+import type { ConfigEnv, UserManifest } from 'wxt';
 
 /**
  * Piezas compartidas por wxt.config.ts (Chrome) y wxt.config.firefox.ts:
@@ -42,6 +42,44 @@ export const sharedManifest: UserManifest = {
     },
   },
 };
+
+/**
+ * ID permanente del complemento en Firefox. Sin él, «Instalar complemento
+ * desde archivo» rechaza el .zip/.xpi con «parece estar dañado»
+ * (ERROR_CORRUPT_FILE): Firefox sólo deja instalar sin ID las cargas
+ * temporales de about:debugging. Una vez firmado en AMO no se puede cambiar
+ * — si cambia, Firefox lo trata como otro complemento distinto.
+ */
+export const FIREFOX_ADDON_ID = 'm365-copilot-vscode@cristiancastineiras.github.io';
+
+/**
+ * Manifest por navegador. Chrome no conoce `browser_specific_settings` (lo
+ * ignora con un aviso en chrome://extensions), así que sólo va en Firefox.
+ */
+export function manifestFor({ browser }: ConfigEnv): UserManifest {
+  if (browser !== 'firefox') return sharedManifest;
+  return {
+    ...sharedManifest,
+    browser_specific_settings: {
+      gecko: {
+        id: FIREFOX_ADDON_ID,
+        // 128 es la primera versión con `world: 'MAIN'` en los content
+        // scripts del manifest (también en MV2): sin eso el interceptor corre
+        // aislado y no ve el WebSocket del chat, así que no captura nada.
+        strict_min_version: '128.0',
+        // Consentimiento de datos nativo de Firefox (140+; las anteriores lo
+        // ignoran con un aviso). AMO lo exige para firmar extensiones nuevas.
+        // Para Mozilla «transmitir» es sacar datos del navegador, y mandar el
+        // perfil al servidor local de VS Code lo es: el token
+        // (authenticationInfo) y la plantilla de la invocación `chat`, que
+        // incluye el último mensaje escrito en Copilot (personalCommunications).
+        data_collection_permissions: {
+          required: ['authenticationInfo', 'personalCommunications'],
+        },
+      },
+    },
+  } as UserManifest;
+}
 
 /**
  * Este `vite` (via wxt → vite@8) ya bundlea con Rolldown y transforma cada

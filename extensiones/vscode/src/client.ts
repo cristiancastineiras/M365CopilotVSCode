@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
-import type { CopilotProfile } from './profile';
+import { foreignAudience, type CopilotProfile } from './profile';
 import { RunawayRepetitionGuard } from './repetitionGuard';
 import { bizChatLocale, t } from './i18n';
 
@@ -79,7 +79,11 @@ export class CopilotAuthError extends CopilotClientError {
 }
 
 /** Map a rejected WS upgrade status to an accurate, actionable client error. */
-function describeUpgradeFailure(status: number, statusMessage: string): CopilotClientError {
+function describeUpgradeFailure(status: number, statusMessage: string, token: string): CopilotClientError {
+	// A token for another service (pasted by hand) explains the rejection better
+	// than "expired": the fix is copying the right one, not re-capturing.
+	const audience = status === 401 || status === 403 ? foreignAudience(token) : null;
+	if (audience) return new CopilotAuthError(t('client.error.foreignAudience', status, audience), status);
 	if (status === 401) return new CopilotAuthError(t('client.error.401'), status);
 	if (status === 403) return new CopilotAuthError(t('client.error.403'), status);
 	if (status === 429) return new CopilotClientError(t('client.error.429'));
@@ -268,7 +272,7 @@ export async function streamCopilotTurn(options: {
 				// now with an accurate message instead of waiting out the generic
 				// handshake timeout — that 15 s stall misled users into thinking the
 				// connection stalled when the token was actually rejected outright.
-				fail(describeUpgradeFailure(status, statusMessage));
+				fail(describeUpgradeFailure(status, statusMessage, profile.accessToken));
 			});
 		});
 
