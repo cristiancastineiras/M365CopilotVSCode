@@ -2,7 +2,7 @@
   "name": "m365-copilot-vscode",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "publisher": "m365-copilot-vscode",
   "license": "MIT",
   "repository": {

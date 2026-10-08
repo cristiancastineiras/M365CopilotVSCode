@@ -2,7 +2,7 @@
 // @name           M365 Copilot — token → VS Code
 // @name:es        M365 Copilot — token → VS Code
 // @namespace      https://github.com/cristiancastineiras/M365CopilotVSCode
-// @version        3.0.0
+// @version        3.0.1
 // @description    Captures your Microsoft 365 Copilot session token and sends it to the M365 Copilot extension for VS Code automatically (or lets you copy it).
 // @description:es Captura el token de tu sesión de Microsoft 365 Copilot y lo envía a la extensión M365 Copilot de VS Code automáticamente (o te deja copiarlo).
 // @author         Cristian Castineiras

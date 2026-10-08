@@ -1,6 +1,6 @@
 {
   "name": "@m365copilot/core",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "private": true,
   "description": "Lógica y contratos compartidos por las extensiones de VS Code y de navegador: tipos del perfil, decodificación de JWT, clasificación de token y constantes del servidor local.",
   "type": "module",
