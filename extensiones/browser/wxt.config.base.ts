@@ -1,5 +1,13 @@
 import type { ConfigEnv, UserManifest } from 'wxt';
-import { MICROSOFT_HOST_PERMISSIONS } from '@m365copilot/core';
+// Ojo con este import: tiene que ser el FUENTE, no '@m365copilot/core'.
+// Este archivo de configuración lo carga `wxt prepare`, que corre como
+// postinstall de este paquete — o sea, durante `pnpm install` y antes de que
+// nadie haya compilado nada. Importando el paquete, en un clon limpio (CI)
+// `packages/core/dist/index.js` todavía no existe y el install entero falla
+// con «Cannot find module». El cargador de la config (jiti) sí sabe leer
+// TypeScript, así que el fuente funciona siempre y sigue habiendo una única
+// fuente de verdad para la lista de dominios.
+import { MICROSOFT_HOST_PERMISSIONS } from '../../packages/core/src/signOut';
 
 /**
  * Piezas compartidas por wxt.config.ts (Chrome) y wxt.config.firefox.ts:
