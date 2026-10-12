@@ -7,6 +7,7 @@ export default defineConfig({
   outDir: '../../releases/chrome',
   alias: {
     '@': fileURLToPath(new URL('.', import.meta.url)),
+    '@m365copilot/core': fileURLToPath(new URL('../../packages/core/src', import.meta.url)),
   },
   runner: {
     disabled: true,

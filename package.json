@@ -15,7 +15,7 @@
     "test": "turbo run test",
     "clean": "turbo run clean && rimraf node_modules releases",
     "package": "pnpm build && pnpm package:browser && pnpm package:vscode",
-    "package:browser": "pnpm --filter m365-copilot-vscode-extension zip && pnpm --filter m365-copilot-vscode-extension zip:firefox",
+    "package:browser": "pnpm --filter m365-copilot-vscode-extension zip && pnpm --filter m365-copilot-vscode-extension zip:edge && pnpm --filter m365-copilot-vscode-extension zip:firefox",
     "package:vscode": "pnpm --filter m365-copilot-vscode package",
     "changeset": "changeset",
     "version-packages": "changeset version",

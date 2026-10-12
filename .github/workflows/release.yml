@@ -64,6 +64,7 @@ jobs:
           files: |
             releases/m365-copilot-vscode-${{ env.VERSION }}.vsix
             releases/chrome/m365-copilot-vscode-extension-chrome.zip
+            releases/edge/m365-copilot-vscode-extension-edge.zip
             releases/firefox/m365-copilot-vscode-extension-firefox.zip
 
       # Firefox Release sólo instala de forma permanente complementos firmados

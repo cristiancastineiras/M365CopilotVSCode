@@ -1,0 +1,14 @@
+{
+  "extName": {
+    "message": "Extensión de VS Code para Microsoft 365 Copilot",
+    "description": "Nombre de la extensión en el navegador y en la tienda."
+  },
+  "extDescription": {
+    "message": "Extensión de navegador que captura el token de autenticación de M365 Copilot y lo sincroniza con VS Code",
+    "description": "Descripción de la extensión en el navegador y en la tienda."
+  },
+  "actionTitle": {
+    "message": "M365 Copilot — estado del token",
+    "description": "Tooltip del botón de la barra de herramientas."
+  }
+}
