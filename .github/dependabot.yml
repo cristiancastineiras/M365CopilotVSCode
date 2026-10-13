@@ -1,0 +1,79 @@
+# Dependabot abre solo las PRs de actualización de dependencias; sólo hay que
+# revisarlas y aceptarlas. Cada PR pasa antes por el workflow CI (tipos, lint,
+# pruebas y build), así que un cambio que rompe algo se ve en rojo y no se
+# acepta por error.
+#
+# Qué llega y cuándo:
+#   - Cada lunes (06:00, Madrid), como mucho 5 PRs abiertas por ecosistema.
+#   - Las subidas «minor» y «patch» llegan agrupadas: una PR con las
+#     dependencias de producción (lo que va dentro del .vsix, p. ej. `ws`) y
+#     otra con las de desarrollo (tsdown, oxlint, turbo, typescript…).
+#   - Las subidas «major» llegan sueltas, una PR por dependencia, porque son
+#     las que pueden romper cosas y conviene leer sus notas una a una.
+#   - Una versión recién publicada espera unos días (`cooldown`) antes de
+#     proponerse: si la retiran o traía un error, ni llega a abrirse la PR.
+#   - Los avisos de seguridad saltan aparte, al momento y sin esperar al lunes
+#     (se activan en Settings → Code security → Dependabot security updates).
+version: 2
+
+updates:
+  # Monorepo pnpm: la raíz y los tres paquetes (extensiones/vscode,
+  # extensiones/browser, packages/core). El pnpm-lock.yaml es uno solo, en la
+  # raíz, y Dependabot lo actualiza junto con el package.json que toque.
+  - package-ecosystem: npm
+    directories:
+      - "/"
+      - "/extensiones/*"
+      - "/packages/*"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Madrid
+    open-pull-requests-limit: 5
+    assignees:
+      - cristiancastineiras
+    # Etiquetas: se quedan las de Dependabot (`dependencies` + `javascript` /
+    # `github_actions`), que crea él mismo; una etiqueta propia tendría que
+    # existir ya en el repo o la PR se abriría sin ella.
+    # Conventional Commits, como el resto del repositorio.
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    groups:
+      production-dependencies:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      development-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  # Las actions de .github/workflows (checkout, setup-node, gh-release…).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Madrid
+    open-pull-requests-limit: 3
+    assignees:
+      - cristiancastineiras
+    commit-message:
+      prefix: "chore(ci)"
+    cooldown:
+      default-days: 3
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

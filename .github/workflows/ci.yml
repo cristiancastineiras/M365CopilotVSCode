@@ -1,0 +1,90 @@
+name: CI
+
+# Valida cada PR y cada push a main: comprobación de tipos, lint, pruebas y
+# compilación de los tres paquetes, y — sólo en PRs — que los cambios en las
+# dependencias no traigan vulnerabilidades conocidas.
+#
+# Es lo que decide si una PR de Dependabot (ver .github/dependabot.yml) se puede
+# aceptar sin miedo: si está en verde, el repositorio sigue pasando todo con la
+# dependencia nueva.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Una ejecución por rama o PR: si llega un commit nuevo mientras corre otra,
+# la anterior se cancela (no tiene sentido terminar de validar algo ya viejo).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Sólo lectura: ni siquiera las PRs de Dependabot (cuyo token ya es de sólo
+# lectura) necesitan más para validar.
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Tipos, lint, pruebas y build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Antes de setup-node: su caché de pnpm necesita que pnpm ya exista, y la
+      # versión exacta sale del campo `packageManager` del package.json raíz.
+      - name: Habilitar Corepack (pnpm)
+        run: corepack enable
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Comprobar tipos
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      # Algunas pruebas crean repositorios git temporales y commitean en ellos
+      # (autocommit, botón de Source Control): un runner limpio no trae
+      # identidad de git configurada, así que se la damos aquí.
+      - name: Pruebas
+        env:
+          GIT_AUTHOR_NAME: CI
+          GIT_AUTHOR_EMAIL: ci@users.noreply.github.com
+          GIT_COMMITTER_NAME: CI
+          GIT_COMMITTER_EMAIL: ci@users.noreply.github.com
+        run: pnpm test
+
+      - name: Compilar
+        run: pnpm build
+
+  # Sólo en PRs: compara las dependencias antes y después del cambio y falla si
+  # la PR mete una con una vulnerabilidad de gravedad alta o crítica en lo que
+  # se publica (las de desarrollo no cuentan: no viajan en el .vsix). Usa el
+  # grafo de dependencias de GitHub, activo por defecto en repos públicos.
+  dependency-review:
+    name: Revisión de dependencias
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Sin comentario en la PR: el token de las PRs de Dependabot es de sólo
+      # lectura y no podría escribirlo. El resultado queda en el resumen del job.
+      - name: Revisar dependencias
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: never
