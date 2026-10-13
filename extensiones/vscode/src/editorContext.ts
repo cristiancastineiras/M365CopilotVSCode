@@ -1,7 +1,20 @@
 import * as vscode from 'vscode';
 import { relativePathForUri } from '../tools/common';
 import { severityLabel } from '../tools/diagnosticsFormat';
+import { localDate, renderEnvironment } from './environment';
 import type { PromptCodeContext } from './participantPrompts';
+
+/** System, shell, absolute workspace root(s) and date, for the prompt (see environment.ts). */
+export function currentEnvironment(): string {
+	return renderEnvironment({
+		platform: process.platform,
+		shell: vscode.env.shell || undefined,
+		folders: (vscode.workspace.workspaceFolders ?? [])
+			.filter((folder) => folder.uri.scheme === 'file')
+			.map((folder) => ({ name: folder.name, path: folder.uri.fsPath })),
+		date: localDate(),
+	});
+}
 
 /** Enough code to answer about a function or a class; more than this is truncated. */
 const MAX_CONTEXT_CHARS = 16_000;

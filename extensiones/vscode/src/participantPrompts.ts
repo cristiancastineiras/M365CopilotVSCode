@@ -58,6 +58,8 @@ export interface ParticipantPromptInput {
 	readonly attachedPaths?: readonly string[];
 	/** Project context retrieved from the local index (projectIndex.ts), if any. */
 	readonly projectContext?: string;
+	/** System, shell, workspace root and date (environment.ts). */
+	readonly environment?: string;
 }
 
 const TASK_KEYS: Readonly<Record<ParticipantCommand | 'ask', MessageKey>> = {
@@ -110,6 +112,7 @@ export function buildParticipantFraming(input: ParticipantPromptInput): string {
 		t(TASK_KEYS[input.command ?? 'ask']),
 	];
 
+	if (input.environment) sections.push(input.environment);
 	const history = renderHistory(input.history ?? []);
 	if (history) sections.push(`${t('participant.prompt.history')}\n${history}`);
 

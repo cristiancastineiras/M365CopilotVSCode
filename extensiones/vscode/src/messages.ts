@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { buildToolProtocolInstructions, buildToolProtocolReminder, type ToolCatalog } from './toolProtocol';
+import { renderTranscript, type TranscriptMessage, type TranscriptPart } from './transcript';
 import { t } from './i18n';
 
 /*
@@ -13,27 +14,25 @@ import { t } from './i18n';
  * instrucciones en el idioma del usuario.
  */
 
-const MAX_CONTEXT_CHARS = 48_000;
-const MAX_MESSAGE_CHARS = 12_000;
-const MAX_LATEST_MESSAGE_CHARS = 24_000;
-const MAX_TOOL_RESULT_CHARS = 12_000;
-const MAX_TOOL_CALL_INPUT_CHARS = 4_000;
-
 export interface FlattenOptions {
 	/** Herramientas del turno (nuestras + nativas de VS Code + MCP). */
 	readonly catalog?: ToolCatalog;
 	/** `LanguageModelChatToolMode.Required`: hay que llamar a una herramienta sí o sí. */
 	readonly toolsRequired?: boolean;
+	/** Sistema, shell, raíz del workspace y fecha (environment.ts). */
+	readonly environment?: string;
 	/** Contexto del proyecto recuperado del índice local (projectIndex.ts), si lo hay. */
 	readonly projectContext?: string;
 }
 
 /**
- * El texto del último mensaje del usuario (no los resultados de
- * herramientas): lo que se busca en el índice del proyecto.
+ * Los textos de los últimos mensajes del usuario (no los resultados de
+ * herramientas), del más nuevo al más viejo: lo que se busca en el índice
+ * del proyecto (ver `retrievalText` en transcript.ts).
  */
-export function latestUserText(messages: readonly vscode.LanguageModelChatRequestMessage[]): string {
-	for (let index = messages.length - 1; index >= 0; index -= 1) {
+export function recentUserTexts(messages: readonly vscode.LanguageModelChatRequestMessage[], count = 2): string[] {
+	const texts: string[] = [];
+	for (let index = messages.length - 1; index >= 0 && texts.length < count; index -= 1) {
 		const message = messages[index];
 		if (message.role !== vscode.LanguageModelChatMessageRole.User) continue;
 		const text = message.content
@@ -41,9 +40,9 @@ export function latestUserText(messages: readonly vscode.LanguageModelChatReques
 			.map((part) => part.value)
 			.join('\n')
 			.trim();
-		if (text) return text;
+		if (text) texts.push(text);
 	}
-	return '';
+	return texts;
 }
 
 /**
@@ -52,33 +51,16 @@ export function latestUserText(messages: readonly vscode.LanguageModelChatReques
  * re-sends the entire transcript on every turn. The simplest robust bridge is
  * to open a fresh conversation each turn and flatten the whole transcript into
  * one prompt with role labels — the model then has full context without us
- * having to reconcile the two state models.
+ * having to reconcile the two state models. How the transcript is squeezed
+ * into the budget (the request pinned, older tool results shortened) lives
+ * in transcript.ts.
  */
 export function flattenMessages(
 	messages: readonly vscode.LanguageModelChatRequestMessage[],
 	options: FlattenOptions = {},
 ): string {
-	const blocks: string[] = [];
-	// El id de llamada es un UUID: sin el nombre delante, un transcript con
-	// varias herramientas (las nativas del modo agente entran aquí igual que las
-	// nuestras) deja al modelo adivinando de cuál viene cada resultado.
-	const callNames = collectToolCallNames(messages);
-
-	for (const [index, message] of messages.entries()) {
-		const role = message.role === vscode.LanguageModelChatMessageRole.Assistant ? 'Assistant' : 'User';
-		const text = partsToText(message.content, callNames).trim();
-		if (!text) continue;
-		const maxChars = index === messages.length - 1 ? MAX_LATEST_MESSAGE_CHARS : MAX_MESSAGE_CHARS;
-		blocks.push(`${role}:\n${trimForContext(text, maxChars)}`);
-	}
-	if (blocks.length === 0) return '';
-
-	// The final User turn is what we want answered; the earlier blocks are
-	// context. A trailing marker nudges plain single-turn rings to answer.
-	const transcript =
-		messages.length > 1
-			? `${t('prompt.continue')}\n\n${compactContext(blocks)}\n\nAssistant:`
-			: blocks[0];
+	const transcript = renderTranscript(toTranscript(messages));
+	if (!transcript) return '';
 
 	// A short reminder placed AFTER the transcript — the last thing the model
 	// reads before it answers. Instruction-following fidelity is not uniform
@@ -98,6 +80,7 @@ export function flattenMessages(
 		t('prompt.tone'),
 		t('prompt.markdown'),
 		catalog ? buildToolProtocolInstructions(catalog) : '',
+		options.environment ?? '',
 		options.projectContext ?? '',
 		transcript,
 		reminder,
@@ -106,43 +89,32 @@ export function flattenMessages(
 		.join('\n\n');
 }
 
-/** callId → nombre de la herramienta, recorriendo todo el transcript. */
-function collectToolCallNames(
-	messages: readonly vscode.LanguageModelChatRequestMessage[],
-): Map<string, string> {
-	const names = new Map<string, string>();
+/**
+ * Los mensajes de VS Code en la forma neutra de transcript.ts. El id de
+ * llamada es un UUID: sin el nombre delante, un transcript con varias
+ * herramientas (las nativas del modo agente entran aquí igual que las
+ * nuestras) deja al modelo adivinando de cuál viene cada resultado.
+ */
+function toTranscript(messages: readonly vscode.LanguageModelChatRequestMessage[]): TranscriptMessage[] {
+	const callNames = new Map<string, string>();
 	for (const message of messages) {
 		for (const part of message.content) {
-			if (part instanceof vscode.LanguageModelToolCallPart) names.set(part.callId, part.name);
+			if (part instanceof vscode.LanguageModelToolCallPart) callNames.set(part.callId, part.name);
 		}
 	}
-	return names;
-}
-
-function partsToText(content: ReadonlyArray<unknown>, callNames: ReadonlyMap<string, string>): string {
-	const out: string[] = [];
-	for (const part of content) {
-		if (part instanceof vscode.LanguageModelTextPart) {
-			out.push(part.value);
-		} else if (part instanceof vscode.LanguageModelToolResultPart) {
-			const name = callNames.get(part.callId);
-			out.push(
-				`${t('prompt.toolResult', name ?? part.callId)}\n${trimForContext(
-					toolResultToText(part.content),
-					MAX_TOOL_RESULT_CHARS,
-				)}`,
-			);
-		} else if (part instanceof vscode.LanguageModelToolCallPart) {
-			out.push(
-				t('prompt.toolCall', part.name, trimForContext(safeJson(part.input), MAX_TOOL_CALL_INPUT_CHARS)),
-			);
-		} else if (typeof part === 'string') {
-			out.push(part);
-		} else {
-			out.push(unknownPartToText(part));
-		}
-	}
-	return out.join('\n');
+	return messages.map((message) => ({
+		role: message.role === vscode.LanguageModelChatMessageRole.Assistant ? 'assistant' : 'user',
+		parts: message.content.map((part): TranscriptPart => {
+			if (part instanceof vscode.LanguageModelTextPart) return { kind: 'text', text: part.value };
+			if (part instanceof vscode.LanguageModelToolResultPart) {
+				return { kind: 'toolResult', name: callNames.get(part.callId) ?? part.callId, text: toolResultToText(part.content) };
+			}
+			if (part instanceof vscode.LanguageModelToolCallPart) {
+				return { kind: 'toolCall', name: part.name, input: safeJson(part.input) };
+			}
+			return { kind: 'text', text: typeof part === 'string' ? part : unknownPartToText(part) };
+		}),
+	}));
 }
 
 /**
@@ -223,38 +195,3 @@ function safeJson(value: unknown): string {
 	}
 }
 
-function compactContext(blocks: readonly string[]): string {
-	const selected: string[] = [];
-	let remaining = MAX_CONTEXT_CHARS;
-	let omitted = false;
-
-	for (let index = blocks.length - 1; index >= 0; index -= 1) {
-		const block = blocks[index];
-		if (remaining <= 0) {
-			omitted = true;
-			break;
-		}
-		if (block.length <= remaining) {
-			selected.unshift(block);
-			remaining -= block.length;
-			continue;
-		}
-
-		selected.unshift(trimForContext(block, remaining));
-		omitted = true;
-		break;
-	}
-
-	if (omitted) selected.unshift(t('prompt.earlierOmitted'));
-	return selected.join('\n\n');
-}
-
-function trimForContext(value: string, maxChars: number): string {
-	if (value.length <= maxChars) return value;
-	if (maxChars < 200) return value.slice(-maxChars);
-
-	const headLength = Math.floor(maxChars * 0.65);
-	const tailLength = maxChars - headLength - 72;
-	const omitted = value.length - headLength - tailLength;
-	return `${value.slice(0, headLength)}\n\n${t('prompt.charsOmitted', omitted)}\n\n${value.slice(-tailLength)}`;
-}

@@ -15,7 +15,13 @@
  * and commands/commits their confirmation dialogs, inline in the chat.
  */
 import * as vscode from 'vscode';
-import { codeContextFromLocation, captureCodeContext, currentTextEditor, type CodeContext } from './editorContext';
+import {
+	codeContextFromLocation,
+	captureCodeContext,
+	currentEnvironment,
+	currentTextEditor,
+	type CodeContext,
+} from './editorContext';
 import type { EditorHandoff } from './editorActions';
 import { MarkdownStreamFormatter } from './markdown';
 import { findModel } from './models';
@@ -31,6 +37,7 @@ import {
 import { isTokenUsable } from './profile';
 import type { ProfileStore } from './secrets';
 import { MAX_TASK_WALL_CLOCK_MS, runToolLoop } from './subagentCore';
+import { retrievalText } from './transcript';
 import { toolResultToText } from './subagents';
 import type { WorkspaceEditManager } from '../tools/writeFile';
 import type { TerminalHistory } from './terminalHistory';
@@ -112,8 +119,11 @@ async function handleRequest(
 	// command output it is about — whose own lines are left out, since they are
 	// in the prompt already. What comes back is the code around it: callers,
 	// definitions it uses, related files.
+	// A short follow-up ("now the other one") brings the previous request along.
+	const history = historyOf(context);
+	const previousRequests = history.filter((turn) => turn.role === 'user').map((turn) => turn.text).reverse();
 	const lookup = [
-		request.prompt,
+		retrievalText([request.prompt, ...previousRequests]),
 		code ? code.text.slice(0, 1_500) : '',
 		terminal ? `${terminal.commandLine}\n${terminal.output.slice(-1_500)}` : '',
 	].join('\n');
@@ -132,9 +142,10 @@ async function handleRequest(
 		request: request.prompt,
 		code,
 		terminal,
-		history: historyOf(context),
+		history,
 		attachedPaths,
 		projectContext,
+		environment: currentEnvironment(),
 	});
 	const wanted = new Set(toolsForCommand(command));
 	const offeredTools = vscode.lm.tools.filter((tool) => wanted.has(tool.name));
@@ -157,6 +168,7 @@ async function handleRequest(
 			maxSteps: maxStepsForCommand(command),
 			signal: controller.signal,
 			offeredTools,
+			singleRoot: (vscode.workspace.workspaceFolders?.length ?? 0) <= 1,
 			log: deps.log,
 			onProse: (delta) => {
 				const formatted = markdown.push(delta);

@@ -84,9 +84,7 @@ export function buildToolProtocolInstructions(catalog: ToolCatalog): string {
 	if (catalog.entries.length === 0) return '';
 
 	const descriptions = catalog.entries.map(renderCatalogEntry).join('\n');
-	const hasM365Edits = catalog.entries.some(
-		(entry) => entry.name === M365_TOOL_NAMES.applyWorkspaceEdits,
-	);
+	const hasM365Edits = m365EditsPreferred(catalog);
 	const hasDiagnostics = catalog.entries.some((entry) => entry.capability === 'diagnostics');
 	const hasEditors = catalog.entries.filter((entry) => entry.capability === 'edit');
 	const hasEditorTools = catalog.entries.some((entry) => entry.origin === 'editor');
@@ -134,7 +132,7 @@ export function buildToolProtocolInstructions(catalog: ToolCatalog): string {
 	// la nuestra y las de edición nativas por igual. The example deliberately
 	// embeds a literal double-quote to make "no need to escape anything here"
 	// concrete instead of abstract.
-	const blockExample = renderBlockExample(catalog.entries);
+	const blockExample = renderBlockExample(catalog.entries, hasM365Edits);
 	const blocksSection = catalog.hasEditTools
 		? [
 				t('protocol.blocks.header'),
@@ -165,14 +163,24 @@ export function buildToolProtocolInstructions(catalog: ToolCatalog): string {
 }
 
 /**
+ * `m365_apply_edits` está en el catálogo y es LA herramienta de edición (no
+ * la duplicada de una nativa). Sólo entonces van sus reglas propias y su
+ * ejemplo: antes se explicaban aunque el catálogo dijera «usa
+ * replace_string_in_file», y el ejemplo de bloques enseñaba justo la que no
+ * había que usar.
+ */
+function m365EditsPreferred(catalog: ToolCatalog): boolean {
+	return catalog.entries.some((entry) => entry.name === M365_TOOL_NAMES.applyWorkspaceEdits && !entry.preferInstead);
+}
+
+/**
  * Ejemplo del formato de bloques con una herramienta que existe de verdad y con
  * SU forma de entrada. Un ejemplo con el nombre de una herramienta y los campos
  * de otra enseña una llamada que fallaría, así que cuando la de edición es
  * nativa el ejemplo se sintetiza a partir de sus propios parámetros.
  */
-function renderBlockExample(entries: readonly CatalogEntry[]): string | null {
-	const ours = entries.find((entry) => entry.name === M365_TOOL_NAMES.applyWorkspaceEdits);
-	if (ours) {
+function renderBlockExample(entries: readonly CatalogEntry[], m365Edits: boolean): string | null {
+	if (m365Edits) {
 		const input = {
 			edits: [
 				{ operation: 'replace', path: t('protocol.blockExample.path'), oldText: '@@block:1@@', newText: '@@block:2@@' },
@@ -186,8 +194,8 @@ function renderBlockExample(entries: readonly CatalogEntry[]): string | null {
 	}
 
 	const editor =
-		entries.find((entry) => entry.capability === 'edit') ??
-		entries.find((entry) => entry.capability === 'create');
+		entries.find((entry) => entry.capability === 'edit' && !entry.preferInstead) ??
+		entries.find((entry) => entry.capability === 'create' && !entry.preferInstead);
 	if (!editor) return null;
 
 	const input: Record<string, unknown> = {};
@@ -209,26 +217,32 @@ function renderBlockExample(entries: readonly CatalogEntry[]): string | null {
 	return `${TOOL_CALL_OPEN}${JSON.stringify({ name: editor.name, input })}${TOOL_CALL_CLOSE}\n${blocks.join('\n')}`;
 }
 
-/** Una entrada del catálogo, en el formato compacto que ve el modelo. */
+/**
+ * Una entrada del catálogo, en el formato compacto que ve el modelo. Una
+ * duplicada (la preferida es otra) va en una sola línea: a quién sustituye y
+ * su firma sin descripciones ni ejemplo — basta para llamarla si la otra
+ * falla, sin gastar el prompt en explicar una herramienta que no debe usar.
+ */
 function renderCatalogEntry(entry: CatalogEntry): string {
 	const origin = t(entry.origin === 'm365' ? 'protocol.origin.m365' : 'protocol.origin.editor');
+	if (entry.preferInstead) {
+		const signature = entry.parameters.map((parameter) => renderParameter(parameter, false)).join('; ');
+		return t('protocol.entry.fallback', entry.name, origin, entry.preferInstead, signature || '{}');
+	}
 	const lines = [`- ${entry.name} (${origin}): ${entry.description || t('protocol.noDescription')}`];
 
 	if (entry.parameters.length > 0) {
-		lines.push(t('protocol.entry.input', entry.parameters.map(renderParameter).join('; ')));
+		lines.push(t('protocol.entry.input', entry.parameters.map((parameter) => renderParameter(parameter)).join('; ')));
 	}
 	if (entry.example) {
 		lines.push(t('protocol.entry.example', JSON.stringify(entry.example)));
 	}
-	if (entry.preferInstead) {
-		lines.push(t('protocol.entry.duplicate', entry.preferInstead));
-	}
 	return lines.join('\n');
 }
 
-function renderParameter(parameter: ToolParameter): string {
+function renderParameter(parameter: ToolParameter, withDescription = true): string {
 	const values = parameter.enumValues.length > 0 ? ` [${parameter.enumValues.join('|')}]` : '';
-	const description = parameter.description ? ` — ${parameter.description}` : '';
+	const description = withDescription && parameter.description ? ` — ${parameter.description}` : '';
 	return `${parameter.name}${parameter.required ? '*' : ''}: ${parameter.type}${values}${description}`;
 }
 
@@ -239,10 +253,13 @@ function renderParameter(parameter: ToolParameter): string {
  * porque lo que enseña el ejemplo es el FORMATO, no el contenido.
  */
 function workedExample(entries: readonly CatalogEntry[]): { name: string; input: unknown } | null {
+	// Never a duplicate: the example would teach exactly the tool the catalog says not to use.
+	const usable = entries.filter((entry) => !entry.preferInstead);
 	const preferred =
-		entries.find((entry) => entry.capability === 'read' && entry.example) ??
-		entries.find((entry) => entry.example) ??
-		entries.find((entry) => entry.capability === 'read') ??
+		usable.find((entry) => entry.capability === 'read' && entry.example) ??
+		usable.find((entry) => entry.capability === 'read') ??
+		usable.find((entry) => entry.example) ??
+		usable[0] ??
 		entries[0];
 	if (!preferred) return null;
 	return { name: preferred.name, input: preferred.example ?? synthesizeInput(preferred) };
@@ -284,9 +301,7 @@ function placeholderFor(parameter: ToolParameter): unknown {
  */
 export function buildToolProtocolReminder(catalog: ToolCatalog, toolsRequired = false): string {
 	if (catalog.entries.length === 0) return '';
-	const hasM365Edits = catalog.entries.some(
-		(entry) => entry.name === M365_TOOL_NAMES.applyWorkspaceEdits,
-	);
+	const hasM365Edits = m365EditsPreferred(catalog);
 	const bareShape = `${TOOL_CALL_OPEN}{"name":"...","input":{...}}${TOOL_CALL_CLOSE}`;
 	const shape = catalog.hasEditTools ? t('protocol.reminder.shapeWithBlocks', bareShape) : bareShape;
 	return (

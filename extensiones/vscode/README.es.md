@@ -464,6 +464,29 @@ coincidencias».
 | `m365copilot.tools.duplicates` | `preferEditor` | A cuál debe ir primero el modelo cuando una nativa y una nuestra hacen lo mismo. La otra queda como alternativa. |
 | `m365copilot.tools.maxAdvertised` | `48` | Tope de herramientas descritas en el prompt (el catálogo viaja como texto). Las que no se describen siguen siendo ejecutables si el modelo las nombra. |
 
+### Cómo conserva el contexto el prompt
+
+Cada paso del agente es un prompt nuevo entero (BizChat recibe un texto por
+turno), así que lo que entra en él — y lo que se queda fuera — decide lo bien
+que sigue el hilo el modelo:
+
+- **La petición queda fijada.** Por muchos pasos de herramientas que se
+  acumulen, la petición en curso sigue en el prompt, marcada como petición
+  actual. Los dos últimos resultados de herramientas van enteros; los
+  anteriores conservan su principio (el modelo puede volver a llamar a la
+  herramienta), y un resultado repetido tal cual más adelante se queda en una
+  línea que remite a él. Si aun así algo tiene que salir, son los turnos más
+  antiguos, con una nota.
+- **Entorno.** El sistema y el shell (con la trampa de PowerShell 5.1: sin
+  `&&`), la raíz absoluta del workspace — las herramientas nativas piden rutas
+  absolutas — y la fecha de hoy.
+- **Catálogo de herramientas ligero.** Una herramienta que duplica a una nativa
+  va en una línea (a cuál sustituye y sus parámetros), los ejemplos usan siempre
+  la preferida y `workspaceFolder` desaparece en un workspace de una sola
+  carpeta.
+- **Seguimientos.** Ante un seguimiento corto como «ahora el otro», el índice
+  del proyecto se busca también con la petición anterior.
+
 ### Revisión de cambios (Keep / Undo)
 
 Los cambios se aplican **en el editor, sin guardar en disco**, como en los

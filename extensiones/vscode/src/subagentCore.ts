@@ -17,6 +17,7 @@ import {
 	type OfferedTool,
 	type ToolCatalog,
 } from './toolProtocol';
+import { condenseToolResult, toolResultBudgets } from './transcript';
 import { t } from './i18n';
 
 // --------------------------------------------------------- concurrency
@@ -99,6 +100,8 @@ export interface ToolLoopParams {
 	readonly endpointBase?: string;
 	/** Sustituye {@link MAX_TASK_WALL_CLOCK_MS} (los tests usan un techo más corto). */
 	readonly maxWallClockMs?: number;
+	/** Workspace de una sola carpeta: el catálogo omite `workspaceFolder`. */
+	readonly singleRoot?: boolean;
 }
 
 export interface ToolLoopResult {
@@ -111,6 +114,8 @@ export interface ToolLoopResult {
 export interface SubagentTaskParams extends Omit<ToolLoopParams, 'framing' | 'onProse' | 'onStepStart'> {
 	readonly label: string;
 	readonly task: string;
+	/** System, shell, workspace root and date (environment.ts). */
+	readonly environment?: string;
 }
 
 export interface SubagentTaskResult {
@@ -121,6 +126,9 @@ export interface SubagentTaskResult {
 }
 
 const MAX_STEP_RESULT_CHARS = 4_000;
+/** How many of the latest results keep {@link MAX_STEP_RESULT_CHARS}; older ones keep the next one. */
+const FULL_STEP_RESULTS = 2;
+const MAX_OLD_STEP_RESULT_CHARS = 800;
 const MAX_CALL_PREVIEW_CHARS = 600;
 const MAX_TRANSCRIPT_CHARS = 24_000;
 const MAX_LAST_RESULT_PREVIEW_CHARS = 2_000;
@@ -145,8 +153,8 @@ export const MAX_TASK_WALL_CLOCK_MS = 8 * 60_000;
  * texto, no una excepción que tumbe al resto de sub-agentes en curso.
  */
 export async function runSubagentTask(params: SubagentTaskParams): Promise<SubagentTaskResult> {
-	const { label, task, ...loop } = params;
-	const result = await runToolLoop({ ...loop, framing: buildSubagentFraming(task) });
+	const { label, task, environment, ...loop } = params;
+	const result = await runToolLoop({ ...loop, framing: buildSubagentFraming(task, environment) });
 	return { label, ok: result.ok, summary: result.summary, steps: result.steps };
 }
 
@@ -164,8 +172,9 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
 		includeEditorTools: false,
 		duplicates: 'both',
 		maxTools: offeredTools.length,
+		singleRoot: params.singleRoot,
 	});
-	const blocks: string[] = [];
+	const steps: LoopStep[] = [];
 	let lastResultText = '';
 	const startedAt = Date.now();
 	const wallClockBudgetMs = params.maxWallClockMs ?? MAX_TASK_WALL_CLOCK_MS;
@@ -196,7 +205,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
 		try {
 			await streamCopilotTurnWithRetry({
 				profile,
-				prompt: buildLoopPrompt(framing, catalog, blocks),
+				prompt: buildLoopPrompt(framing, catalog, steps),
 				tone,
 				signal,
 				endpointBase,
@@ -229,8 +238,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
 		});
 		const resultText = await executeTool(finishedCall.name, finishedCall.input);
 		lastResultText = resultText;
-		blocks.push(renderCallBlock(step, finishedCall));
-		blocks.push(renderResultBlock(finishedCall.name, resultText));
+		steps.push({ call: renderCallBlock(step, finishedCall), name: finishedCall.name, result: resultText });
 	}
 
 	const summary = t('subagent.stepLimit', maxSteps, clip(lastResultText, MAX_LAST_RESULT_PREVIEW_CHARS));
@@ -238,23 +246,51 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
 	return { ok: false, outcome: 'stepLimit', summary, steps: maxSteps };
 }
 
-function buildSubagentFraming(task: string): string {
-	return [t('subagent.prompt.framing'), t('subagent.prompt.task', task), t('subagent.prompt.finish')].join('\n\n');
+function buildSubagentFraming(task: string, environment?: string): string {
+	return [t('subagent.prompt.framing'), environment ?? '', t('subagent.prompt.task', task), t('subagent.prompt.finish')]
+		.filter(Boolean)
+		.join('\n\n');
 }
 
-function buildLoopPrompt(framing: string, catalog: ToolCatalog, blocks: readonly string[]): string {
+/** One step of the loop: the call (already rendered) and what the tool returned. */
+interface LoopStep {
+	readonly call: string;
+	readonly name: string;
+	readonly result: string;
+}
+
+function buildLoopPrompt(framing: string, catalog: ToolCatalog, steps: readonly LoopStep[]): string {
 	return [
 		buildToolProtocolInstructions(catalog),
 		framing,
-		compactBlocks(blocks),
+		compactBlocks(renderSteps(steps)),
 		buildToolProtocolReminder(catalog, false),
 	]
 		.filter(Boolean)
 		.join('\n\n');
 }
 
-/** Igual que `compactContext` de messages.ts pero local: se queda con los pasos
- * más recientes y avisa cuando descarta los más antiguos por espacio. */
+/**
+ * The steps as prompt blocks. Like the chat transcript (transcript.ts): the
+ * latest results whole (up to {@link MAX_STEP_RESULT_CHARS}), older ones
+ * shortened, and an older result repeated word for word later on reduced to
+ * a pointer — so ten steps still fit instead of the first ones falling out.
+ */
+function renderSteps(steps: readonly LoopStep[]): string[] {
+	const budgets = toolResultBudgets(
+		steps.map((step) => ({ name: step.name, text: step.result })),
+		{ full: FULL_STEP_RESULTS, maxChars: MAX_STEP_RESULT_CHARS, maxOldChars: MAX_OLD_STEP_RESULT_CHARS },
+	);
+	return steps.flatMap((step, index) => {
+		const budget = budgets[index];
+		const text =
+			budget.older || budget.duplicate ? condenseToolResult(step.result, budget) : clip(step.result, budget.maxChars);
+		return [step.call, t('subagent.prompt.resultBlock', step.name, text)];
+	});
+}
+
+/** Se queda con los pasos más recientes y avisa cuando descarta los más
+ * antiguos por espacio. */
 function compactBlocks(blocks: readonly string[]): string {
 	if (blocks.length === 0) return '';
 	const kept: string[] = [];
@@ -275,10 +311,6 @@ function compactBlocks(blocks: readonly string[]): string {
 
 function renderCallBlock(step: number, call: DecodedToolCall): string {
 	return t('subagent.prompt.callBlock', step, call.name, safeJsonPreview(call.input));
-}
-
-function renderResultBlock(name: string, resultText: string): string {
-	return t('subagent.prompt.resultBlock', name, clip(resultText, MAX_STEP_RESULT_CHARS));
 }
 
 function safeJsonPreview(input: Record<string, unknown>): string {

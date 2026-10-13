@@ -59,9 +59,12 @@ import {
 	ToolCallDecoder,
 	buildToolCatalog,
 	buildToolProtocolInstructions,
+	buildToolProtocolReminder,
 	type OfferedTool,
 	type ToolCatalog,
 } from '../src/toolProtocol.ts';
+import { renderTranscript, retrievalText, TRANSCRIPT_LIMITS, type TranscriptMessage } from '../src/transcript.ts';
+import { describeShell, localDate, renderEnvironment } from '../src/environment.ts';
 import { ConcurrencyLimiter, clip, runSubagentTask, runToolLoop } from '../src/subagentCore.ts';
 import { replaceTextOnce } from '../tools/replaceText.ts';
 import {
@@ -563,8 +566,27 @@ function testToolPromptRendering() {
 	// herramientas nativas que piden rutas absolutas.
 	assert.match(prompt, /filePath\*: string — The absolute path of the file to read\./);
 	assert.match(prompt, /run_in_terminal/);
-	assert.match(prompt, /duplicada: usa read_file/);
 	assert.match(prompt, /<m365_tool_call>/);
+
+	// A duplicate goes in one line: which tool it stands in for and its bare
+	// signature, no description or example — enough to call it if the other fails.
+	assert.match(prompt, /\n- m365_read_file \(de esta extensión\): duplicada de read_file; úsala sólo si esa falla\. Entrada: path: string\n/);
+	assert.doesNotMatch(prompt, /m365_read_file \(de esta extensión\): Lee/);
+	// When the native editor wins, m365_apply_edits' own rules and example go,
+	// and neither the block example nor the worked example teaches a duplicate.
+	assert.doesNotMatch(prompt, /En m365_apply_edits es OBLIGATORIO|En m365_apply_edits cada operación/);
+	assert.match(prompt, /Ejemplo:\n<m365_tool_call>\{"name":"replace_string_in_file"/);
+	assert.match(prompt, /Asistente: [^\n]*\n<m365_tool_call>\{"name":"read_file"/);
+	assert.doesNotMatch(buildToolProtocolReminder(catalog), /m365_apply_edits/);
+	// With only ours (the @m365 participant), they are the editor: rules and example stay.
+	const oursOnly = buildToolProtocolInstructions(buildToolCatalog(M365_TOOLS));
+	assert.match(oursOnly, /En m365_apply_edits es OBLIGATORIO/);
+	assert.match(oursOnly, /Asistente: [^\n]*\n<m365_tool_call>\{"name":"m365_read_file"/);
+
+	// Single-folder workspace: our "only for multi-root" parameter is noise.
+	const withFolder = [{ name: M365_TOOL_NAMES.readFile, inputSchema: { type: 'object', properties: { path: { type: 'string' }, workspaceFolder: { type: 'string' } } } }];
+	assert.deepEqual(entry(buildToolCatalog(withFolder), M365_TOOL_NAMES.readFile).parameters.map((p) => p.name), ['path', 'workspaceFolder']);
+	assert.deepEqual(entry(buildToolCatalog(withFolder, { singleRoot: true }), M365_TOOL_NAMES.readFile).parameters.map((p) => p.name), ['path']);
 
 	// El ejemplo del formato de bloques tiene que usar los campos DE la
 	// herramienta que nombra: sin las nuestras se sintetiza con los parámetros
@@ -580,6 +602,98 @@ function testToolPromptRendering() {
 	assert.equal(buildToolProtocolInstructions(buildToolCatalog([])), '');
 
 	console.log('  ✓ el prompt describe cada herramienta con su origen, firma y preferencia');
+}
+
+function testTranscript() {
+	setLocale('en');
+	const user = (text: string): TranscriptMessage => ({ role: 'user', parts: [{ kind: 'text', text }] });
+	const answer = (text: string): TranscriptMessage => ({ role: 'assistant', parts: [{ kind: 'text', text }] });
+	const call = (name: string, input = '{}'): TranscriptMessage => ({
+		role: 'assistant',
+		parts: [{ kind: 'text', text: 'Checking.' }, { kind: 'toolCall', name, input }],
+	});
+	const result = (name: string, text: string): TranscriptMessage => ({ role: 'user', parts: [{ kind: 'toolResult', name, text }] });
+
+	assert.equal(renderTranscript([user('hola')]), 'User:\nhola', 'un solo mensaje va tal cual');
+
+	// An agent session of 8 reads of ~9 KB: before, the request fell out after
+	// a few steps; now the last two results go whole, older ones shortened,
+	// and everything — the request and the earlier chat included — fits.
+	const file = (i: number) => `// file ${i}\n${`const value${i} = ${'x'.repeat(60)};\n`.repeat(110)}`;
+	const session: TranscriptMessage[] = [
+		user('old question'),
+		answer('old answer'),
+		user('Refactor the parser so empty files return an empty tree'),
+		...Array.from({ length: 8 }, (_, i) => [call('read_file', `{"filePath":"/w/f${i + 1}.ts"}`), result('read_file', file(i + 1))]).flat(),
+	];
+	const prompt = renderTranscript(session);
+	assert.ok(prompt.startsWith(`${t('prompt.continue')}\n\n`) && prompt.endsWith('\n\nAssistant:'));
+	assert.match(prompt, /User:\nold question\n\nAssistant:\nold answer\n\nUser \(current request\):\nRefactor the parser/);
+	assert.ok(prompt.includes(file(8)) && prompt.includes(file(7)), 'los dos últimos resultados enteros');
+	assert.ok(!prompt.includes(file(6)) && prompt.includes('// file 6\n'), 'los anteriores, sólo su principio');
+	assert.match(prompt, /\[older result shortened: \d+ more characters; call the tool again if you need them\]/);
+	assert.match(prompt, /Tool results:\n\[result of tool read_file\]\n\/\/ file 1\n/);
+	assert.doesNotMatch(prompt, /earlier turns omitted/);
+	assert.ok(prompt.length < 40_000, `cabe holgado (${prompt.length})`);
+
+	// The same result twice: the older copy becomes a pointer.
+	const repeated = renderTranscript([user('task'), call('read_file'), result('read_file', 'same text'), call('read_file'), result('read_file', 'same text')]);
+	assert.equal(repeated.split('same text').length - 1, 1);
+	assert.match(repeated, /\[result of tool read_file\]\n\[same result as a later call below\][\s\S]*\[result of tool read_file\]\nsame text/);
+
+	// Under pressure the request stays; what goes is the oldest, with a note per gap.
+	const huge = 'y'.repeat(11_000);
+	const pressure = [
+		user('first chat turn'),
+		answer('first answer'),
+		user('THE TASK'),
+		...Array.from({ length: 12 }, (_, i) => [call('grep_search'), result('grep_search', `result ${i} ${huge}`)]).flat(),
+	];
+	const squeezed = renderTranscript(pressure, { ...TRANSCRIPT_LIMITS, maxContextChars: 20_000 });
+	assert.ok(squeezed.length < 22_000, `respeta el presupuesto (${squeezed.length})`);
+	assert.doesNotMatch(squeezed, /first chat turn/);
+	assert.match(squeezed, /\[earlier turns omitted[^\]]*\]\n\nUser \(current request\):\nTHE TASK\n\n\[earlier turns omitted[^\]]*\]\n\n/);
+	assert.match(squeezed, /result 11 y/, 'el último resultado sigue ahí');
+
+	// Retrieval: a short follow-up brings the previous request along.
+	const long = 'explain how the token server validates incoming profiles before storing them';
+	assert.equal(retrievalText([long, 'something else']), long);
+	assert.equal(retrievalText(['ahora en el otro', 'refactoriza parseStatus en autoCommitGit']), 'ahora en el otro\nrefactoriza parseStatus en autoCommitGit');
+	assert.equal(
+		retrievalText(['<userRequest>y en este?</userRequest>', '<context>x</context><userRequest>arregla el login</userRequest>']),
+		'y en este?\narregla el login',
+		'del prompt del modo agente sólo cuenta <userRequest>',
+	);
+	assert.equal(retrievalText(['solo']), 'solo');
+	assert.equal(retrievalText([]), '');
+	console.log('  ✓ transcript: petición fijada, resultados antiguos recortados y repetidos resumidos, y búsqueda con la petición anterior');
+}
+
+function testEnvironment() {
+	setLocale('en');
+	assert.equal(describeShell('C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'), 'Windows PowerShell 5.1 (no `&&`: chain commands with `;`)');
+	assert.equal(describeShell('C:\\Program Files\\PowerShell\\7\\pwsh.exe'), 'PowerShell 7');
+	assert.equal(describeShell('/bin/zsh'), 'zsh');
+	assert.equal(describeShell(undefined), undefined);
+	assert.equal(
+		renderEnvironment({
+			platform: 'win32',
+			shell: 'C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+			folders: [{ name: 'repo', path: 'C:\\dev\\repo' }],
+			date: '2026-10-13',
+		}),
+		'Environment: Windows · Windows PowerShell 5.1 (no `&&`: chain commands with `;`) · today 2026-10-13\n' +
+			'Workspace root (absolute paths start here): C:\\dev\\repo',
+	);
+	assert.equal(
+		renderEnvironment({ platform: 'linux', folders: [{ name: 'a', path: '/a' }, { name: 'b', path: '/b' }], date: '2026-01-05' }),
+		'Environment: Linux · today 2026-01-05\nWorkspace folders: a (/a), b (/b)',
+	);
+	assert.equal(renderEnvironment({ platform: 'darwin', shell: '/bin/zsh', folders: [], date: '2026-01-05' }), 'Environment: macOS · zsh · today 2026-01-05');
+	assert.equal(localDate(new Date(2026, 0, 5)), '2026-01-05');
+	setLocale('es');
+	assert.match(renderEnvironment({ platform: 'win32', folders: [], date: '2026-10-13' }), /^Entorno: Windows · hoy 2026-10-13$/);
+	console.log('  ✓ entorno: sistema, shell (PowerShell 5.1 sin &&), raíz absoluta del workspace y fecha');
 }
 
 // ---- commitMessage.ts -------------------------------------------------------
@@ -3020,6 +3134,9 @@ async function main() {
 	testToolCatalog();
 	testSpawnAgentsNeverTrimmed();
 	testToolPromptRendering();
+	console.log('transcript.ts / environment.ts');
+	testTranscript();
+	testEnvironment();
 	console.log('commitMessage.ts');
 	testCommitMessageValidation();
 	console.log('client.ts');

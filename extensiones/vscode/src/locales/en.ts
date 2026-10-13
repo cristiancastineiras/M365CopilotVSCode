@@ -288,13 +288,23 @@ export const en = {
 	'prompt.markdownReminder':
 		'Remember: if your answer includes code of 2 or more lines, put it inside ``` fences with the language. Never as ' +
 		'plain text. And be brief and direct: no chit-chat, no restating the obvious, no extra paragraphs.',
-	'prompt.continue': 'Continue this conversation. Answer only the last user turn.',
+	'prompt.continue':
+		'Continue this conversation: answer the latest user request. Earlier turns are context; the tool results ' +
+		'after it are what you have done so far.',
 	'prompt.toolResult': '[result of tool {0}]',
 	'prompt.toolCall': '[tool call {0}({1})]',
 	'prompt.nonTextOmitted': '[non-text attachment omitted]',
 	'prompt.attachmentOmitted': '[attachment {0}, {1} KB, omitted]',
 	'prompt.earlierOmitted': '[earlier turns omitted to keep the relevant context]',
 	'prompt.charsOmitted': '[... {0} characters omitted ...]',
+	'prompt.role.request': 'User (current request)',
+	'prompt.role.toolResults': 'Tool results',
+	'prompt.sameResultBelow': '[same result as a later call below]',
+	'prompt.olderResultShortened': '[older result shortened: {0} more characters; call the tool again if you need them]',
+	'env.line': 'Environment: {0} · today {1}',
+	'env.root': 'Workspace root (absolute paths start here): {0}',
+	'env.roots': 'Workspace folders: {0}',
+	'env.shell.windowsPowerShell': 'Windows PowerShell 5.1 (no `&&`: chain commands with `;`)',
 
 	// ------------------------------------------------------------ tool protocol (model-facing)
 	'protocol.important':
@@ -370,7 +380,7 @@ export const en = {
 	'protocol.noDescription': 'No description.',
 	'protocol.entry.input': '  input: {0}',
 	'protocol.entry.example': '  example input: {0}',
-	'protocol.entry.duplicate': '  (duplicate: use {0} for this; this one only if the other fails)',
+	'protocol.entry.fallback': '- {0} ({1}): duplicate of {2}; use it only if that one fails. Input: {3}',
 	'protocol.reminder.shapeWithBlocks': '{0} (followed by the <m365_block> sections if you use the block format)',
 	'protocol.reminder.start':
 		'Remember: to read or modify the workspace, your answer must be ONLY {0}, without code fences and without ' +

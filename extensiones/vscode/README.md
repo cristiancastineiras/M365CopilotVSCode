@@ -445,6 +445,26 @@ search **says when it was not exhaustive** instead of claiming "no matches".
 | `m365copilot.tools.duplicates` | `preferEditor` | Which tool the model should try first when a native one and ours do the same thing. The other stays as a fallback. |
 | `m365copilot.tools.maxAdvertised` | `48` | Cap on tools described in the prompt (the catalog travels as text). Undescribed tools can still run if the model names them. |
 
+### How the prompt keeps the context
+
+Every agent step is a whole new prompt (BizChat takes one text per turn), so
+what goes into it — and what stays out — decides how well the model follows:
+
+- **The request is pinned.** However many tool steps pile up, the request being
+  worked on stays in the prompt, marked as the current request. The two latest
+  tool results go whole; older ones keep their start (the model can call the
+  tool again), and a result repeated word for word later on becomes a one-line
+  pointer. When something still has to go, it is the oldest turns, with a note.
+- **Environment.** The system and shell (with the PowerShell 5.1 quirk: no
+  `&&`), the absolute workspace root — native tools want absolute paths — and
+  today's date.
+- **Lean tool catalog.** A tool that duplicates a native one is listed in one
+  line (what it stands in for and its parameters), the examples always use the
+  preferred tool, and `workspaceFolder` is left out of a single-folder
+  workspace.
+- **Follow-ups.** For a short follow-up like "now the other one", the project
+  index is searched with the previous request too.
+
 ### Reviewing changes (Keep / Undo)
 
 Changes land **in the editor, unsaved**, like VS Code's own editing flows:

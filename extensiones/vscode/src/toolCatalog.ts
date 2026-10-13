@@ -225,6 +225,11 @@ export interface ToolCatalogOptions {
 	readonly duplicates?: DuplicatePolicy;
 	readonly maxTools?: number;
 	readonly maxChars?: number;
+	/**
+	 * Un workspace de una sola carpeta: el parámetro `workspaceFolder` de las
+	 * nuestras ("sólo para workspaces multi-raíz") no sirve de nada y se omite.
+	 */
+	readonly singleRoot?: boolean;
 }
 
 const DEFAULT_MAX_TOOLS = 48;
@@ -233,6 +238,8 @@ const MAX_TOOL_DESC_CHARS = 320;
 const MAX_PARAM_DESC_CHARS = 90;
 const MAX_PARAMS = 12;
 const MAX_ENUM_VALUES = 8;
+/** El parámetro de nuestras herramientas que sólo importa en workspaces multi-raíz. */
+const WORKSPACE_FOLDER_PARAM = 'workspaceFolder';
 
 /**
  * Clasificación por nombre (y descripción como refuerzo). Deliberadamente
@@ -332,13 +339,16 @@ export function buildToolCatalog(
 
 		const hint = origin === 'm365' ? hints[tool.name as M365ToolName] : undefined;
 		const description = hint?.description ?? shortText(tool.description ?? '', MAX_TOOL_DESC_CHARS);
+		const parameters = parametersOf(tool.inputSchema).filter(
+			(parameter) => !(options.singleRoot && origin === 'm365' && parameter.name === WORKSPACE_FOLDER_PARAM),
+		);
 		order.set(tool.name, order.size);
 		candidates.push({
 			name: tool.name,
 			origin,
 			capability: classifyCapability(tool.name, tool.description ?? ''),
 			description,
-			parameters: parametersOf(tool.inputSchema),
+			parameters,
 			example: hint?.example ?? null,
 			preferInstead: null,
 		});
@@ -429,13 +439,19 @@ function displayRank(entry: CatalogEntry, order: ReadonlyMap<string, number>): n
 	return capabilityRank(entry) + (entry.preferInstead ? 500 : 0) + (order.get(entry.name) ?? 0);
 }
 
-/** Coste aproximado en caracteres de describir esta herramienta en el prompt. */
+/**
+ * Coste aproximado en caracteres de describir esta herramienta en el prompt.
+ * Una duplicada se describe en una línea (nombre, a quién sustituye y su
+ * firma sin descripciones; ver `renderCatalogEntry` en toolProtocol.ts).
+ */
 function entryWeight(entry: CatalogEntry): number {
+	const duplicate = entry.preferInstead !== null;
 	const params = entry.parameters.reduce(
 		(total, parameter) =>
-			total + parameter.name.length + parameter.type.length + parameter.description.length + 8,
+			total + parameter.name.length + parameter.type.length + (duplicate ? 0 : parameter.description.length) + 8,
 		0,
 	);
+	if (duplicate) return entry.name.length + (entry.preferInstead?.length ?? 0) + params + 64;
 	const example = entry.example ? JSON.stringify(entry.example).length : 0;
 	return entry.name.length + entry.description.length + params + example + 48;
 }

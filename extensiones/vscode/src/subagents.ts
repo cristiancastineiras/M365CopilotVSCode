@@ -19,6 +19,7 @@
  */
 import * as vscode from 'vscode';
 import { boundedInteger, errorMessage } from '../tools/common';
+import { currentEnvironment } from './editorContext';
 import { findModel } from './models';
 import { isTokenUsable } from './profile';
 import type { ProfileStore } from './secrets';
@@ -117,6 +118,8 @@ async function spawnAgents(
 			const listeners = [token.onCancellationRequested(abort), progressToken.onCancellationRequested(abort)];
 			try {
 				const executeTool = makeExecutor(options.toolInvocationToken, mutateLimiter, token);
+				const environment = currentEnvironment();
+				const singleRoot = (vscode.workspace.workspaceFolders?.length ?? 0) <= 1;
 				const results = await Promise.all(
 					normalized.map((entry) =>
 						runLimiter.run(() =>
@@ -130,6 +133,8 @@ async function spawnAgents(
 								offeredTools,
 								executeTool,
 								log,
+								environment,
+								singleRoot,
 								onStep: (info) => {
 									progress.report({ message: `${entry.label}: ${stepMessage(info)}` });
 									log(t('log.subagentStep', entry.label, info.step, info.kind, clip(info.detail, 200)));

@@ -292,13 +292,23 @@ export const es: Record<keyof typeof en, string> = {
 	'prompt.markdownReminder':
 		'Recuerda: si tu respuesta incluye código de 2 o más líneas, ponlo entre vallas ``` con el lenguaje. Nunca como ' +
 		'texto plano. Y sé breve y directo: sin cháchara, sin repetir lo obvio, sin párrafos de más.',
-	'prompt.continue': 'Continúa esta conversación. Responde únicamente al último turno del usuario.',
+	'prompt.continue':
+		'Continúa esta conversación: responde a la última petición del usuario. Los turnos anteriores son contexto; ' +
+		'los resultados de herramientas que la siguen son lo que llevas hecho.',
 	'prompt.toolResult': '[resultado de la herramienta {0}]',
 	'prompt.toolCall': '[llamada a herramienta {0}({1})]',
 	'prompt.nonTextOmitted': '[contenido adjunto no textual omitido]',
 	'prompt.attachmentOmitted': '[adjunto {0}, {1} KB, omitido]',
 	'prompt.earlierOmitted': '[turnos anteriores omitidos para conservar el contexto relevante]',
 	'prompt.charsOmitted': '[... {0} caracteres omitidos ...]',
+	'prompt.role.request': 'Usuario (petición actual)',
+	'prompt.role.toolResults': 'Resultados de herramientas',
+	'prompt.sameResultBelow': '[mismo resultado que una llamada posterior, más abajo]',
+	'prompt.olderResultShortened': '[resultado antiguo recortado: {0} caracteres más; vuelve a llamar a la herramienta si los necesitas]',
+	'env.line': 'Entorno: {0} · hoy {1}',
+	'env.root': 'Raíz del workspace (las rutas absolutas empiezan aquí): {0}',
+	'env.roots': 'Carpetas del workspace: {0}',
+	'env.shell.windowsPowerShell': 'Windows PowerShell 5.1 (sin `&&`: encadena comandos con `;`)',
 
 	// ------------------------------------------------------------ protocolo de herramientas (lo lee el modelo)
 	'protocol.important':
@@ -373,7 +383,7 @@ export const es: Record<keyof typeof en, string> = {
 	'protocol.noDescription': 'Sin descripción.',
 	'protocol.entry.input': '  entrada: {0}',
 	'protocol.entry.example': '  ejemplo de input: {0}',
-	'protocol.entry.duplicate': '  (duplicada: usa {0} para esto; ésta sólo si la otra falla)',
+	'protocol.entry.fallback': '- {0} ({1}): duplicada de {2}; úsala sólo si esa falla. Entrada: {3}',
 	'protocol.reminder.shapeWithBlocks': '{0} (seguido de los <m365_block> si usas el formato de bloques)',
 	'protocol.reminder.start':
 		'Recuerda: para leer o modificar el workspace, tu respuesta debe ser ÚNICAMENTE {0}, ' +

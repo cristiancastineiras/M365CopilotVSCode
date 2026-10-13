@@ -10,8 +10,10 @@ import {
 } from './client';
 import { log } from './logger';
 
+import { currentEnvironment } from './editorContext';
 import { MarkdownStreamFormatter } from './markdown';
-import { flattenMessages, latestUserText } from './messages';
+import { flattenMessages, recentUserTexts } from './messages';
+import { retrievalText } from './transcript';
 import { webSearchEnabled } from './webSearch';
 import { sourcesMarkdown } from './webSearchPrompt';
 import { allModels, findModel, modelRegistry, toChatInformation, type TokenState } from './models';
@@ -28,12 +30,14 @@ function readToolSettings(): {
 	includeEditorTools: boolean;
 	duplicates: DuplicatePolicy;
 	maxTools: number;
+	singleRoot: boolean;
 } {
 	const config = vscode.workspace.getConfiguration('m365copilot.tools');
 	return {
 		includeEditorTools: config.get<boolean>('includeEditorTools', true),
 		duplicates: config.get<DuplicatePolicy>('duplicates', 'preferEditor'),
 		maxTools: config.get<number>('maxAdvertised', 48),
+		singleRoot: (vscode.workspace.workspaceFolders?.length ?? 0) <= 1,
 	};
 }
 
@@ -97,11 +101,16 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 		const webTurn = catalog.callable.size === 0 && webSearchEnabled() && Boolean(profile.invocationTemplate);
 		let projectContext: string | undefined;
 		try {
-			projectContext = await this.projectContext?.(latestUserText(messages));
+			projectContext = await this.projectContext?.(retrievalText(recentUserTexts(messages, 2)));
 		} catch (error) {
 			log(t('log.indexContextFailed', error instanceof Error ? error.message : String(error)));
 		}
-		const prompt = flattenMessages(messages, { catalog, toolsRequired, projectContext });
+		const prompt = flattenMessages(messages, {
+			catalog,
+			toolsRequired,
+			environment: currentEnvironment(),
+			projectContext,
+		});
 		log(
 			t(
 				'log.chatRequest',
