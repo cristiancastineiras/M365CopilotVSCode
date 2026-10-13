@@ -125,22 +125,35 @@
 		return true;
 	}
 	/**
+	* Diagnostica un token candidato contra el store actual. `accepted` sólo viene
+	* cuando `diagnosis === 'accepted'`. Es la lógica de decisión única: tanto el
+	* sí/no (`acceptToken`) como el motivo salen de aquí.
+	*/
+	function diagnoseToken(current, token, now = Date.now()) {
+		const candidate = token.trim();
+		if (!isValidJwt(candidate)) return { diagnosis: "not-a-jwt" };
+		if (!isSydneyToken(candidate)) return { diagnosis: "not-sydney" };
+		const claims = extractClaims(candidate);
+		if (!claims) return { diagnosis: "no-claims" };
+		if (!areClaimsUsable(claims, now)) return { diagnosis: "expired" };
+		if (current.accessToken === candidate) return { diagnosis: "duplicate" };
+		const currentExp = current.claims?.exp ?? 0;
+		if (claims.exp && currentExp && claims.exp < currentExp) return { diagnosis: "older-than-current" };
+		return {
+			diagnosis: "accepted",
+			accepted: {
+				accessToken: candidate,
+				claims
+			}
+		};
+	}
+	/**
 	* Lo que hay que guardar si `token` merece sustituir al actual, o null: debe
 	* ser un JWT válido, de Substrate/Sydney (el de Copilot, no cualquier token de
 	* Office), sin caducar, distinto del guardado y no más viejo que él.
 	*/
 	function acceptToken(current, token, now = Date.now()) {
-		const candidate = token.trim();
-		if (!isValidJwt(candidate) || !isSydneyToken(candidate)) return null;
-		const claims = extractClaims(candidate);
-		if (!claims || !areClaimsUsable(claims, now)) return null;
-		if (current.accessToken === candidate) return null;
-		const currentExp = current.claims?.exp ?? 0;
-		if (claims.exp && currentExp && claims.exp < currentExp) return null;
-		return {
-			accessToken: candidate,
-			claims
-		};
+		return diagnoseToken(current, token, now).accepted ?? null;
 	}
 	/**
 	* Tokens candidatos dentro de un valor de localStorage/sessionStorage: MSAL

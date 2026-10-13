@@ -47,10 +47,16 @@ inline completions — and keep its token in sync. Everything is available in
 pnpm install
 pnpm build        # core → VS Code extension → browser extension
 pnpm test
-pnpm package      # .vsix + Chrome/Edge/Firefox zips into releases/
+pnpm package      # .vsix, Chrome/Edge/Firefox zips and userscript into releases/
 ```
 
 Requires Node ≥ 22.18 and pnpm 10.
+
+`releases/` is git-ignored: the official artifacts (VS Code, Chrome, Edge,
+Firefox and the Tampermonkey userscript) are built by
+[`.github/workflows/release.yml`](.github/workflows/release.yml) when a
+`vX.Y.Z` tag is pushed and published only on the
+[GitHub releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases).
 
 ## Languages
 

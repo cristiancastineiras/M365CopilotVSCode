@@ -635,7 +635,7 @@ pnpm watch            # recompilar al guardar
 pnpm typecheck        # tsc --noEmit
 pnpm lint             # oxlint
 pnpm test             # tests de protocolo, herramientas, i18n y BizChat simulado (sin VS Code)
-pnpm package          # .vsix en ../../releases
+pnpm package          # .vsix en ../../releases/vscode, userscript en ../../releases/tampermonkey
 ```
 
 Pulsa `F5` en VS Code para lanzar un *Extension Development Host*.

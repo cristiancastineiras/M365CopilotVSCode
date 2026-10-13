@@ -1393,7 +1393,7 @@
     "lint": "oxlint src tools userscript",
     "test": "node --experimental-strip-types --import ./test/register.mjs test/e2e.mts && node scripts/build-userscript.mjs --check && node --experimental-strip-types --import ./test/register.mjs test/userscript.mts",
     "icon": "node scripts/render-icon.mjs",
-    "package": "pnpm build && vsce package --no-dependencies --allow-missing-repository --out ../../releases",
+    "package": "pnpm build && node scripts/build-userscript.mjs --release ../../releases/tampermonkey && node -e \"require('node:fs').mkdirSync('../../releases/vscode',{recursive:true})\" && vsce package --no-dependencies --allow-missing-repository --out ../../releases/vscode",
     "vscode:prepublish": "pnpm build",
     "changeset": "changeset",
     "version": "changeset version",

@@ -48,10 +48,16 @@ disponible en **inglés y español**.
 pnpm install
 pnpm build        # core → extensión de VS Code → extensión de navegador
 pnpm test
-pnpm package      # .vsix + zips de Chrome/Edge/Firefox en releases/
+pnpm package      # .vsix, zips de Chrome/Edge/Firefox y userscript en releases/
 ```
 
 Requiere Node ≥ 22.18 y pnpm 10.
+
+`releases/` está en `.gitignore`: los artefactos oficiales (VS Code, Chrome,
+Edge, Firefox y el userscript de Tampermonkey) los genera
+[`.github/workflows/release.yml`](.github/workflows/release.yml) al subir un
+tag `vX.Y.Z` y sólo se publican en las
+[releases de GitHub](https://github.com/cristiancastineiras/M365CopilotVSCode/releases).
 
 ## Idiomas
 

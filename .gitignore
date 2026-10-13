@@ -16,6 +16,10 @@ out/
 *.tgz
 # *.vsix
 *.tsbuildinfo
+# Artefactos de `pnpm package` (.vsix, zips de Chrome/Edge/Firefox, .xpi y el
+# userscript de Tampermonkey). No se versionan: sólo se publican como assets
+# de la release de GitHub que genera .github/workflows/release.yml.
+releases/
 
 # Pruebas y cobertura
 coverage/

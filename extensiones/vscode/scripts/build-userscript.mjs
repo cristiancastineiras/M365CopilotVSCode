@@ -4,15 +4,17 @@
  * shares with the browser extension) into m365copilot-token.user.js, the
  * file users install in Tampermonkey/Violentmonkey.
  *
- *   node scripts/build-userscript.mjs           write the .user.js
- *   node scripts/build-userscript.mjs --check   exit 1 if it is out of date
+ *   node scripts/build-userscript.mjs                 write the .user.js
+ *   node scripts/build-userscript.mjs --check         exit 1 if it is out of date
+ *   node scripts/build-userscript.mjs --release <dir> write a copy into <dir>
+ *     (`pnpm package` → releases/tampermonkey, published by the release workflow)
  *
  * The generated file is committed (it is installed straight from GitHub and
  * auto-updates through @updateURL), so `pnpm build` regenerates it and the
  * tests run the --check: the userscript can no longer fall behind the
  * extension the way the hand-written one did.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -107,7 +109,17 @@ export async function buildUserscript() {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
 	const fresh = await buildUserscript();
-	if (process.argv.includes('--check')) {
+	const releaseAt = process.argv.indexOf('--release');
+	if (releaseAt !== -1) {
+		const dir = process.argv[releaseAt + 1];
+		if (!dir) {
+			console.error('Usage: node scripts/build-userscript.mjs --release <dir>');
+			process.exit(1);
+		}
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(join(dir, 'm365copilot-token.user.js'), fresh);
+		console.log(`m365copilot-token.user.js written to ${dir}.`);
+	} else if (process.argv.includes('--check')) {
 		let current = '';
 		try {
 			current = readFileSync(OUTPUT, 'utf8').replace(/\r\n/g, '\n');
