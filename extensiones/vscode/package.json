@@ -1431,11 +1431,11 @@
     "@changesets/cli": "^2.27.1",
     "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^26.4.1",
-    "@types/vscode": "^1.104.0",
+    "@types/vscode": "^1.140.0",
     "@types/ws": "^8.18.2",
     "@vscode/vsce": "^3.6.2",
-    "oxlint": "^1.81.0",
-    "tsdown": "^0.22.14",
+    "oxlint": "^1.87.0",
+    "tsdown": "^0.23.0",
     "typescript": "^7.0.2"
   }
 }
