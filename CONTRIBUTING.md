@@ -71,6 +71,29 @@ Antes de solicitar revisión:
 - Mantén la rama actualizada respecto a la rama principal.
 - No incluyas secretos, tokens, datos personales ni archivos generados innecesarios.
 
+## Integración continua y dependencias
+
+Cada pull request y cada push a `main` pasan el workflow **CI**
+(`.github/workflows/ci.yml`): comprobación de tipos, lint, pruebas y
+compilación de los tres paquetes. En las pull requests, además, una revisión de
+las dependencias avisa si el cambio introduce una con una vulnerabilidad alta o
+crítica.
+
+Las dependencias las mantiene **Dependabot** (`.github/dependabot.yml`), que
+abre solo las pull requests de actualización:
+
+- Cada lunes llegan agrupadas las subidas menores y de parche: una pull request
+  con las dependencias de producción (lo que va dentro del `.vsix`, como `ws`) y
+  otra con las de desarrollo.
+- Las subidas mayores llegan sueltas, una por dependencia, para leer sus notas.
+- Las actions de `.github/workflows` se actualizan igual.
+- Una versión recién publicada espera unos días antes de proponerse.
+
+Para aceptar una: comprueba que el CI está en verde, lee las notas de la versión
+si es una subida mayor y fusiónala. No necesita changeset; si actualiza una
+dependencia de producción y quieres que conste en el changelog, añade uno de
+tipo `patch`.
+
 ## Incidencias
 
 Antes de abrir una incidencia, comprueba que no exista otra equivalente. Incluye:
