@@ -39,7 +39,7 @@ jobs:
       HAS_AMO_KEYS: ${{ secrets.AMO_JWT_ISSUER != '' && secrets.AMO_JWT_SECRET != '' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Habilitar Corepack (pnpm)
         run: corepack enable

@@ -32,7 +32,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Antes de setup-node: su caché de pnpm necesita que pnpm ya exista, y la
       # versión exacta sale del campo `packageManager` del package.json raíz.
@@ -71,7 +71,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Sin comentario en la PR: el token de las PRs de Dependabot es de sólo
       # lectura y no podría escribirlo. El resultado queda en el resumen del job.
