@@ -1,5 +1,17 @@
 # M365 Copilot for VS Code
 
+[![VS Marketplace version](https://flat.badgen.net/vs-marketplace/v/m365-copilot-vscode.m365-copilot-vscode?label=VS%20Marketplace&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode)
+[![Installs](https://flat.badgen.net/vs-marketplace/i/m365-copilot-vscode.m365-copilot-vscode?label=installs&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode)
+[![Downloads](https://flat.badgen.net/vs-marketplace/d/m365-copilot-vscode.m365-copilot-vscode?label=downloads&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode)
+[![Rating](https://flat.badgen.net/vs-marketplace/rating/m365-copilot-vscode.m365-copilot-vscode?label=rating&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode&ssr=false#review-details)
+
+[![Latest release](https://img.shields.io/github/v/release/cristiancastineiras/M365CopilotVSCode?label=release&logo=github&color=24292f)](https://github.com/cristiancastineiras/M365CopilotVSCode/releases/latest)
+[![Build](https://img.shields.io/github/actions/workflow/status/cristiancastineiras/M365CopilotVSCode/release.yml?label=build&logo=githubactions&logoColor=white)](https://github.com/cristiancastineiras/M365CopilotVSCode/actions/workflows/release.yml)
+[![GitHub downloads](https://img.shields.io/github/downloads/cristiancastineiras/M365CopilotVSCode/total?label=GitHub%20downloads&logo=github&color=24292f)](https://github.com/cristiancastineiras/M365CopilotVSCode/releases)
+[![Stars](https://img.shields.io/github/stars/cristiancastineiras/M365CopilotVSCode?label=stars&logo=github&color=e3b341&style=flat)](https://github.com/cristiancastineiras/M365CopilotVSCode/stargazers)
+[![Issues](https://img.shields.io/github/issues/cristiancastineiras/M365CopilotVSCode?label=issues&logo=github)](https://github.com/cristiancastineiras/M365CopilotVSCode/issues)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 **English** · [Español](README.es.md)
 
 Use your **Microsoft 365 Copilot** subscription inside VS Code: as a model in the

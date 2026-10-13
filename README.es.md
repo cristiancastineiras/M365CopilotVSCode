@@ -1,5 +1,18 @@
 # M365 Copilot para VS Code 
 
+[![Versión en VS Marketplace](https://flat.badgen.net/vs-marketplace/v/m365-copilot-vscode.m365-copilot-vscode?label=VS%20Marketplace&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode)
+[![Instalaciones](https://flat.badgen.net/vs-marketplace/i/m365-copilot-vscode.m365-copilot-vscode?label=instalaciones&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode)
+[![Descargas](https://flat.badgen.net/vs-marketplace/d/m365-copilot-vscode.m365-copilot-vscode?label=descargas&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode)
+[![Valoración](https://flat.badgen.net/vs-marketplace/rating/m365-copilot-vscode.m365-copilot-vscode?label=valoraci%C3%B3n&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode&ssr=false#review-details)
+
+[![Última versión](https://img.shields.io/github/v/release/cristiancastineiras/M365CopilotVSCode?label=versi%C3%B3n&logo=github&color=24292f)](https://github.com/cristiancastineiras/M365CopilotVSCode/releases/latest)
+[![Compilación](https://img.shields.io/github/actions/workflow/status/cristiancastineiras/M365CopilotVSCode/release.yml?label=compilaci%C3%B3n&logo=githubactions&logoColor=white)](https://github.com/cristiancastineiras/M365CopilotVSCode/actions/workflows/release.yml)
+[![Descargas en GitHub](https://img.shields.io/github/downloads/cristiancastineiras/M365CopilotVSCode/total?label=descargas%20en%20GitHub&logo=github&color=24292f)](https://github.com/cristiancastineiras/M365CopilotVSCode/releases)
+[![Estrellas](https://img.shields.io/github/stars/cristiancastineiras/M365CopilotVSCode?label=estrellas&logo=github&color=e3b341&style=flat)](https://github.com/cristiancastineiras/M365CopilotVSCode/stargazers)
+[![Incidencias](https://img.shields.io/github/issues/cristiancastineiras/M365CopilotVSCode?label=incidencias&logo=github)](https://github.com/cristiancastineiras/M365CopilotVSCode/issues)
+[![Licencia: AGPL-3.0](https://img.shields.io/github/license/cristiancastineiras/M365CopilotVSCode?label=licencia&color=blue)](LICENSE)
+
+
 [English](README.md) · **Español**
 
 Monorepo (pnpm workspaces + Turborepo) de las piezas que llevan tu suscripción
