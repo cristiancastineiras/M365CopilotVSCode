@@ -83,7 +83,7 @@ function describeSection(text: string): DiffSection {
 	let file = '';
 	let content = -1;
 	for (let i = 1; i < lines.length && content === -1; i += 1) {
-		const line = lines[i];
+		const line = lines[i] ?? '';
 		if (line.startsWith('@@')) content = i;
 		else if (line.startsWith('+++ ')) {
 			file = stripSide(line.slice(4)) || file;
@@ -92,7 +92,7 @@ function describeSection(text: string): DiffSection {
 		else if (line.startsWith('rename to ')) file = line.slice('rename to '.length);
 	}
 	if (!file) {
-		const header = lines[0];
+		const header = lines[0] ?? '';
 		const at = header.lastIndexOf(' b/');
 		file = at === -1 ? header.slice('diff --git '.length) : header.slice(at + 3);
 	}
@@ -143,23 +143,27 @@ export function budgetDiff(diff: string, maxChars: number): string {
 	if (total <= maxChars) return [head, ...parts].filter(Boolean).join('\n');
 
 	const allowance = parts.map(() => 0);
-	const bySize = parts.map((_, i) => i).sort((a, b) => parts[a].length - parts[b].length);
+	const sizeOf = (index: number) => parts[index]?.length ?? 0;
+	const bySize = parts.map((_, i) => i).sort((a, b) => sizeOf(a) - sizeOf(b));
 	let remaining = Math.max(0, maxChars - head.length);
 	bySize.forEach((index, k) => {
-		allowance[index] = Math.min(parts[index].length, Math.floor(remaining / (bySize.length - k)));
-		remaining -= allowance[index];
+		const share = Math.min(sizeOf(index), Math.floor(remaining / (bySize.length - k)));
+		allowance[index] = share;
+		remaining -= share;
 	});
-	return [head, ...parts.map((part, i) => fitSection(part, allowance[i]))].filter(Boolean).join('\n');
+	return [head, ...parts.map((part, i) => fitSection(part, allowance[i] ?? 0))].filter(Boolean).join('\n');
 }
 
 /** The section's first lines up to `allowance` characters; its `diff --git` line always stays. */
 function fitSection(part: string, allowance: number): string {
 	if (part.length <= allowance) return part;
 	const lines = part.split('\n');
-	let size = lines[0].length;
+	let size = (lines[0] ?? '').length;
 	let kept = 1;
-	while (kept < lines.length && size + 1 + lines[kept].length <= allowance) {
-		size += 1 + lines[kept].length;
+	while (kept < lines.length) {
+		const length = (lines[kept] ?? '').length;
+		if (size + 1 + length > allowance) break;
+		size += 1 + length;
 		kept += 1;
 	}
 	return [...lines.slice(0, kept), t('commit.diff.fileTruncated', lines.length - kept)].join('\n');

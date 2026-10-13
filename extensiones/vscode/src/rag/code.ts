@@ -160,16 +160,16 @@ const JS_METHOD_RE =
 	/^\s+(?:(?:public|private|protected|static|readonly|async|override|abstract|declare|get|set)\s+)*(#?[A-Za-z_$][\w$]*)\s*(?:<[^>()]*>)?\s*\([^()]*\)\s*(?::\s*[^={}()]+)?\s*\{\s*$/;
 
 const PYTHON_RULES: readonly Rule[] = [
-	[/^(\s*)(?:async\s+)?def\s+([A-Za-z_]\w*)\s*\(/, (m, indent) => named(m[2], indent > 0 ? 'method' : 'function', !m[2].startsWith('_'))],
-	[/^(\s*)class\s+([A-Za-z_]\w*)/, (m) => named(m[2], 'class', !m[2].startsWith('_'))],
+	[/^(\s*)(?:async\s+)?def\s+([A-Za-z_]\w*)\s*\(/, (m, indent) => named(m[2], indent > 0 ? 'method' : 'function', !m[2]?.startsWith('_'))],
+	[/^(\s*)class\s+([A-Za-z_]\w*)/, (m) => named(m[2], 'class', !m[2]?.startsWith('_'))],
 ];
 
 const GO_RULES: readonly Rule[] = [
-	[/^func\s+\(\s*\w*\s*\*?\s*([A-Za-z_]\w*)[^)]*\)\s*([A-Za-z_]\w*)\s*[[(]/, (m) => named(m[2], 'method', /^[A-Z]/.test(m[2]))],
-	[/^func\s+([A-Za-z_]\w*)\s*[[(]/, (m) => named(m[1], 'function', /^[A-Z]/.test(m[1]))],
-	[/^type\s+([A-Za-z_]\w*)\s+struct\b/, (m) => named(m[1], 'struct', /^[A-Z]/.test(m[1]))],
-	[/^type\s+([A-Za-z_]\w*)\s+interface\b/, (m) => named(m[1], 'interface', /^[A-Z]/.test(m[1]))],
-	[/^type\s+([A-Za-z_]\w*)\s/, (m) => named(m[1], 'type', /^[A-Z]/.test(m[1]))],
+	[/^func\s+\(\s*\w*\s*\*?\s*([A-Za-z_]\w*)[^)]*\)\s*([A-Za-z_]\w*)\s*[[(]/, (m) => named(m[2], 'method', /^[A-Z]/.test(m[2] ?? ''))],
+	[/^func\s+([A-Za-z_]\w*)\s*[[(]/, (m) => named(m[1], 'function', /^[A-Z]/.test(m[1] ?? ''))],
+	[/^type\s+([A-Za-z_]\w*)\s+struct\b/, (m) => named(m[1], 'struct', /^[A-Z]/.test(m[1] ?? ''))],
+	[/^type\s+([A-Za-z_]\w*)\s+interface\b/, (m) => named(m[1], 'interface', /^[A-Z]/.test(m[1] ?? ''))],
+	[/^type\s+([A-Za-z_]\w*)\s/, (m) => named(m[1], 'type', /^[A-Z]/.test(m[1] ?? ''))],
 ];
 
 const RUST_RULES: readonly Rule[] = [
@@ -193,23 +193,26 @@ const METHOD_DECL_RE =
 	/^(\s+)(?:\[[^\]]*\]\s*)?(?:(?:public|private|protected|internal|static|final|abstract|synchronized|native|virtual|override|async|sealed|extern|unsafe|new|partial|default)\s+)+(?:<[^>]+>\s+)?[\w<>[\],.?]+(?:\s*<[^>]*>)?\s+([A-Za-z_]\w*)\s*\(/;
 
 const JVM_RULES: readonly Rule[] = [
-	[TYPE_DECL_RE, (m) => named(m[3], declKind(m[2]), !/private|internal|fileprivate/.test(m[1]))],
+	[TYPE_DECL_RE, (m) => named(m[3], declKind(m[2] ?? ''), !/private|internal|fileprivate/.test(m[1] ?? ''))],
 	[FUN_DECL_RE, (m, indent) => named(m[2], indent > 0 ? 'method' : 'function', true)],
 	[METHOD_DECL_RE, (m) => named(m[2], 'method', true)],
 ];
 
 const C_RULES: readonly Rule[] = [
-	[/^\s*(?:typedef\s+)?(class|struct|union|enum(?:\s+class)?|namespace)\s+([A-Za-z_]\w*)\s*(?:[:{]|$)/, (m) => named(m[2], declKind(m[1]))],
+	[/^\s*(?:typedef\s+)?(class|struct|union|enum(?:\s+class)?|namespace)\s+([A-Za-z_]\w*)\s*(?:[:{]|$)/, (m) => named(m[2], declKind(m[1] ?? ''))],
 	[
 		/^(?!\s)(?:[\w:*&<>,~]+\s+)+\**&?([A-Za-z_~][\w:~]*)\s*\([^;]*$/,
-		(m) => named(m[1].split('::').pop(), m[1].includes('::') ? 'method' : 'function'),
+		(m) => {
+			const full = m[1] ?? '';
+			return named(full.split('::').pop(), full.includes('::') ? 'method' : 'function');
+		},
 	],
 	[/^#define\s+([A-Z_][A-Z0-9_]{2,})\b/, (m) => named(m[1], 'constant')],
 ];
 
 const PHP_RULES: readonly Rule[] = [
 	[/^(\s*)(?:(?:public|private|protected|static|abstract|final)\s+)*function\s+&?([A-Za-z_]\w*)/, (m, indent) => named(m[2], indent > 0 ? 'method' : 'function', true)],
-	[/^\s*(?:abstract\s+|final\s+|readonly\s+)*(class|interface|trait|enum)\s+([A-Za-z_]\w*)/, (m) => named(m[2], declKind(m[1]), true)],
+	[/^\s*(?:abstract\s+|final\s+|readonly\s+)*(class|interface|trait|enum)\s+([A-Za-z_]\w*)/, (m) => named(m[2], declKind(m[1] ?? ''), true)],
 ];
 
 const RUBY_RULES: readonly Rule[] = [
@@ -228,11 +231,11 @@ const SHELL_RULES: readonly Rule[] = [
 const SQL_RULES: readonly Rule[] = [
 	[
 		/^\s*create\s+(?:or\s+replace\s+)?(table|view|function|procedure|trigger|index|type)\s+(?:if\s+not\s+exists\s+)?([\w."[\]]+)/i,
-		(m) => named(m[2].replace(/["[\]]/g, ''), /table|view|index/i.test(m[1]) ? 'table' : 'function'),
+		(m) => named((m[2] ?? '').replace(/["[\]]/g, ''), /table|view|index/i.test(m[1] ?? '') ? 'table' : 'function'),
 	],
 ];
 
-const MARKDOWN_RULES: readonly Rule[] = [[/^(#{1,4})\s+(.+?)\s*#*\s*$/, (m) => ({ name: m[2].slice(0, 80), kind: 'section' })]];
+const MARKDOWN_RULES: readonly Rule[] = [[/^(#{1,4})\s+(.+?)\s*#*\s*$/, (m) => ({ name: (m[2] ?? '').slice(0, 80), kind: 'section' })]];
 
 function declKind(keyword: string): SymbolKind {
 	if (/interface|protocol/.test(keyword)) return 'interface';
@@ -273,7 +276,7 @@ export function extractSymbols(lines: readonly string[], family: LanguageFamily)
 	let inBlockComment = false;
 
 	for (let index = 0; index < lines.length && symbols.length < MAX_SYMBOLS; index += 1) {
-		const line = lines[index];
+		const line = lines[index] ?? '';
 		const trimmed = line.trim();
 		if (!trimmed) continue;
 		if (family !== 'markdown' && family !== 'python' && family !== 'ruby' && family !== 'shell') {
@@ -291,7 +294,7 @@ export function extractSymbols(lines: readonly string[], family: LanguageFamily)
 		}
 
 		const indent = line.length - line.trimStart().length;
-		while (containers.length > 0 && indent <= containers[containers.length - 1].indent && !trimmed.startsWith('{')) {
+		while (containers.length > 0 && indent <= containers[containers.length - 1]!.indent && !trimmed.startsWith('{')) {
 			containers.pop();
 		}
 
@@ -302,7 +305,8 @@ export function extractSymbols(lines: readonly string[], family: LanguageFamily)
 		}
 		if (!symbol && family === 'js' && containers.length > 0) {
 			const method = JS_METHOD_RE.exec(line);
-			if (method && !NOT_A_NAME.has(method[1])) symbol = { name: method[1], kind: 'method' };
+			const methodName = method?.[1];
+			if (methodName && !NOT_A_NAME.has(methodName)) symbol = { name: methodName, kind: 'method' };
 		}
 		if (!symbol) continue;
 
@@ -334,13 +338,13 @@ export function extractImports(text: string, family: LanguageFamily): string[] {
 		case 'python':
 			collect(/^\s*from\s+(\.*[\w.]*)\s+import\b/gm);
 			for (const match of text.matchAll(/^\s*import\s+([\w.]+(?:\s*,\s*[\w.]+)*)/gm)) {
-				for (const name of match[1].split(',')) if (found.size < MAX_IMPORTS) found.add(name.trim());
+				for (const name of (match[1] ?? '').split(',')) if (found.size < MAX_IMPORTS) found.add(name.trim());
 			}
 			break;
 		case 'go':
 			collect(/^\s*import\s+(?:\w+\s+)?"([^"]+)"/gm);
 			for (const block of text.matchAll(/^\s*import\s*\(([\s\S]*?)\)/gm)) {
-				for (const match of block[1].matchAll(/"([^"]+)"/g)) if (found.size < MAX_IMPORTS) found.add(match[1]);
+				for (const match of (block[1] ?? '').matchAll(/"([^"]+)"/g)) if (match[1] && found.size < MAX_IMPORTS) found.add(match[1]);
 			}
 			break;
 		case 'rust':
@@ -406,7 +410,7 @@ export function chunkLines(lines: readonly string[], symbols: readonly CodeSymbo
 	for (const symbol of symbols) {
 		let line = symbol.line;
 		// Doc comments and decorators belong to the declaration below them.
-		for (let steps = 0; steps < 15 && line > 1 && COMMENT_LINE_RE.test(lines[line - 2]); steps += 1) line -= 1;
+		for (let steps = 0; steps < 15 && line > 1 && COMMENT_LINE_RE.test(lines[line - 2] ?? ''); steps += 1) line -= 1;
 		if (line > 1) starts.add(line);
 	}
 
@@ -438,9 +442,9 @@ export function chunkLines(lines: readonly string[], symbols: readonly CodeSymbo
 	}
 	// A sliver at the end reads better attached to the chunk before it.
 	const last = chunks[chunks.length - 1];
-	if (chunks.length > 1 && last.endLine - last.startLine < 5) {
+	if (last && chunks.length > 1 && last.endLine - last.startLine < 5) {
 		chunks.pop();
-		chunks[chunks.length - 1] = { startLine: chunks[chunks.length - 1].startLine, endLine: last.endLine };
+		chunks[chunks.length - 1] = { startLine: chunks[chunks.length - 1]!.startLine, endLine: last.endLine };
 	}
 	return chunks;
 }

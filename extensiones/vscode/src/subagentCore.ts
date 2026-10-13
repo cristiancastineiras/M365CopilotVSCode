@@ -282,7 +282,7 @@ function renderSteps(steps: readonly LoopStep[]): string[] {
 		{ full: FULL_STEP_RESULTS, maxChars: MAX_STEP_RESULT_CHARS, maxOldChars: MAX_OLD_STEP_RESULT_CHARS },
 	);
 	return steps.flatMap((step, index) => {
-		const budget = budgets[index];
+		const budget = budgets[index]!; // one budget per step
 		const text =
 			budget.older || budget.duplicate ? condenseToolResult(step.result, budget) : clip(step.result, budget.maxChars);
 		return [step.call, t('subagent.prompt.resultBlock', step.name, text)];
@@ -297,7 +297,7 @@ function compactBlocks(blocks: readonly string[]): string {
 	let remaining = MAX_TRANSCRIPT_CHARS;
 	let omitted = false;
 	for (let index = blocks.length - 1; index >= 0; index -= 1) {
-		const block = blocks[index];
+		const block = blocks[index]!;
 		if (remaining <= 0) {
 			omitted = true;
 			break;

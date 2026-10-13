@@ -100,7 +100,7 @@ export function buildToolProtocolInstructions(catalog: ToolCatalog): string {
 		...(hasGitCommit
 			? [t('protocol.rule.commit', M365_TOOL_NAMES.gitCommit, M365_TOOL_NAMES.generateCommitMessage)]
 			: []),
-		...(hasEditors.length > 1 ? [t('protocol.rule.sameEditor', hasEditors[0].name)] : []),
+		...(hasEditors.length > 1 ? [t('protocol.rule.sameEditor', hasEditors[0]?.name ?? '')] : []),
 		...(hasM365Edits
 			? [t('protocol.rule.editFields', M365_TOOL_NAMES.applyWorkspaceEdits), t('protocol.rule.batches')]
 			: []),
@@ -665,7 +665,7 @@ function resolveInput(record: Record<string, unknown>): Record<string, unknown> 
 function collectBlockRefs(call: DecodedToolCall): string[] {
 	const ids = new Set<string>();
 	walkStrings(call.input, (text) => {
-		for (const match of text.matchAll(BLOCK_REF_RE)) ids.add(match[1]);
+		for (const match of text.matchAll(BLOCK_REF_RE)) if (match[1]) ids.add(match[1]);
 		return undefined;
 	});
 	return [...ids];
@@ -732,7 +732,7 @@ function findOpenMarker(buffer: string): { index: number; length: number } | nul
 /** Locate a `<m365_block id="...">` opening tag. */
 function findBlockOpen(buffer: string): { index: number; length: number; id: string } | null {
 	const match = BLOCK_OPEN_RE.exec(buffer);
-	return match ? { index: match.index, length: match[0].length, id: match[1] } : null;
+	return match ? { index: match.index, length: match[0].length, id: match[1] ?? '' } : null;
 }
 
 /** Strip exactly one newline immediately inside each edge, if present — lets the

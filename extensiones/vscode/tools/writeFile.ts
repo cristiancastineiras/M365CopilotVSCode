@@ -189,7 +189,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 		await this.applyToEditor(files);
 
 		for (const file of files) this.track(file);
-		await this.revealFirst(files[0]);
+		await this.revealFirst(files[0]!);
 		this.changed();
 
 		const summary = files
@@ -559,6 +559,8 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 			next = direction === 1 ? targets[0] : targets[targets.length - 1];
 		}
 
+		// `next` is always set here: targets is not empty, and every branch above picks from it.
+		if (!next) return;
 		const document = await vscode.workspace.openTextDocument(next.uri);
 		const target = await vscode.window.showTextDocument(document, { preview: false });
 		revealLine(target, next.line);
@@ -599,7 +601,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 			return;
 		}
 		if (files.length === 1) {
-			await this.showDiff(files[0].uri);
+			await this.showDiff(files[0]!.uri);
 			return;
 		}
 		const items = await Promise.all(

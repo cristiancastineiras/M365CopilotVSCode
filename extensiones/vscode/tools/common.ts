@@ -60,7 +60,7 @@ export async function readWorkspaceText(
 export function wholeDocumentRange(text: string): vscode.Range {
 	const lines = text.split(/\r\n|\r|\n/);
 	const lastLine = lines.length - 1;
-	return new vscode.Range(0, 0, lastLine, lines[lastLine].length);
+	return new vscode.Range(0, 0, lastLine, lines[lastLine]?.length ?? 0);
 }
 
 export function boundedInteger(value: unknown, fallback: number, min: number, max: number): number {
@@ -118,7 +118,7 @@ function resolveWorkspaceFolder(workspaceFolderName: unknown): vscode.WorkspaceF
 	if (folders.length === 0) throw new Error(t('ws.noFolder'));
 
 	const requested = typeof workspaceFolderName === 'string' ? workspaceFolderName.trim() : '';
-	if (!requested && folders.length === 1) return folders[0];
+	if (!requested && folders.length === 1) return folders[0]!;
 	if (requested) {
 		const folder = folders.find((candidate) => candidate.name === requested);
 		if (folder) return folder;

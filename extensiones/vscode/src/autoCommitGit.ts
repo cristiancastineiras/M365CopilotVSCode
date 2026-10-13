@@ -98,9 +98,9 @@ export function parseStatus(output: string): StatusEntry[] {
 	const entries: StatusEntry[] = [];
 	for (let i = 0; i < fields.length; i += 1) {
 		const field = fields[i];
-		if (field.length < 4) continue;
-		const index = field[0];
-		const worktree = field[1];
+		if (field === undefined || field.length < 4) continue;
+		const index = field.charAt(0);
+		const worktree = field.charAt(1);
 		const file = field.slice(3);
 		const origPath = 'RC'.includes(index) || 'RC'.includes(worktree) ? fields[++i] : undefined;
 		if (file.endsWith('/')) continue;

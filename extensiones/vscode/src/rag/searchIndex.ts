@@ -274,7 +274,7 @@ export class SearchIndex {
 			const idf = Math.log(1 + (this.chunkCount - list.length + 0.5) / (list.length + 0.5));
 			for (const posting of list) {
 				if (!inScope(posting.path)) continue;
-				const chunk = this.files.get(posting.path)!.chunks[posting.chunk];
+				const chunk = this.files.get(posting.path)!.chunks[posting.chunk]!;
 				const saturation = (posting.tf * (K1 + 1)) / (posting.tf + K1 * (1 - B + (B * chunk.length) / averageLength));
 				const key = `${posting.path}#${posting.chunk}`;
 				let entry = scores.get(key);
@@ -308,7 +308,7 @@ export class SearchIndex {
 		const ranked: SearchHit[] = [];
 		for (const entry of scores.values()) {
 			const file = this.files.get(entry.path)!;
-			const chunk = file.chunks[entry.chunk];
+			const chunk = file.chunks[entry.chunk]!;
 			if (options.exclude && options.exclude.path === file.path && chunk.startLine <= options.exclude.endLine && chunk.endLine >= options.exclude.startLine) {
 				continue;
 			}
@@ -503,7 +503,7 @@ export class ImportResolver {
 	}
 
 	private resolveJs(dir: string, specifier: string): Resolution {
-		const clean = specifier.split(/[?#]/)[0];
+		const clean = specifier.split(/[?#]/)[0] ?? '';
 		if (clean.startsWith('.') || clean.startsWith('/')) {
 			const base = clean.startsWith('/') ? normalize(clean.slice(1)) : join(dir, clean);
 			return this.files([this.withExtensions(base)]);
@@ -518,7 +518,7 @@ export class ImportResolver {
 			const found = this.withExtensions(`${prefix}${alias[1]}`) ?? this.withExtensions(`${prefix}src/${alias[1]}`);
 			return found ? this.files([found]) : { kind: 'unknown' };
 		}
-		const packageName = clean.startsWith('@') ? clean.split('/').slice(0, 2).join('/') : clean.split('/')[0];
+		const packageName = clean.startsWith('@') ? clean.split('/').slice(0, 2).join('/') : (clean.split('/')[0] ?? clean);
 		const workspacePackage = this.packages.get(packageName);
 		if (workspacePackage) {
 			const subpath = clean.slice(packageName.length).replace(/^\//, '');
@@ -545,7 +545,7 @@ export class ImportResolver {
 		const found = this.firstExisting([`${module}.py`, `${module}/__init__.py`, `src/${module}.py`, `src/${module}/__init__.py`]);
 		if (found) return this.files([found]);
 		const suffix = this.uniqueBySuffix(`${module}.py`) ?? this.uniqueBySuffix(`${module}/__init__.py`);
-		return suffix ? this.files([suffix]) : { kind: 'external', name: specifier.split('.')[0] };
+		return suffix ? this.files([suffix]) : { kind: 'external', name: specifier.split('.')[0] ?? specifier };
 	}
 
 	private resolveGo(specifier: string): Resolution {
@@ -555,7 +555,7 @@ export class ImportResolver {
 			const suffix = parts.slice(start).join('/');
 			const dirs = [...this.byDir.keys()].filter((dir) => dir === suffix || dir.endsWith(`/${suffix}`));
 			if (dirs.length === 1) {
-				const files = (this.byDir.get(dirs[0]) ?? []).filter((path) => path.endsWith('.go') && !path.endsWith('_test.go'));
+				const files = (this.byDir.get(dirs[0]!) ?? []).filter((path) => path.endsWith('.go') && !path.endsWith('_test.go'));
 				if (files.length > 0) return { kind: 'files', paths: files.slice(0, 5) };
 			}
 			if (dirs.length > 1) break;
@@ -647,7 +647,7 @@ export function bestWindow(
 	let sum = hits.slice(0, maxLines).reduce((total, count) => total + count, 0);
 	best = sum;
 	for (let start = 1; start + maxLines <= lines.length; start += 1) {
-		sum += hits[start + maxLines - 1] - hits[start - 1];
+		sum += hits[start + maxLines - 1]! - hits[start - 1]!;
 		if (sum > best) {
 			best = sum;
 			bestStart = start;

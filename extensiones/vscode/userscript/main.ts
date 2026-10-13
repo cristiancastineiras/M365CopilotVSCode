@@ -625,7 +625,7 @@ function mountUi(): void {
 			captured: [T.capturedTitle, T.capturedSub],
 			connected: [T.connectedTitle, T.connectedSub],
 			warning: [T.warningTitle, T.warningSub],
-		}[state];
+		}[state] as [string, string];
 		q('.status-title').textContent = title;
 		q<HTMLElement>('.status-title').toggleAttribute('data-busy', state === 'waiting');
 		q('.status-sub').textContent = sub;

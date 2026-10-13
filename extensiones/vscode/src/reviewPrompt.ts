@@ -121,7 +121,7 @@ const SEVERITY_RANK: Record<FindingSeverity, number> = { error: 0, warning: 1, i
 function readJsonList(answer: string): unknown[] | null {
 	const text = answer.replace(/\r\n?/g, '\n');
 	const candidates: string[] = [];
-	for (const match of text.matchAll(/(`{3,}|~{3,})[^\n]*\n([\s\S]*?)(?:\n[ \t]*\1|$)/g)) candidates.push(match[2]);
+	for (const match of text.matchAll(/(`{3,}|~{3,})[^\n]*\n([\s\S]*?)(?:\n[ \t]*\1|$)/g)) candidates.push(match[2] ?? '');
 	const open = text.indexOf('[');
 	const close = text.lastIndexOf(']');
 	if (open !== -1 && close > open) candidates.push(text.slice(open, close + 1));
@@ -279,7 +279,8 @@ function unquoteGitPath(raw: string): string {
 			bytes.push(parseInt(octal[0], 8));
 			index += 3;
 		} else {
-			bytes.push(...encoder.encode(simple[inner[index + 1]] ?? inner[index + 1] ?? ''));
+			const escaped = inner[index + 1] ?? '';
+			bytes.push(...encoder.encode(simple[escaped] ?? escaped));
 			index += 1;
 		}
 	}

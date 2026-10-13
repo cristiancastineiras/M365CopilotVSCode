@@ -73,7 +73,8 @@ export function toolResultBudgets(
 	const seen = new Set<string>();
 	const budgets: ResultBudget[] = [];
 	for (let index = results.length - 1, rank = 0; index >= 0; index -= 1, rank += 1) {
-		const key = `${results[index].name}\0${results[index].text}`;
+		const result = results[index]!;
+		const key = `${result.name}\0${result.text}`;
 		const duplicate = seen.has(key);
 		seen.add(key);
 		const older = rank >= limits.full;
@@ -115,7 +116,7 @@ export function renderTranscript(messages: readonly TranscriptMessage[], limits 
 			if (part.kind === 'toolCall') {
 				return t('prompt.toolCall', part.name, trimForContext(part.input, limits.maxToolCallInputChars));
 			}
-			const budget = budgets[resultIndex];
+			const budget = budgets[resultIndex]!; // one budget per tool result, in order
 			resultIndex += 1;
 			return `${t('prompt.toolResult', part.name)}\n${condenseToolResult(part.text, budget)}`;
 		});
@@ -136,7 +137,7 @@ export function renderTranscript(messages: readonly TranscriptMessage[], limits 
 		});
 	}
 	if (blocks.length === 0) return '';
-	if (messages.length === 1) return blocks[0].text;
+	if (messages.length === 1) return blocks[0]!.text;
 	return `${t('prompt.continue')}\n\n${selectWithinBudget(blocks, pinned, limits.maxContextChars)}\n\nAssistant:`;
 }
 
@@ -203,6 +204,6 @@ function isText(part: TranscriptPart): boolean {
 }
 
 function findLastIndex<T>(items: readonly T[], predicate: (item: T) => boolean): number {
-	for (let index = items.length - 1; index >= 0; index -= 1) if (predicate(items[index])) return index;
+	for (let index = items.length - 1; index >= 0; index -= 1) if (predicate(items[index]!)) return index;
 	return -1;
 }

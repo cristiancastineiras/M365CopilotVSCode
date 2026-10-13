@@ -50,7 +50,7 @@ export function validateConventionalCommitMessage(raw: unknown): string {
 		throw new Error(t('commitMsg.tooLong', MAX_MESSAGE_CHARS));
 	}
 
-	const subject = message.split('\n', 1)[0];
+	const subject = message.split('\n', 1)[0] ?? '';
 	if (!SUBJECT_RE.test(subject)) {
 		throw new Error(
 			t('commitMsg.notConventional', CONVENTIONAL_COMMIT_TYPES.join(', '), subject.slice(0, MAX_SUBJECT_CHARS)),
@@ -130,10 +130,11 @@ export function commitMessageProblem(message: string): string | undefined {
 export function cleanGeneratedCommitMessage(raw: string): string {
 	let text = raw.replace(/\r\n/g, '\n').trim();
 	const fenced = /^(`{3,}|~{3,})[^\n]*\n([\s\S]*?)\n\1\s*$/.exec(text);
-	if (fenced) text = fenced[2].trim();
+	if (fenced) text = (fenced[2] ?? '').trim();
 	// A short label line ending in a colon before the real subject.
 	const lines = text.split('\n');
-	if (lines.length > 1 && /^[^:]{1,40}:\s*$/.test(lines[0]) && !SUBJECT_RE.test(lines[0])) {
+	const label = lines[0] ?? '';
+	if (lines.length > 1 && /^[^:]{1,40}:\s*$/.test(label) && !SUBJECT_RE.test(label)) {
 		text = lines.slice(1).join('\n').trim();
 	}
 	if (/^(["'`])[\s\S]*\1$/.test(text)) text = text.slice(1, -1).trim();
@@ -181,7 +182,7 @@ const AI_SIGNATURE_RE = /^\W*(?:generated|created|written) (?:by|with)\b.*\b(?:c
 export function normalizeCommitMessage(raw: string, options: { readonly ticket?: string } = {}): string {
 	const text = raw.replace(/\r\n?/g, '\n').trim();
 	if (!text) return '';
-	const [first, ...rest] = text.split('\n');
+	const [first = '', ...rest] = text.split('\n');
 	const subject = normalizeSubject(first);
 	let paragraphs = rest
 		.join('\n')
@@ -223,7 +224,7 @@ function normalizeSubject(line: string): string {
 		.replace(/^\*\*(.+)\*\*$/, '$1');
 	const match = /^([A-Za-z]+) ?(?:\( ?([^)]*?) ?\))? ?(!)? ?: ?(.*)$/.exec(subject);
 	if (match) {
-		const [, word, scope, bang, summary] = match;
+		const [, word = '', scope, bang, summary] = match;
 		const type = TYPE_ALIASES[word.toLowerCase()] ?? word.toLowerCase();
 		if ((CONVENTIONAL_COMMIT_TYPES as readonly string[]).includes(type) && summary) {
 			const cleanScope = scope ? scope.replace(/ /g, '-') : '';
@@ -242,9 +243,9 @@ function tidyParagraph(paragraph: string): string {
 	const items: { indent: string; bullet: boolean; text: string }[] = [];
 	for (const line of lines) {
 		const bullet = /^(\s*)- (.*)$/.exec(line);
-		if (bullet) items.push({ indent: bullet[1], bullet: true, text: bullet[2] });
+		if (bullet) items.push({ indent: bullet[1] ?? '', bullet: true, text: bullet[2] ?? '' });
 		else if (items.length === 0 || TRAILER_RE.test(line)) items.push({ indent: '', bullet: false, text: line.trim() });
-		else items[items.length - 1].text += ` ${line.trim()}`;
+		else items[items.length - 1]!.text += ` ${line.trim()}`;
 	}
 	return items
 		.map((item) =>

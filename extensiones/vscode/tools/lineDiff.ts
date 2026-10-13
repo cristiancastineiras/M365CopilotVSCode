@@ -102,7 +102,10 @@ function myers(a: readonly number[], b: readonly number[]): Hunk[] | null {
 		if (d > MAX_EDIT_DISTANCE) return null;
 		trace.push(v.slice(offset - d - 1, offset + d + 2));
 		for (let k = -d; k <= d; k += 2) {
-			let x = k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1]) ? v[offset + k + 1] : v[offset + k - 1] + 1;
+			// Both neighbours are inside the array: it is sized for max + 1 diagonals each way.
+			const down = v[offset + k + 1]!;
+			const right = v[offset + k - 1]!;
+			let x = k === -d || (k !== d && right < down) ? down : right + 1;
 			let y = x - k;
 			while (x < n && y < m && a[x] === b[y]) {
 				x += 1;
@@ -122,8 +125,8 @@ function backtrack(trace: readonly Int32Array[], n: number, m: number): Hunk[] {
 	let x = n;
 	let y = m;
 	for (let d = trace.length - 1; d > 0; d -= 1) {
-		const slice = trace[d];
-		const at = (k: number) => slice[k + d + 1];
+		const slice = trace[d]!;
+		const at = (k: number) => slice[k + d + 1]!;
 		const k = x - y;
 		const prevK = k === -d || (k !== d && at(k - 1) < at(k + 1)) ? k + 1 : k - 1;
 		const prevX = at(prevK);
@@ -213,6 +216,7 @@ export function revertHunkEdit(current: string, baseline: string, hunk: Hunk): L
 	const oldLines = splitLines(baseline).slice(hunk.oldStart, hunk.oldStart + hunk.oldLength);
 	const eol = eolOf(current.includes('\n') || current.includes('\r') ? current : baseline);
 	const lastLine = newLines.length - 1;
+	const lengthOf = (line: number) => newLines[line]?.length ?? 0;
 
 	if (hunk.newLength === 0) {
 		// The agent removed lines: put them back before line `newStart`…
@@ -220,21 +224,21 @@ export function revertHunkEdit(current: string, baseline: string, hunk: Hunk): L
 			return edit(hunk.newStart, 0, hunk.newStart, 0, oldLines.join(eol) + eol);
 		}
 		// …or after the last line, when they were removed from the end.
-		return edit(lastLine, newLines[lastLine].length, lastLine, newLines[lastLine].length, eol + oldLines.join(eol));
+		return edit(lastLine, lengthOf(lastLine), lastLine, lengthOf(lastLine), eol + oldLines.join(eol));
 	}
 
 	const endLine = hunk.newStart + hunk.newLength - 1;
 	if (hunk.oldLength > 0) {
-		return edit(hunk.newStart, 0, endLine, newLines[endLine].length, oldLines.join(eol));
+		return edit(hunk.newStart, 0, endLine, lengthOf(endLine), oldLines.join(eol));
 	}
 
 	// The agent only inserted lines: remove them together with one line break.
 	if (endLine < lastLine) return edit(hunk.newStart, 0, endLine + 1, 0, '');
 	if (hunk.newStart > 0) {
 		const before = hunk.newStart - 1;
-		return edit(before, newLines[before].length, endLine, newLines[endLine].length, '');
+		return edit(before, lengthOf(before), endLine, lengthOf(endLine), '');
 	}
-	return edit(0, 0, endLine, newLines[endLine].length, '');
+	return edit(0, 0, endLine, lengthOf(endLine), '');
 }
 
 function edit(startLine: number, startCharacter: number, endLine: number, endCharacter: number, text: string): LineEdit {

@@ -211,7 +211,7 @@ class M365CodeActionProvider implements vscode.CodeActionProvider {
 }
 
 function shorten(message: string): string {
-	const firstLine = message.split('\n', 1)[0].trim();
+	const firstLine = (message.split('\n', 1)[0] ?? '').trim();
 	return firstLine.length > MAX_DIAGNOSTIC_TITLE_CHARS
 		? `${firstLine.slice(0, MAX_DIAGNOSTIC_TITLE_CHARS - 1)}…`
 		: firstLine;

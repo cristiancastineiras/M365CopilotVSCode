@@ -62,7 +62,7 @@ const PREAMBLE_RE = /^[^\n{}();=<>[\]]{3,}:[ \t]*\n/;
 export function extractEditedCode(answer: string, original: string): string | null {
 	const normalized = answer.replace(/\r\n?/g, '\n');
 	const fenced = FENCED_BLOCK_RE.exec(normalized);
-	let code = fenced ? fenced[2] : normalized.trim().replace(PREAMBLE_RE, '');
+	let code = fenced ? (fenced[2] ?? '') : normalized.trim().replace(PREAMBLE_RE, '');
 	code = code.replace(/\n+$/, '');
 	if (!code.trim()) return null;
 	return reindent(code, original.replace(/\r\n?/g, '\n'));

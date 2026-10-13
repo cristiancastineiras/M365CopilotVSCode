@@ -73,7 +73,7 @@ function dropProsePreamble(text: string): string {
 	const lines = text.split('\n');
 	let start = 0;
 	while (start < lines.length && start < 2) {
-		const line = lines[start].trim();
+		const line = (lines[start] ?? '').trim();
 		if (!line) {
 			start += 1;
 			continue;

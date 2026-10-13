@@ -144,7 +144,7 @@ export default function App() {
   });
   const token = tokenStatus(profile.hasToken, expired, profile.minutesLeft);
   const vsc = vscodeStatus(vscode);
-  const renewal = REFRESH[profile.refreshAction ?? 'none'] ?? REFRESH.none;
+  const renewal = REFRESH[profile.refreshAction ?? 'none'] ?? REFRESH.none!;
   // El botón grande es siempre el paso siguiente: sin token o sin sesión,
   // abrir M365 Copilot; con el token caducado, renovarlo (enviarlo fallaría);
   // si no, enviarlo. El secundario no repite el principal.

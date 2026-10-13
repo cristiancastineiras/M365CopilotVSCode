@@ -235,7 +235,8 @@ export class ProjectIndexService implements vscode.Disposable {
 						for (const [index, file] of analyzed.entries()) {
 							if (!file) continue;
 							next.upsert(file);
-							uris.set(file.path, batch[index].uri);
+							const source = batch[index];
+							if (source) uris.set(file.path, source.uri);
 							chars += file.size;
 						}
 						progress.report({ message: `${Math.min(start + BATCH_SIZE, selection.files.length)}/${selection.files.length}` });
@@ -425,7 +426,10 @@ export class ProjectIndexService implements vscode.Disposable {
 							token.token,
 						);
 						const kept = new Set(output.split('\0').filter(Boolean));
-						for (const [index, path] of relative.entries()) if (kept.has(path)) accepted.push(slice[index]);
+						for (const [index, path] of relative.entries()) {
+							const candidate = slice[index];
+							if (candidate && kept.has(path)) accepted.push(candidate);
+						}
 					} catch {
 						accepted.push(...slice);
 					}

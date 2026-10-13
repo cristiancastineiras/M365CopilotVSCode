@@ -34,7 +34,7 @@ export function recentUserTexts(messages: readonly vscode.LanguageModelChatReque
 	const texts: string[] = [];
 	for (let index = messages.length - 1; index >= 0 && texts.length < count; index -= 1) {
 		const message = messages[index];
-		if (message.role !== vscode.LanguageModelChatMessageRole.User) continue;
+		if (message?.role !== vscode.LanguageModelChatMessageRole.User) continue;
 		const text = message.content
 			.filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
 			.map((part) => part.value)

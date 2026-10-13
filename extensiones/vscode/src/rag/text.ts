@@ -359,7 +359,7 @@ export function isSkippedPath(path: string): boolean {
 	if (SKIPPED_NAME_RE.test(path)) return true;
 	const segments = path.split('/');
 	if (segments.slice(0, -1).some((segment) => SKIPPED_SEGMENTS.has(segment))) return true;
-	const name = segments[segments.length - 1];
+	const name = segments[segments.length - 1] ?? '';
 	const dot = name.lastIndexOf('.');
 	return dot > 0 && BINARY_EXTENSIONS.has(name.slice(dot + 1).toLowerCase());
 }
@@ -402,7 +402,7 @@ export function globToRegExp(glob: string): RegExp {
 	let braces = 0;
 	const pattern = glob.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
 	while (index < pattern.length) {
-		const char = pattern[index];
+		const char = pattern[index] ?? '';
 		if (char === '*') {
 			if (pattern[index + 1] === '*') {
 				const slash = pattern[index + 2] === '/';

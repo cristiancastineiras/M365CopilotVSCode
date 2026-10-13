@@ -57,7 +57,7 @@ export function cleanTerminalOutput(raw: string, command: string): string {
 	const lines = text.split('\n');
 	// Shells echo the command back before running it; that is noise here since
 	// the caller already reports the command separately.
-	if (lines.length > 0 && lines[0].trim() === command.trim()) lines.shift();
+	if (lines[0]?.trim() === command.trim()) lines.shift();
 
 	return lines
 		.join('\n')

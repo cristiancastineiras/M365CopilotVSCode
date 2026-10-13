@@ -192,7 +192,7 @@ export class AutoCommitter implements vscode.Disposable {
 		this.lastRound = { root: watch.root, round, at: Date.now() };
 		const text =
 			round.subjects.length === 1
-				? t('autoCommit.committed', watch.name, round.subjects[0])
+				? t('autoCommit.committed', watch.name, round.subjects[0] ?? '')
 				: t('autoCommit.committedMany', round.subjects.length, watch.name, round.subjects.join(' · '));
 		const show = t('autoCommit.show');
 		const undo = t('autoCommit.undo');
@@ -659,7 +659,7 @@ class RepositoryWatch implements vscode.Disposable {
 		const subjects = commits.map((group) => subjectOf(group.message));
 		const text =
 			commits.length === 1
-				? t('autoCommit.confirm', this.name, subjects[0])
+				? t('autoCommit.confirm', this.name, subjects[0] ?? '')
 				: t('autoCommit.confirmMany', commits.length, this.name, subjects.join(' · '));
 		const commit = t('autoCommit.confirm.commit');
 		const choose = t('autoCommit.confirm.choose');
@@ -705,7 +705,7 @@ function describeDecision(decision: AutoCommitDecision): string {
 }
 
 function subjectOf(message: string): string {
-	return message.split('\n', 1)[0];
+	return message.split('\n', 1)[0] ?? '';
 }
 
 /** git in `root`, for the calls that are never cancelled (undo, submodule check, log). */

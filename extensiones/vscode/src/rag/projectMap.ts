@@ -93,7 +93,7 @@ function renderAreas(files: readonly IndexedFile[], maxLines: number): string[] 
 		}
 		const subfolders = countBy(
 			members.filter((file) => dirname(file.path) !== area),
-			(file) => file.path.slice(area ? area.length + 1 : 0).split('/')[0],
+			(file) => file.path.slice(area ? area.length + 1 : 0).split('/')[0] ?? '',
 		);
 		const direct = members.filter((file) => dirname(file.path) === area);
 		const shown = [...direct]

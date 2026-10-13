@@ -1,4 +1,4 @@
-# M365 Copilot → VS Code · Monorepo
+# M365 Copilot para VS Code 
 
 [English](README.md) · **Español**
 

@@ -1,6 +1,7 @@
-# M365 Copilot → VS Code · Monorepo
+# M365 Copilot for VS Code
 
 **English** · [Español](README.es.md)
+
 
 Monorepo (pnpm workspaces + Turborepo) of the pieces that bring your
 **Microsoft 365 Copilot** subscription into VS Code — as chat models, the

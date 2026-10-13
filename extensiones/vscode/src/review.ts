@@ -326,7 +326,8 @@ async function reviewDocument(
 	token: vscode.CancellationToken,
 ): Promise<ReviewFinding[] | undefined> {
 	const relativePath = relativePathForUri(document.uri);
-	const bounds: LineRange = { start: segments[0].startLine, end: lastLineOf(segments[segments.length - 1]) };
+	// Never empty: segmentsAround gives back undefined instead of an empty list.
+	const bounds: LineRange = { start: segments[0]!.startLine, end: lastLineOf(segments[segments.length - 1]!) };
 	const controller = new AbortController();
 	const cancel = token.onCancellationRequested(() => controller.abort());
 	let answer = '';

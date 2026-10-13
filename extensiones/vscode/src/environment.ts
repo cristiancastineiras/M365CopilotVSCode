@@ -36,7 +36,7 @@ export function describeShell(shell: string | undefined): string | undefined {
 export function renderEnvironment(info: EnvironmentInfo): string {
 	const system = [PLATFORMS[info.platform] ?? info.platform, describeShell(info.shell)].filter(Boolean).join(' · ');
 	const lines = [t('env.line', system, info.date)];
-	if (info.folders.length === 1) lines.push(t('env.root', info.folders[0].path));
+	if (info.folders.length === 1) lines.push(t('env.root', info.folders[0]?.path ?? ''));
 	else if (info.folders.length > 1) {
 		lines.push(t('env.roots', info.folders.map((folder) => `${folder.name} (${folder.path})`).join(', ')));
 	}

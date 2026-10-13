@@ -178,7 +178,7 @@ const NOT_BREAKING = /^\s*(?:-|no|none|nothing|false|n\/a|ninguno|nada)?\s*\.?\s
 /** `type(scope)!: …` plus a `BREAKING CHANGE:` trailer, unless the message already has one. */
 function withBreaking(message: string, breaking: string): string {
 	if (!breaking || /^BREAKING[ -]CHANGE:/m.test(message)) return message;
-	const [subject, ...rest] = message.split('\n');
+	const [subject = '', ...rest] = message.split('\n');
 	const marked = subject.replace(/^([A-Za-z]+(?:\([^)]*\))?)!?:/, '$1!:');
 	return `${[marked, ...rest].join('\n').trimEnd()}\n\nBREAKING CHANGE: ${breaking}`;
 }
@@ -220,7 +220,7 @@ function oneLine(value: unknown, max = MAX_REASON_CHARS): string {
 function readJsonObject(answer: string): Record<string, unknown> | undefined {
 	const text = answer.replace(/\r\n?/g, '\n');
 	const candidates: string[] = [];
-	for (const match of text.matchAll(/(`{3,}|~{3,})[^\n]*\n([\s\S]*?)(?:\n[ \t]*\1|$)/g)) candidates.push(match[2]);
+	for (const match of text.matchAll(/(`{3,}|~{3,})[^\n]*\n([\s\S]*?)(?:\n[ \t]*\1|$)/g)) candidates.push(match[2] ?? '');
 	const open = text.indexOf('{');
 	const close = text.lastIndexOf('}');
 	if (open !== -1 && close > open) candidates.push(text.slice(open, close + 1));

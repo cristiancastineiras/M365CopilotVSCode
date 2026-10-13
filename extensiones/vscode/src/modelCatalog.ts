@@ -107,7 +107,8 @@ const MODE_LABELS: Readonly<Record<string, string>> = {
  */
 export function prettyTone(tone: string): string {
 	const tokens = tone.split(/[_\-\s]+/).filter(Boolean);
-	const mode = tokens.length > 0 ? MODE_LABELS[tokens[tokens.length - 1].toLowerCase()] : undefined;
+	const last = tokens[tokens.length - 1];
+	const mode = last !== undefined ? MODE_LABELS[last.toLowerCase()] : undefined;
 	if (mode) tokens.pop();
 	const words: string[] = [];
 	for (const token of tokens) {
@@ -209,8 +210,7 @@ export function mergeModels(sources: ModelSources): CatalogModel[] {
 		});
 	};
 
-	const auto = BUILTIN_MODELS[0];
-	const result: CatalogModel[] = [auto];
+	const result: CatalogModel[] = BUILTIN_MODELS.slice(0, 1);
 	for (const model of BUILTIN_MODELS.slice(1)) {
 		const tone = model.tone!;
 		if (hidden.has(tone) && !custom.has(tone)) continue;
