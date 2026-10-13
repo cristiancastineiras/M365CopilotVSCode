@@ -22,13 +22,13 @@
     "@m365copilot/core": "workspace:*",
     "wxt": "^0.19.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^19.3.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.268",
     "@types/node": "^22.5.0",
     "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
+    "@types/react-dom": "^19.3.0",
     "typescript": "^5.6.2",
     "vite": "^6.0.0",
     "rolldown": "^0.12.0"
