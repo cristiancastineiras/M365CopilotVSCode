@@ -8,7 +8,13 @@
  * check the prompt and every answer shape the model likes to produce.
  */
 import type { StatusEntry, UntrackedFile } from './autoCommitGit';
-import { CONVENTIONAL_COMMIT_TYPES, cleanGeneratedCommitMessage, validateConventionalCommitMessage } from '../tools/commitMessage';
+import { budgetDiff, diffStats, formatStat, historyContext, renderUntrackedDiff, wrap, type DiffStat } from '../tools/commitContext';
+import {
+	CONVENTIONAL_COMMIT_TYPES,
+	cleanGeneratedCommitMessage,
+	normalizeCommitMessage,
+	validateConventionalCommitMessage,
+} from '../tools/commitMessage';
 import { t } from './i18n';
 
 /** Unrelated finished changes may become separate commits — but never a flood of them. */
@@ -18,8 +24,8 @@ export const MAX_CHANGED_FILES = 150;
 
 const MAX_PROMPT_DIFF_CHARS = 24_000;
 const MAX_PROMPT_FILES = 80;
-const MAX_RECENT_SUBJECTS = 6;
 const MAX_REASON_CHARS = 200;
+const MAX_BREAKING_CHARS = 400;
 const BODY_WIDTH = 72;
 
 export interface AutoCommitPromptInput {
@@ -49,64 +55,60 @@ export type AutoCommitDecision =
 	| { readonly kind: 'invalid'; readonly reason: string };
 
 export function buildAutoCommitPrompt(input: AutoCommitPromptInput): string {
-	const state = [t('autoCommit.prompt.branch', input.branch)];
+	const state = [t('commit.context.branch', input.branch)];
 	if (input.lastCommit) state.push(t('autoCommit.prompt.lastCommit', input.lastCommit.minutesAgo, input.lastCommit.subject));
 	if (input.pendingMinutes !== undefined) state.push(t('autoCommit.prompt.pendingFor', input.pendingMinutes));
 	if (input.lastWaitReason) state.push(t('autoCommit.prompt.lastWait', input.lastWaitReason));
 
-	const recent = input.recentSubjects.slice(0, MAX_RECENT_SUBJECTS);
-	const files = input.entries.slice(0, MAX_PROMPT_FILES).map(describeEntry);
+	const fullDiff = [input.diff.trimEnd(), ...input.untracked.map(renderUntrackedDiff)].filter(Boolean).join('\n');
+	const stats = diffStats(fullDiff);
+	const history = historyContext(input.recentSubjects);
+	const files = input.entries.slice(0, MAX_PROMPT_FILES).map((entry) => describeEntry(entry, stats.get(entry.path)));
 	if (input.entries.length > files.length) files.push(`- … (+${input.entries.length - files.length})`);
-
-	const fullDiff = [input.diff.trimEnd(), ...input.untracked.map(renderUntracked)].filter(Boolean).join('\n');
-	const diff =
-		fullDiff.length > MAX_PROMPT_DIFF_CHARS
-			? `${fullDiff.slice(0, MAX_PROMPT_DIFF_CHARS)}\n${t('scm.prompt.truncated', fullDiff.length - MAX_PROMPT_DIFF_CHARS)}`
-			: fullDiff;
 
 	const context = [
 		t('autoCommit.prompt.state'),
 		...state.map((line) => `- ${line}`),
 		'',
-		...(recent.length > 0 ? [t('autoCommit.prompt.recent'), ...recent.map((subject) => `- ${subject}`), ''] : []),
+		...(history.length > 0 ? [...history, ''] : []),
 		t('scm.prompt.files', input.entries.length),
 		...files,
 		'',
 		t('scm.prompt.diff'),
-		diff,
+		budgetDiff(fullDiff, MAX_PROMPT_DIFF_CHARS),
 		t('scm.prompt.diffEnd'),
 	].join('\n');
 	return t('autoCommit.prompt', MAX_COMMITS_PER_ROUND, CONVENTIONAL_COMMIT_TYPES.join(', '), context);
 }
 
-/** `- src/a.ts (modified)`, with the path exactly as the answer must quote it. */
-export function describeEntry(entry: StatusEntry): string {
+/**
+ * `- src/a.ts (modified, +12 -3)`, with the path exactly as the answer must
+ * quote it; the line counts tell the main change from the small touches.
+ */
+export function describeEntry(entry: StatusEntry, stat?: DiffStat): string {
 	let kind: string;
 	if (entry.index === '?') kind = t('autoCommit.prompt.kind.new');
 	else if (entry.index === 'R' || entry.worktree === 'R') kind = t('autoCommit.prompt.kind.renamed', entry.origPath ?? '?');
 	else if (entry.index === 'D' || entry.worktree === 'D') kind = t('autoCommit.prompt.kind.deleted');
 	else if (entry.index === 'A') kind = t('autoCommit.prompt.kind.added');
 	else kind = t('autoCommit.prompt.kind.modified');
-	return `- ${entry.path} (${kind})`;
-}
-
-/** A new file as the diff git would show once it is added. */
-function renderUntracked(file: UntrackedFile): string {
-	const header = `diff --git a/${file.path} b/${file.path}\nnew file\n--- /dev/null\n+++ b/${file.path}`;
-	if (file.content === undefined) return `${header}\n${t('autoCommit.prompt.binary', file.size)}`;
-	const lines = file.content.replace(/\r\n?/g, '\n').replace(/\n$/, '').split('\n');
-	const body = lines.map((line) => `+${line}`).join('\n');
-	return `${header}\n${body}${file.truncated ? `\n${t('autoCommit.prompt.fileTruncated', file.size)}` : ''}`;
+	return `- ${entry.path} (${[kind, formatStat(stat)].filter(Boolean).join(', ')})`;
 }
 
 /**
  * Reads the model's answer. Paths are matched against what changed (exactly,
  * then ignoring `./`, backslashes, a copied "(modified)" note and case);
  * unknown ones are dropped, and a file only goes into the first commit that
- * names it. A commit whose message is not valid Conventional Commits is
- * dropped too: nothing gets committed with a message nobody can read later.
+ * names it. Messages are tidied ({@link normalizeCommitMessage}, with the
+ * branch's `ticket` as a `Refs:` trailer); a commit whose message is still
+ * not valid Conventional Commits is dropped: nothing gets committed with a
+ * message nobody can read later.
  */
-export function parseAutoCommitDecision(answer: string, entries: readonly StatusEntry[]): AutoCommitDecision {
+export function parseAutoCommitDecision(
+	answer: string,
+	entries: readonly StatusEntry[],
+	options: { readonly ticket?: string } = {},
+): AutoCommitDecision {
 	const record = readJsonObject(answer);
 	if (!record) return { kind: 'invalid', reason: t('autoCommit.invalid.noJson') };
 
@@ -131,7 +133,7 @@ export function parseAutoCommitDecision(answer: string, entries: readonly Status
 		if (files.length === 0) continue;
 		let message: string;
 		try {
-			message = validateConventionalCommitMessage(composeMessage(group));
+			message = validateConventionalCommitMessage(normalizeCommitMessage(composeMessage(group), options));
 		} catch (error) {
 			problem = error instanceof Error ? error.message : String(error);
 			continue;
@@ -143,12 +145,17 @@ export function parseAutoCommitDecision(answer: string, entries: readonly Status
 }
 
 /**
- * The commit message out of `{subject, body}` (body as a list of points or a
- * text) or a ready-made `message`. Points become `- ` bullets wrapped at 72
- * columns, which is how `git log` reads best.
+ * The commit message out of `{subject, body, breaking}` (body as a list of
+ * points or a text) or a ready-made `message`. Points become `- ` bullets
+ * wrapped at 72 columns, which is how `git log` reads best; `breaking` adds
+ * the `!` and the `BREAKING CHANGE:` trailer.
  */
 function composeMessage(group: Record<string, unknown>): string {
-	if (typeof group.message === 'string' && group.message.trim()) return cleanGeneratedCommitMessage(group.message);
+	const breaking =
+		typeof group.breaking === 'string' && !NOT_BREAKING.test(group.breaking) ? oneLine(group.breaking, MAX_BREAKING_CHARS) : '';
+	if (typeof group.message === 'string' && group.message.trim()) {
+		return withBreaking(cleanGeneratedCommitMessage(group.message), breaking);
+	}
 	const subject = String(group.subject ?? group.title ?? group.summary ?? '')
 		.replace(/\s+/g, ' ')
 		.trim()
@@ -162,23 +169,18 @@ function composeMessage(group: Record<string, unknown>): string {
 			: typeof group.body === 'string'
 				? group.body.trim()
 				: '';
-	return body ? `${subject}\n\n${body}` : subject;
+	return withBreaking(body ? `${subject}\n\n${body}` : subject, breaking);
 }
 
-function wrap(text: string, width: number, first: string, rest: string): string {
-	const lines: string[] = [];
-	let line = first;
-	for (const word of text.split(/\s+/)) {
-		const prefix = lines.length === 0 ? first : rest;
-		if (line.length > prefix.length && line.length + 1 + word.length > width) {
-			lines.push(line);
-			line = rest + word;
-		} else {
-			line += line.length > prefix.length ? ` ${word}` : word;
-		}
-	}
-	lines.push(line);
-	return lines.join('\n');
+/** What a model writes in `breaking` when nothing breaks. */
+const NOT_BREAKING = /^\s*(?:-|no|none|nothing|false|n\/a|ninguno|nada)?\s*\.?\s*$/i;
+
+/** `type(scope)!: …` plus a `BREAKING CHANGE:` trailer, unless the message already has one. */
+function withBreaking(message: string, breaking: string): string {
+	if (!breaking || /^BREAKING[ -]CHANGE:/m.test(message)) return message;
+	const [subject, ...rest] = message.split('\n');
+	const marked = subject.replace(/^([A-Za-z]+(?:\([^)]*\))?)!?:/, '$1!:');
+	return `${[marked, ...rest].join('\n').trimEnd()}\n\nBREAKING CHANGE: ${breaking}`;
 }
 
 /** Maps what the model wrote to a path `git status` listed, or undefined. */
@@ -210,9 +212,9 @@ function asList(value: unknown): unknown[] {
 	return typeof value === 'string' ? [value] : [];
 }
 
-function oneLine(value: unknown): string {
+function oneLine(value: unknown, max = MAX_REASON_CHARS): string {
 	const text = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
-	return text.length > MAX_REASON_CHARS ? `${text.slice(0, MAX_REASON_CHARS - 1)}…` : text;
+	return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
 function readJsonObject(answer: string): Record<string, unknown> | undefined {

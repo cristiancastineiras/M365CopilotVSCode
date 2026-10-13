@@ -206,10 +206,30 @@ the token, a short status-bar message confirms it.
 
 The ✨ button in the **Source Control** title bar (*Generate commit message with
 M365 Copilot*) writes a [Conventional Commits](https://www.conventionalcommits.org/)
-message from the staged diff — or the working tree's, if nothing is staged —
-straight into the commit box, in the extension's language. It never commits:
-you review and commit yourself. Next to it, ☑ reviews those changes before you
-commit (see [Code review as comments](#code-review-as-comments)).
+message from the staged diff — or the working tree's, new files included, if
+nothing is staged — straight into the commit box, in the extension's language
+(or the repository's, when all its recent commits use another one). It never
+commits: you review and commit yourself. Next to it, ☑ reviews those changes
+before you commit (see [Code review as comments](#code-review-as-comments)).
+
+What makes the message good, both here and in the auto-commit below:
+
+- **Your repository's conventions:** the model sees the latest 30 subjects and
+  the scopes they use, so the new commit says `(vscode)` like the others, not
+  `(extension)`.
+- **A specific subject and a body that says why:** the right type (`feat`,
+  `fix`, `refactor`…), never "update files"; the body explains the problem and
+  the change in behavior, not the diff file by file. Incompatible changes get
+  `!` and a `BREAKING CHANGE:` line.
+- **The whole change in view:** each file with its added/removed lines; when
+  the diff is large, the room is shared between files instead of cutting off
+  the last ones, and lock or generated files (`pnpm-lock.yaml`, `dist/`,
+  `*.min.js`…) shrink to their line counts.
+- **Tidied before it reaches you:** `Feat:` → `feat:`, no trailing period, body
+  wrapped at 72 columns, no assistant signatures or co-author lines. A message
+  that still breaks Conventional Commits is sent back to the model once.
+- **The ticket from the branch:** on `feature/ABC-123-login` or `fix/42-crash`
+  the message ends with `Refs: ABC-123` / `Refs: #42`.
 
 ### Auto-commit
 

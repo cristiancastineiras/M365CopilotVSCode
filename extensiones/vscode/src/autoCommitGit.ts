@@ -73,8 +73,10 @@ export class HeadMovedError extends Error {}
 const COMMIT_TIMEOUT_MS = 120_000;
 /** How much of a new file the model gets to see. */
 const UNTRACKED_PREVIEW_BYTES = 6_000;
+/** Enough history to see which scopes the repository uses, not just the last few. */
+const RECENT_SUBJECTS = 30;
 
-const STATUS_ARGS = ['-c', 'core.quotePath=false', 'status', '--porcelain=v1', '-z', '--untracked-files=all'];
+export const STATUS_ARGS = ['-c', 'core.quotePath=false', 'status', '--porcelain=v1', '-z', '--untracked-files=all'];
 const UNMERGED = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);
 const OPERATION_FILES: readonly (readonly [string, OperationInProgress])[] = [
 	['MERGE_HEAD', 'merge'],
@@ -134,6 +136,18 @@ export async function readRepoState(git: GitRunner): Promise<RepoState> {
 	};
 }
 
+/**
+ * Subjects of the latest commits, newest first, merges left out: what the
+ * model reads the repository's style, scopes and language from. Empty in a
+ * repository without commits.
+ */
+export async function recentSubjects(git: GitRunner, count = RECENT_SUBJECTS): Promise<string[]> {
+	return (await git(['log', `-${count}`, '--no-merges', '--format=%s']).catch(() => ''))
+		.split('\n')
+		.map((line) => line.trim())
+		.filter(Boolean);
+}
+
 /** Whether the repository is a submodule of another one (those are left alone). */
 export async function isSubmodule(git: GitRunner): Promise<boolean> {
 	return (await git(['rev-parse', '--show-superproject-working-tree']).catch(() => '')).trim() !== '';
@@ -157,6 +171,11 @@ export async function readChanges(git: GitRunner, root: string, head: string): P
 		hash.update(`\0${entry.path}\0${file.preview.size}\0${file.mtimeMs}`);
 	}
 	return { entries, diff, untracked, fingerprint: hash.digest('hex') };
+}
+
+/** The start of a new, untracked file, as the model sees it; undefined if it cannot be read. */
+export async function readUntrackedPreview(root: string, relativePath: string): Promise<UntrackedFile | undefined> {
+	return (await readUntracked(root, relativePath))?.preview;
 }
 
 async function readUntracked(

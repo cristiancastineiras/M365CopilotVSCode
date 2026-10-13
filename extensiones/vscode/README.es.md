@@ -215,10 +215,30 @@ mensaje breve en la barra de estado lo confirma.
 El botón ✨ de la barra de título de **Source Control** (*Generar mensaje de
 commit con M365 Copilot*) redacta un mensaje
 [Conventional Commits](https://www.conventionalcommits.org/) a partir del diff en
-stage — o del árbol de trabajo si no hay nada en stage — y lo escribe
-directamente en el cuadro de commit, en el idioma de la extensión. Nunca
-commitea: lo revisas y commiteas tú. A su lado, ☑ revisa esos cambios antes del
-commit (ver [Revisión de código como comentarios](#revisión-de-código-como-comentarios)).
+stage — o del árbol de trabajo, archivos nuevos incluidos, si no hay nada en
+stage — y lo escribe directamente en el cuadro de commit, en el idioma de la
+extensión (o en el del repositorio, si todos sus commits recientes usan otro).
+Nunca commitea: lo revisas y commiteas tú. A su lado, ☑ revisa esos cambios
+antes del commit (ver [Revisión de código como comentarios](#revisión-de-código-como-comentarios)).
+
+Qué hace bueno el mensaje, aquí y en el autocommit de abajo:
+
+- **Las convenciones de tu repositorio:** el modelo ve los últimos 30 subjects y
+  los ámbitos que usan, así que el commit nuevo dice `(vscode)` como los demás,
+  no `(extension)`.
+- **Un subject concreto y un cuerpo que dice por qué:** el tipo correcto
+  (`feat`, `fix`, `refactor`…), nunca «actualizar archivos»; el cuerpo explica
+  el problema y el cambio de comportamiento, no el diff archivo por archivo. Los
+  cambios incompatibles llevan `!` y una línea `BREAKING CHANGE:`.
+- **El cambio entero a la vista:** cada archivo con sus líneas añadidas y
+  quitadas; si el diff es grande, el espacio se reparte entre los archivos en
+  vez de cortar los últimos, y los archivos de bloqueo o generados
+  (`pnpm-lock.yaml`, `dist/`, `*.min.js`…) se quedan en su recuento de líneas.
+- **Pulido antes de llegarte:** `Feat:` → `feat:`, sin punto final, cuerpo a 72
+  columnas, sin firmas de asistentes ni líneas de coautor. Si aun así no cumple
+  Conventional Commits, se le devuelve al modelo una vez.
+- **El ticket de la rama:** en `feature/ABC-123-login` o `fix/42-crash` el
+  mensaje termina con `Refs: ABC-123` / `Refs: #42`.
 
 ### Autocommit
 

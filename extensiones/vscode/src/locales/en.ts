@@ -243,6 +243,7 @@ export const en = {
 	'log.participantRequest': '@m365 request: command={0}, tone={1}, context={2}',
 	'log.participantNoToken': '@m365 request (command={0}) without a usable token',
 	'log.commitMessage': 'commit message generated: {0} chars from a {1}-char diff',
+	'log.commitMessageRetry': 'commit message rejected ({0}); asking again',
 	'log.autoCommit': 'auto-commit {0}: {1}',
 	'log.server.listening': '✅ Auto-refresh server listening on http://localhost:{0}',
 	'log.server.portInUse': '⚠️ Port {0} already in use. The auto-refresh server is not available.',
@@ -762,20 +763,47 @@ export const en = {
 	'scm.empty': 'M365 Copilot did not return a commit message. Try again.',
 	'scm.done': 'M365 Copilot: commit message ready in Source Control — review it before committing.',
 	'scm.prompt':
-		'Write a git commit message for the changes below.\n' +
-		'Rules:\n' +
-		'- First line: Conventional Commits, "type(optional scope): summary", in the imperative mood, at most 72 ' +
-		'characters, no trailing period. Valid types: {0}.\n' +
-		'- Then, only if it adds information, a blank line and a short body (a few "- " bullet points) explaining what ' +
-		'changed and why.\n' +
-		'- Write the message in English.\n' +
-		'- Reply ONLY with the commit message: no code fences, no quotes, no explanations before or after.\n' +
+		'Write the git commit message for the changes below, as a careful senior developer who wants a history that ' +
+		'is still useful months from now.\n' +
+		'Format:\n' +
+		'- First line: Conventional Commits, "type(scope): summary" — imperative mood ("add", not "added" or "adds"), ' +
+		'first word in lowercase unless it is a name, at most 72 characters (ideally about 50), no trailing period. ' +
+		'Valid types: {0}.\n' +
+		'- Then, unless the change is trivial and the first line says it all, a blank line and a body of 1 to 5 short ' +
+		'"- " points.\n' +
+		'- If the change breaks compatibility (a public API, setting, command, file format or CLI option that others ' +
+		'rely on), put "!" before the colon and end with a line "BREAKING CHANGE: what breaks and how to migrate".\n' +
+		'How to write it:\n' +
+		'- type = the main purpose: feat (a new capability), fix (corrects a bug), refactor (same behavior, better ' +
+		'code), perf (faster or lighter), docs (documentation only), test (tests only), build (build system or ' +
+		'dependencies), ci (CI configuration), style (formatting only), chore (other maintenance), revert.\n' +
+		'- scope = the part of the project it affects (package, module or folder), one short lowercase word; reuse a ' +
+		'scope this repository already uses when one fits, and leave it out when the change spans the whole project.\n' +
+		'- summary = what changes, specifically. Never vague: not "update files", "fix bug", "changes" or ' +
+		'"improvements".\n' +
+		'- body = why it was needed and what it changes in behavior (before → after): the problem it solves, the bug ' +
+		'it fixes, the effect for users. Do not narrate the diff file by file, list file names or repeat the first ' +
+		'line.\n' +
+		'- If the changes mix unrelated work, the first line describes the main one and the body mentions the rest.\n' +
+		'- Describe only what the diff shows: do not invent reasons, tests, issue numbers or benefits.\n' +
+		'- Write the message in English, unless the recent commits listed below are all written in another ' +
+		'language: then use theirs.\n' +
+		'- Reply ONLY with the commit message: no code fences, no quotes, no explanations before or after.\n\n' +
 		'{1}',
 	'scm.prompt.files': 'Changed files ({0}):',
 	'scm.prompt.diff': '--- diff ---',
 	'scm.prompt.diffEnd': '--- end of diff ---',
 	'scm.prompt.truncated': '[diff truncated: {0} more characters]',
 	'scm.prompt.unstaged': 'Nothing is staged: these are the working-tree changes the commit is likely to include.',
+	'scm.prompt.repair':
+		'Your previous answer was:\n{0}\nIt cannot be used: {1}\nReply again with the corrected commit message only.',
+
+	// ------------------------------------------------------------ commit context (SCM + auto-commit)
+	'commit.context.branch': 'Branch: {0}',
+	'commit.context.recent': 'Latest commits of this repository (match their style, scopes and language):',
+	'commit.context.scopes': 'Scopes already used here (times): {0}',
+	'commit.diff.fileTruncated': '[… {0} more lines of this file not shown]',
+	'commit.diff.omitted': '[lock or generated file: +{0} -{1} lines, content not shown]',
 
 	// ------------------------------------------------------------ auto-commit
 	'autoCommit.enabled':
@@ -853,11 +881,22 @@ export const en = {
 		'files that are still in progress out of every commit.\n' +
 		'- If the changes have been piling up for a long time, prefer committing the parts that are finished.\n' +
 		'Each commit message documents the change for whoever reads the history months from now:\n' +
-		'- subject: Conventional Commits, "type(optional scope): summary", imperative mood, at most 72 characters, ' +
-		'no trailing period. Valid types: {1}.\n' +
-		'- body: 1 to 5 short points saying what changed and why — the reason, the effect, the bug it fixes. Do not ' +
-		'repeat the subject or just list file names.\n' +
-		'- Write the subject, the body and the reason in English.\n' +
+		'- subject: Conventional Commits, "type(scope): summary" — imperative mood ("add", not "added"), first word ' +
+		'in lowercase unless it is a name, at most 72 characters (ideally about 50), no trailing period. Valid ' +
+		'types: {1}.\n' +
+		'- type = the main purpose: feat (a new capability), fix (corrects a bug), refactor (same behavior, better ' +
+		'code), perf, docs (documentation only), test (tests only), build (build system or dependencies), ci, style ' +
+		'(formatting only), chore (other maintenance).\n' +
+		'- scope = the part of the project it affects, one short lowercase word; reuse a scope this repository ' +
+		'already uses when one fits, and leave it out when the change spans the whole project.\n' +
+		'- summary: what changes, specifically. Never vague: not "update files", "fix bug" or "changes".\n' +
+		'- body: 1 to 5 short points saying why it was needed and what it changes in behavior — the problem, the ' +
+		'effect, the bug it fixes. Do not repeat the subject, list file names or invent reasons the diff does not ' +
+		'show.\n' +
+		'- breaking: add it ONLY if the commit breaks compatibility (a public API, setting, command, file format or ' +
+		'CLI option others rely on): one sentence saying what breaks and how to migrate.\n' +
+		'- Write the "reason" in English. Write the subject and the body in English too, unless the recent commits ' +
+		'listed below are all written in another language: then use theirs.\n' +
 		'Reply ONLY with one JSON object — no code fences, nothing before or after it. Either:\n' +
 		'{"decision":"commit","commits":[{"files":["src/parser.ts"],"subject":"fix(parser): handle empty input",' +
 		'"body":["Return an empty tree instead of throwing when the file is empty.","Opening a new, empty file no ' +
@@ -867,11 +906,9 @@ export const en = {
 		'In "files", use the paths exactly as listed below.\n\n' +
 		'{2}',
 	'autoCommit.prompt.state': 'Repository state:',
-	'autoCommit.prompt.branch': 'Branch: {0}',
 	'autoCommit.prompt.lastCommit': 'Last commit: {0} min ago — "{1}"',
 	'autoCommit.prompt.pendingFor': 'These changes have been piling up for about {0} min.',
 	'autoCommit.prompt.lastWait': 'Last time you decided to wait because: {0}',
-	'autoCommit.prompt.recent': 'Latest commits (follow their style and scopes):',
 	'autoCommit.prompt.kind.new': 'new file',
 	'autoCommit.prompt.kind.added': 'added',
 	'autoCommit.prompt.kind.modified': 'modified',

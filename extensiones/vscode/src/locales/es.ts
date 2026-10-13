@@ -250,6 +250,7 @@ export const es: Record<keyof typeof en, string> = {
 	'log.participantRequest': 'petición a @m365: comando={0}, tone={1}, contexto={2}',
 	'log.participantNoToken': 'petición a @m365 (comando={0}) sin un token utilizable',
 	'log.commitMessage': 'mensaje de commit generado: {0} chars a partir de un diff de {1} chars',
+	'log.commitMessageRetry': 'mensaje de commit rechazado ({0}); se vuelve a pedir',
 	'log.autoCommit': 'autocommit {0}: {1}',
 	'log.server.listening': '✅ Servidor de auto-renovación escuchando en http://localhost:{0}',
 	'log.server.portInUse': '⚠️ Puerto {0} ya en uso. El servidor de auto-renovación no está disponible.',
@@ -771,20 +772,50 @@ export const es: Record<keyof typeof en, string> = {
 	'scm.empty': 'M365 Copilot no devolvió ningún mensaje de commit. Vuelve a intentarlo.',
 	'scm.done': 'M365 Copilot: mensaje de commit listo en Source Control — revísalo antes de commitear.',
 	'scm.prompt':
-		'Escribe un mensaje de commit de git para los cambios de abajo.\n' +
-		'Reglas:\n' +
-		'- Primera línea: Conventional Commits, "tipo(ámbito opcional): resumen", en imperativo, como mucho 72 ' +
-		'caracteres y sin punto final. Tipos válidos: {0}.\n' +
-		'- Después, sólo si aporta información, una línea en blanco y un cuerpo breve (unos pocos puntos "- ") que ' +
-		'explique qué cambió y por qué.\n' +
-		'- Escribe el mensaje en español.\n' +
-		'- Responde ÚNICAMENTE con el mensaje de commit: sin vallas de código, sin comillas y sin explicaciones antes ni después.\n' +
+		'Escribe el mensaje de commit de git para los cambios de abajo, como un desarrollador sénior cuidadoso que ' +
+		'quiere un historial que siga siendo útil dentro de unos meses.\n' +
+		'Formato:\n' +
+		'- Primera línea: Conventional Commits, "tipo(ámbito): resumen" — en imperativo o infinitivo, como lo hagan ' +
+		'los commits recientes ("añade" o "añadir", no "añadido"), primera palabra en minúscula salvo que sea un ' +
+		'nombre propio, como mucho 72 caracteres (mejor unos 50) y sin punto final. Tipos válidos: {0}.\n' +
+		'- Después, salvo que el cambio sea trivial y la primera línea lo diga todo, una línea en blanco y un cuerpo ' +
+		'de 1 a 5 puntos breves "- ".\n' +
+		'- Si el cambio rompe la compatibilidad (una API pública, un ajuste, un comando, un formato de archivo o una ' +
+		'opción de CLI de la que otros dependen), pon "!" antes de los dos puntos y termina con una línea ' +
+		'"BREAKING CHANGE: qué se rompe y cómo migrar".\n' +
+		'Cómo escribirlo:\n' +
+		'- tipo = el propósito principal: feat (una capacidad nueva), fix (corrige un fallo), refactor (mismo ' +
+		'comportamiento, mejor código), perf (más rápido o ligero), docs (sólo documentación), test (sólo tests), ' +
+		'build (sistema de build o dependencias), ci (configuración de CI), style (sólo formato), chore (otro ' +
+		'mantenimiento), revert.\n' +
+		'- ámbito = la parte del proyecto afectada (paquete, módulo o carpeta), una palabra corta en minúsculas; ' +
+		'reutiliza un ámbito que este repositorio ya use cuando encaje, y omítelo si el cambio abarca todo el proyecto.\n' +
+		'- resumen = qué cambia, en concreto. Nunca vago: nada de "actualizar archivos", "arreglar bug", "cambios" o ' +
+		'"mejoras".\n' +
+		'- cuerpo = por qué hacía falta y qué cambia en el comportamiento (antes → después): el problema que resuelve, ' +
+		'el fallo que arregla, el efecto para el usuario. No narres el diff archivo por archivo, no enumeres archivos ' +
+		'ni repitas la primera línea.\n' +
+		'- Si los cambios mezclan trabajos sin relación, la primera línea describe el principal y el cuerpo menciona ' +
+		'el resto.\n' +
+		'- Describe sólo lo que muestra el diff: no inventes motivos, tests, números de incidencia ni beneficios.\n' +
+		'- Escribe el mensaje en español, salvo que los commits recientes de abajo estén todos escritos en otro ' +
+		'idioma: entonces usa el suyo.\n' +
+		'- Responde ÚNICAMENTE con el mensaje de commit: sin vallas de código, sin comillas y sin explicaciones antes ni después.\n\n' +
 		'{1}',
 	'scm.prompt.files': 'Archivos cambiados ({0}):',
 	'scm.prompt.diff': '--- diff ---',
 	'scm.prompt.diffEnd': '--- fin del diff ---',
 	'scm.prompt.truncated': '[diff recortado: {0} caracteres más]',
 	'scm.prompt.unstaged': 'No hay nada en stage: estos son los cambios del árbol de trabajo que probablemente incluirá el commit.',
+	'scm.prompt.repair':
+		'Tu respuesta anterior fue:\n{0}\nNo se puede usar: {1}\nResponde de nuevo sólo con el mensaje de commit corregido.',
+
+	// ------------------------------------------------------------ contexto del commit (SCM + autocommit)
+	'commit.context.branch': 'Rama: {0}',
+	'commit.context.recent': 'Últimos commits de este repositorio (sigue su estilo, sus ámbitos y su idioma):',
+	'commit.context.scopes': 'Ámbitos que ya se usan aquí (veces): {0}',
+	'commit.diff.fileTruncated': '[… {0} líneas más de este archivo sin mostrar]',
+	'commit.diff.omitted': '[archivo de bloqueo o generado: +{0} -{1} líneas, contenido sin mostrar]',
 
 	// ------------------------------------------------------------ autocommit
 	'autoCommit.enabled':
@@ -862,11 +893,22 @@ export const es: Record<keyof typeof en, string> = {
 		'fuera de todos los commits los archivos que siguen en curso.\n' +
 		'- Si los cambios llevan mucho tiempo acumulándose, inclínate por commitear las partes que ya están terminadas.\n' +
 		'Cada mensaje de commit documenta el cambio para quien lea el historial dentro de unos meses:\n' +
-		'- subject: Conventional Commits, "tipo(ámbito opcional): resumen", en imperativo, como mucho 72 caracteres y ' +
-		'sin punto final. Tipos válidos: {1}.\n' +
-		'- body: de 1 a 5 puntos breves que digan qué cambió y por qué — el motivo, el efecto, el fallo que arregla. ' +
-		'No repitas el subject ni te limites a listar archivos.\n' +
-		'- Escribe el subject, el body y el motivo en español.\n' +
+		'- subject: Conventional Commits, "tipo(ámbito): resumen" — en imperativo o infinitivo, como lo hagan los ' +
+		'commits recientes ("añade" o "añadir", no "añadido"), primera palabra en minúscula salvo que sea un nombre ' +
+		'propio, como mucho 72 caracteres (mejor unos 50) y sin punto final. Tipos válidos: {1}.\n' +
+		'- tipo = el propósito principal: feat (una capacidad nueva), fix (corrige un fallo), refactor (mismo ' +
+		'comportamiento, mejor código), perf, docs (sólo documentación), test (sólo tests), build (sistema de build o ' +
+		'dependencias), ci, style (sólo formato), chore (otro mantenimiento).\n' +
+		'- ámbito = la parte del proyecto afectada, una palabra corta en minúsculas; reutiliza un ámbito que este ' +
+		'repositorio ya use cuando encaje, y omítelo si el cambio abarca todo el proyecto.\n' +
+		'- resumen: qué cambia, en concreto. Nunca vago: nada de "actualizar archivos", "arreglar bug" o "cambios".\n' +
+		'- body: de 1 a 5 puntos breves que digan por qué hacía falta y qué cambia en el comportamiento — el problema, ' +
+		'el efecto, el fallo que arregla. No repitas el subject, no enumeres archivos ni inventes motivos que el diff ' +
+		'no muestre.\n' +
+		'- breaking: añádelo SÓLO si el commit rompe la compatibilidad (una API pública, un ajuste, un comando, un ' +
+		'formato de archivo o una opción de CLI de la que otros dependen): una frase que diga qué se rompe y cómo migrar.\n' +
+		'- Escribe el "reason" en español. Escribe el subject y el body también en español, salvo que los commits ' +
+		'recientes de abajo estén todos escritos en otro idioma: entonces usa el suyo.\n' +
 		'Responde ÚNICAMENTE con un objeto JSON — sin vallas de código, nada antes ni después. O bien:\n' +
 		'{"decision":"commit","commits":[{"files":["src/parser.ts"],"subject":"fix(parser): manejar la entrada vacía",' +
 		'"body":["Devuelve un árbol vacío en vez de lanzar una excepción cuando el archivo está vacío.","Abrir un ' +
@@ -876,11 +918,9 @@ export const es: Record<keyof typeof en, string> = {
 		'En "files", usa las rutas exactamente como aparecen abajo.\n\n' +
 		'{2}',
 	'autoCommit.prompt.state': 'Estado del repositorio:',
-	'autoCommit.prompt.branch': 'Rama: {0}',
 	'autoCommit.prompt.lastCommit': 'Último commit: hace {0} min — "{1}"',
 	'autoCommit.prompt.pendingFor': 'Estos cambios llevan acumulándose unos {0} min.',
 	'autoCommit.prompt.lastWait': 'La última vez decidiste esperar porque: {0}',
-	'autoCommit.prompt.recent': 'Últimos commits (sigue su estilo y sus ámbitos):',
 	'autoCommit.prompt.kind.new': 'archivo nuevo',
 	'autoCommit.prompt.kind.added': 'añadido',
 	'autoCommit.prompt.kind.modified': 'modificado',

@@ -27,6 +27,7 @@ import {
 	isSubmodule,
 	readChanges,
 	readRepoState,
+	recentSubjects,
 	undoCommits,
 	type ChangeSnapshot,
 	type CommitRound,
@@ -44,6 +45,7 @@ import { showLog, truncate } from './logger';
 import { editorTone } from './models';
 import { isTokenUsable, type CopilotProfile } from './profile';
 import type { ProfileStore } from './secrets';
+import { ticketFromBranch } from '../tools/commitContext';
 import { execGit } from '../tools/git';
 import { getGitApi, type GitApi, type GitRepository } from '../tools/gitExtension';
 import { errorMessage } from '../tools/common';
@@ -538,10 +540,7 @@ class RepositoryWatch implements vscode.Disposable {
 			}
 		}
 
-		const recent = (await git(['log', '-6', '--format=%s']).catch(() => ''))
-			.split('\n')
-			.map((line) => line.trim())
-			.filter(Boolean);
+		const recent = await recentSubjects(git);
 		const prompt = buildAutoCommitPrompt({
 			entries: snapshot.entries,
 			diff: snapshot.diff,
@@ -556,7 +555,7 @@ class RepositoryWatch implements vscode.Disposable {
 			recentSubjects: recent,
 		});
 		const answer = await this.ask(profile, prompt, token);
-		const decision = parseAutoCommitDecision(answer, snapshot.entries);
+		const decision = parseAutoCommitDecision(answer, snapshot.entries, { ticket: ticketFromBranch(state.branch) });
 		this.owner.deps.log(t('log.autoCommit', this.name, describeDecision(decision)));
 		if (decision.kind === 'invalid') this.owner.deps.log(truncate(answer, 600));
 

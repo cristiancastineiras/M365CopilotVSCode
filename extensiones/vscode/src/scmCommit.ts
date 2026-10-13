@@ -5,16 +5,28 @@
  *
  * Unlike the `m365_generate_commit_message` agent tool, which triggers VS
  * Code's native ✨ generator (answered by whatever model Copilot Chat uses),
- * this asks Microsoft 365 Copilot directly, in one turn, from the staged diff
- * — or the working tree's when nothing is staged. It never commits: the
- * message lands in the box for the user to review.
+ * this asks Microsoft 365 Copilot directly from the staged diff — or the
+ * working tree's, new files included, when nothing is staged — with the
+ * repository's recent subjects and scopes and the branch name as context.
+ * A message that still breaks Conventional Commits after tidying gets one
+ * more turn. It never commits: the message lands in the box for the user to
+ * review.
  */
 import * as vscode from 'vscode';
 import { streamCopilotTurnWithRetry } from './client';
 import { requireUsableProfile } from './commands';
 import { editorTone } from './models';
 import type { ProfileStore } from './secrets';
-import { buildCommitMessagePrompt, cleanGeneratedCommitMessage } from '../tools/commitMessage';
+import { recentSubjects, type GitRunner } from './autoCommitGit';
+import { readChangesToDescribe } from './scmChanges';
+import { ticketFromBranch } from '../tools/commitContext';
+import {
+	buildCommitMessagePrompt,
+	cleanGeneratedCommitMessage,
+	commitMessageProblem,
+	normalizeCommitMessage,
+	type CommitPromptInput,
+} from '../tools/commitMessage';
 import { execGit } from '../tools/git';
 import { getGitRepository, listGitRepositories, type GitRepository } from '../tools/gitExtension';
 import { errorMessage } from '../tools/common';
@@ -49,30 +61,38 @@ async function generateCommitMessage(store: ProfileStore, log: (message: string)
 			const cancel = token.onCancellationRequested(() => controller.abort());
 			try {
 				const cwd = target.rootUri.fsPath;
-				let staged = true;
-				let diff = await execGit(['diff', '--cached', '--no-color'], cwd, token);
-				let files = await execGit(['diff', '--cached', '--name-status'], cwd, token);
-				if (!diff.trim()) {
-					staged = false;
-					diff = await execGit(['diff', '--no-color'], cwd, token);
-					files = await execGit(['status', '--porcelain=v1'], cwd, token);
-				}
-				if (!diff.trim() && !files.trim()) {
+				const git: GitRunner = (args, options) => execGit(args, cwd, token, options);
+				const changes = await readChangesToDescribe(git, cwd);
+				if (!changes) {
 					void vscode.window.showInformationMessage(t('scm.noChanges'));
 					return;
 				}
+				const branch = (await git(['symbolic-ref', '-q', '--short', 'HEAD']).catch(() => '')).trim() || undefined;
+				const input: CommitPromptInput = { ...changes, branch, recentSubjects: await recentSubjects(git) };
+				const ticket = ticketFromBranch(branch);
 
-				let answer = '';
-				await streamCopilotTurnWithRetry({
-					profile,
-					prompt: buildCommitMessagePrompt({ files: lines(files), diff, staged }),
-					tone: editorTone(),
-					signal: controller.signal,
-					log,
-					callbacks: { onText: (delta) => (answer += delta) },
-				});
-				const message = cleanGeneratedCommitMessage(answer);
-				log(t('log.commitMessage', message.length, diff.length));
+				const ask = async (prompt: string): Promise<string> => {
+					let answer = '';
+					await streamCopilotTurnWithRetry({
+						profile,
+						prompt,
+						tone: editorTone(),
+						signal: controller.signal,
+						log,
+						callbacks: { onText: (delta) => (answer += delta) },
+					});
+					return normalizeCommitMessage(cleanGeneratedCommitMessage(answer), { ticket });
+				};
+				let message = await ask(buildCommitMessagePrompt(input));
+				// One more turn when the message cannot be used as it is (not Conventional
+				// Commits, empty…): the model gets its answer back with the reason.
+				const problem = commitMessageProblem(message);
+				if (problem && !token.isCancellationRequested) {
+					log(t('log.commitMessageRetry', problem));
+					const retry = await ask(buildCommitMessagePrompt({ ...input, rejected: { message, problem } }));
+					if (retry && (!commitMessageProblem(retry) || !message)) message = retry;
+				}
+				log(t('log.commitMessage', message.length, changes.diff.length));
 				if (!message) {
 					void vscode.window.showWarningMessage(t('scm.empty'));
 					return;
@@ -114,11 +134,4 @@ export async function resolveRepository(source: unknown): Promise<GitRepository 
 		{ placeHolder: t('scm.pickRepository') },
 	);
 	return picked?.repository;
-}
-
-function lines(text: string): string[] {
-	return text
-		.split(/\r?\n/)
-		.map((line) => line.trimEnd())
-		.filter(Boolean);
 }

@@ -67,8 +67,11 @@ import { replaceTextOnce } from '../tools/replaceText.ts';
 import {
 	buildCommitMessagePrompt,
 	cleanGeneratedCommitMessage,
+	commitMessageProblem,
+	normalizeCommitMessage,
 	validateConventionalCommitMessage,
 } from '../tools/commitMessage.ts';
+import { budgetDiff, diffStats, historyContext, isNoisePath, splitDiff, ticketFromBranch } from '../tools/commitContext.ts';
 import { LOCALES, messageKeys, placeholdersOf, resolveLocale, setLocale, t, tIn } from '../src/i18n.ts';
 import {
 	buildAutoCommitPrompt,
@@ -85,10 +88,12 @@ import {
 	pathsToCommit,
 	readChanges,
 	readRepoState,
+	recentSubjects,
 	undoCommits,
 	type GitRunner,
 	type StatusEntry,
 } from '../src/autoCommitGit.ts';
+import { readChangesToDescribe } from '../src/scmChanges.ts';
 import { execFile } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -601,6 +606,9 @@ function testCommitMessageValidation() {
 	assert.throws(() => validateConventionalCommitMessage('feature: algo nuevo'), /Conventional Commits/);
 	// Punto final en la primera línea.
 	assert.throws(() => validateConventionalCommitMessage('fix: arregla el bug.'), /no debe terminar en punto/);
+	// Ámbito con letras no ASCII (antes `\w` lo rechazaba).
+	assert.equal(validateConventionalCommitMessage('fix(configuración): leer el ajuste'), 'fix(configuración): leer el ajuste');
+	assert.throws(() => validateConventionalCommitMessage('fix(con espacio): algo'), /Conventional Commits/);
 
 	console.log('  ✓ valida (sin reescribir) que la primera línea siga Conventional Commits');
 }
@@ -1512,17 +1520,32 @@ function testCommitMessageGeneration() {
 	});
 	assert.match(prompt, /Conventional Commits/);
 	assert.match(prompt, /feat, fix, docs/);
-	assert.match(prompt, /Write the message in English\./);
+	assert.match(prompt, /Write the message in English, unless the recent commits/);
+	assert.match(prompt, /BREAKING CHANGE: what breaks and how to migrate/);
+	assert.match(prompt, /Never vague/);
 	assert.match(prompt, /Changed files \(2\):\nM\tsrc\/a\.ts\nA\tsrc\/b\.ts/);
 	assert.match(prompt, /\+const x = 1;/);
-	assert.doesNotMatch(prompt, /Nothing is staged/);
+	assert.doesNotMatch(prompt, /Nothing is staged|Branch:|Latest commits|previous answer/, 'sin datos no hay secciones vacías');
 
 	const unstaged = buildCommitMessagePrompt({ files: [], diff: 'x'.repeat(30_000), staged: false });
 	assert.match(unstaged, /Nothing is staged/);
 	assert.match(unstaged, /\[diff truncated: 6000 more characters\]/);
 
+	// Repository conventions, branch and the retry after a rejected answer.
+	const withContext = buildCommitMessagePrompt({
+		files: ['M\tsrc/a.ts\t+1 -0'],
+		diff: 'diff --git a/src/a.ts b/src/a.ts\n+const x = 1;',
+		staged: true,
+		branch: 'feature/ABC-7-login',
+		recentSubjects: ['feat(vscode): add menu', 'fix(vscode): align icons', 'docs: typo', 'feat(browser): add popup'],
+		rejected: { message: 'Update stuff', problem: 'not Conventional Commits' },
+	});
+	assert.match(withContext, /Branch: feature\/ABC-7-login\nLatest commits of this repository \(match their style, scopes and language\):\n- feat\(vscode\): add menu\n/);
+	assert.match(withContext, /Scopes already used here \(times\): vscode \(2\), browser \(1\)\n/);
+	assert.match(withContext, /--- end of diff ---\n\nYour previous answer was:\nUpdate stuff\nIt cannot be used: not Conventional Commits\n/);
+
 	setLocale('es');
-	assert.match(buildCommitMessagePrompt({ files: [], diff: 'd', staged: true }), /Escribe el mensaje en español\./);
+	assert.match(buildCommitMessagePrompt({ files: [], diff: 'd', staged: true }), /Escribe el mensaje en español, salvo que/);
 
 	assert.equal(cleanGeneratedCommitMessage('feat(ui): add menu'), 'feat(ui): add menu');
 	assert.equal(cleanGeneratedCommitMessage('```\nfix: avoid crash\n\n- detail\n```'), 'fix: avoid crash\n\n- detail');
@@ -1531,6 +1554,112 @@ function testCommitMessageGeneration() {
 	assert.equal(cleanGeneratedCommitMessage('fix: a\r\n\r\n\r\n\r\n- b'), 'fix: a\n\n- b');
 	assert.equal(cleanGeneratedCommitMessage('   '), '');
 	console.log('  ✓ mensaje de commit con M365: prompt en el idioma activo, diff acotado y limpieza de la respuesta');
+}
+
+function testCommitMessageNormalization() {
+	setLocale('en');
+	// Subject: type case and aliases, spaces, scope with spaces, trailing period.
+	assert.equal(normalizeCommitMessage('Feat(UI) : Add menu.'), 'feat(UI): Add menu');
+	assert.equal(normalizeCommitMessage('feature: add export'), 'feat: add export');
+	assert.equal(normalizeCommitMessage('bugfix(auth service)!:drop the old token'), 'fix(auth-service)!: drop the old token');
+	assert.equal(normalizeCommitMessage('**docs: fix typo**'), 'docs: fix typo');
+	assert.equal(normalizeCommitMessage('Merge branch "dev"'), 'Merge branch "dev"', 'lo que no es un tipo no se toca');
+	assert.equal(normalizeCommitMessage('   '), '');
+
+	// Body: blank line after the subject, bullets as "- ", reflow only when too long.
+	assert.equal(normalizeCommitMessage('fix: a\n* one\n• two'), 'fix: a\n\n- one\n- two');
+	const long = normalizeCommitMessage(
+		'fix(parser): handle empty input\n\n' +
+			'- Return an empty tree instead of throwing when the file is empty, which is what\n' +
+			'  happens every time a new file is created.\n' +
+			'- Short point.',
+	);
+	assert.equal(
+		long,
+		'fix(parser): handle empty input\n\n' +
+			'- Return an empty tree instead of throwing when the file is empty, which\n' +
+			'  is what happens every time a new file is created.\n' +
+			'- Short point.',
+	);
+	assert.ok(long.split('\n').every((line) => line.length <= 72));
+	const fenced = `docs: show the command\n\n\`\`\`\n${'y'.repeat(100)}\n\`\`\``;
+	assert.equal(normalizeCommitMessage(fenced), fenced, 'los bloques de código no se reflujan');
+
+	// An assistant never signs the commit; a human co-author stays.
+	assert.equal(normalizeCommitMessage('fix: a\n\n- b\n\nCo-authored-by: GitHub Copilot <copilot@github.com>'), 'fix: a\n\n- b');
+	assert.equal(normalizeCommitMessage('fix: a\n\n- b\n\n🤖 Generated with M365 Copilot'), 'fix: a\n\n- b');
+	assert.equal(
+		normalizeCommitMessage('fix: a\n\n- b\n\nCo-authored-by: Ana <ana@example.com>'),
+		'fix: a\n\n- b\n\nCo-authored-by: Ana <ana@example.com>',
+	);
+
+	// Ticket from the branch: a new trailer, or next to the existing ones; never twice.
+	assert.equal(normalizeCommitMessage('fix: a\n\n- b', { ticket: 'ABC-1' }), 'fix: a\n\n- b\n\nRefs: ABC-1');
+	assert.equal(
+		normalizeCommitMessage('feat!: x\n\nBREAKING CHANGE: y', { ticket: '#42' }),
+		'feat!: x\n\nBREAKING CHANGE: y\nRefs: #42',
+	);
+	assert.equal(normalizeCommitMessage('fix: a (abc-1)', { ticket: 'ABC-1' }), 'fix: a (abc-1)');
+
+	assert.equal(commitMessageProblem('fix(configuración): a'), undefined);
+	assert.match(commitMessageProblem(normalizeCommitMessage('Update stuff')) ?? '', /Conventional Commits/);
+	assert.match(commitMessageProblem('') ?? '', /empty/);
+	console.log('  ✓ mensaje de commit: tipo, ámbito y punto corregidos, cuerpo a 72 columnas, sin firmas de IA, ticket como Refs');
+}
+
+function testCommitContext() {
+	setLocale('en');
+	// Sections: the path of a rename, a deletion and a binary file; +/- counts
+	// only after the header (an added "++x" line is an addition).
+	const sections = splitDiff(
+		'diff --git a/old.ts b/new.ts\nsimilarity index 90%\nrename from old.ts\nrename to new.ts\n--- a/old.ts\n+++ b/new.ts\n@@ -1 +1,2 @@\n-a\n+b\n+++x\n' +
+			'diff --git a/gone.ts b/gone.ts\ndeleted file mode 100644\n--- a/gone.ts\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-x\n-y\n' +
+			'diff --git a/logo.png b/logo.png\nBinary files a/logo.png and b/logo.png differ\n',
+	).sections;
+	assert.deepEqual(
+		sections.map(({ path, added, removed }) => [path, added, removed]),
+		[['new.ts', 2, 1], ['gone.ts', 0, 2], ['logo.png', 0, 0]],
+	);
+	assert.equal(diffStats('diff --git a/src/a.ts b/src/a.ts\n+const x = 1;').get('src/a.ts')?.added, 1, 'sin cabecera ---/+++ también cuenta');
+
+	for (const noisy of ['pnpm-lock.yaml', 'packages/x/package-lock.json', 'dist/app.js', 'src/app.min.js', 'go.sum']) {
+		assert.ok(isNoisePath(noisy), noisy);
+	}
+	for (const real of ['src/distance.ts', 'src/build.ts', 'README.md', 'lock.ts']) assert.ok(!isNoisePath(real), real);
+
+	// Budget: the lock file shrinks to its counts even when everything fits…
+	const lock = `diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml\n--- a/pnpm-lock.yaml\n+++ b/pnpm-lock.yaml\n@@ -1,3 +1,3 @@\n${'-old: 1\n'.repeat(3)}${'+new: 2\n'.repeat(3)}`;
+	const small = 'diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-a\n+b';
+	assert.equal(
+		budgetDiff(`${small}\n${lock}`, 24_000),
+		`${small}\ndiff --git a/pnpm-lock.yaml b/pnpm-lock.yaml\n[lock or generated file: +3 -3 lines, content not shown]`,
+	);
+	// …and when it doesn't fit, a huge file no longer pushes the files after it out of the prompt.
+	const huge = `diff --git a/src/huge.ts b/src/huge.ts\n--- a/src/huge.ts\n+++ b/src/huge.ts\n@@ -0,0 +1,3000 @@\n${'+const line = "some generated-looking but real code";\n'.repeat(3000)}`;
+	const last = 'diff --git a/src/last.ts b/src/last.ts\n--- a/src/last.ts\n+++ b/src/last.ts\n@@ -1 +1 @@\n-before\n+after';
+	const budgeted = budgetDiff(`${small}\n${huge}\n${last}`, 24_000);
+	assert.ok(budgeted.length <= 24_200, `cabe en el presupuesto (${budgeted.length})`);
+	assert.ok(budgeted.includes(small) && budgeted.includes(last), 'los archivos pequeños siguen enteros, también los del final');
+	assert.match(budgeted, /\+const line[^\n]*\n\[… \d+ more lines of this file not shown\]\ndiff --git a\/src\/last\.ts/);
+
+	// Repository conventions and the ticket of the branch.
+	assert.deepEqual(historyContext([]), []);
+	assert.deepEqual(historyContext(['feat(vscode): a', 'fix(vscode)!: b', 'docs: c', 'feat(browser): d', 'Merge branch x']), [
+		'Latest commits of this repository (match their style, scopes and language):',
+		'- feat(vscode): a',
+		'- fix(vscode)!: b',
+		'- docs: c',
+		'- feat(browser): d',
+		'- Merge branch x',
+		'Scopes already used here (times): vscode (2), browser (1)',
+	]);
+	assert.equal(ticketFromBranch('feature/ABC-123-login'), 'ABC-123');
+	assert.equal(ticketFromBranch('ABC-9'), 'ABC-9');
+	assert.equal(ticketFromBranch('fix/42-crash'), '#42');
+	assert.equal(ticketFromBranch('fix/utf-8-names'), undefined, 'claves en minúscula no cuentan');
+	assert.equal(ticketFromBranch('main'), undefined);
+	assert.equal(ticketFromBranch(undefined), undefined);
+	console.log('  ✓ contexto del commit: diff repartido entre archivos, lockfiles resumidos, ámbitos del historial y ticket de la rama');
 }
 
 // ---- auto-commit -------------------------------------------------------------
@@ -1559,11 +1688,16 @@ function testAutoCommitPrompt() {
 	assert.match(prompt, /auto-commit assistant/);
 	assert.match(prompt, /at most 3\)/);
 	assert.match(prompt, /feat, fix, docs/);
-	assert.match(prompt, /Write the subject, the body and the reason in English\./);
+	assert.match(prompt, /Write the "reason" in English\. Write the subject and the body in English too, unless the recent commits/);
+	assert.match(prompt, /- breaking: add it ONLY if the commit breaks compatibility/);
 	assert.match(prompt, /- Branch: main\n- Last commit: 12 min ago — "feat: add menu"\n- These changes have been piling up for about 25 min\./);
 	assert.match(prompt, /Last time you decided to wait because: the parser is half written/);
-	assert.match(prompt, /- fix\(ui\): align icons/);
-	assert.match(prompt, /Changed files \(4\):\n- src\/a\.ts \(modified\)\n- src\/new\.ts \(new file\)\n- docs\/guide\.md \(renamed from docs\/old\.md\)\n- old\.txt \(deleted\)/);
+	assert.match(prompt, /Latest commits of this repository[^\n]*\n- feat: add menu\n- fix\(ui\): align icons\nScopes already used here \(times\): ui \(1\)\n/);
+	assert.match(
+		prompt,
+		/Changed files \(4\):\n- src\/a\.ts \(modified, \+1 -0\)\n- src\/new\.ts \(new file, \+1 -0\)\n- docs\/guide\.md \(renamed from docs\/old\.md\)\n- old\.txt \(deleted\)/,
+		'cada archivo con sus líneas añadidas y quitadas',
+	);
 	assert.match(prompt, /\+const x = 1;/);
 	assert.match(prompt, /\+\+\+ b\/src\/new\.ts\n\+export \{\};\n/, 'un archivo nuevo se ve como su diff, sin \\r');
 	assert.match(prompt, /\[binary file, 2048 bytes\]/);
@@ -1573,7 +1707,7 @@ function testAutoCommitPrompt() {
 	assert.doesNotMatch(big, /Latest commits|Last commit:/, 'sin historial no hay secciones vacías');
 
 	setLocale('es');
-	assert.match(buildAutoCommitPrompt({ entries, diff: '', untracked: [], branch: 'dev', recentSubjects: [] }), /Escribe el subject, el body y el motivo en español\.[\s\S]*- Rama: dev/);
+	assert.match(buildAutoCommitPrompt({ entries, diff: '', untracked: [], branch: 'dev', recentSubjects: [] }), /Escribe el "reason" en español\.[\s\S]*- Rama: dev/);
 	assert.equal(describeEntry(entries[1]), '- src/new.ts (archivo nuevo)');
 
 	// ---- decisions
@@ -1633,6 +1767,31 @@ function testAutoCommitPrompt() {
 	);
 	assert.equal(many.kind === 'commit' && many.commits.length, MAX_COMMITS_PER_ROUND, 'nunca más de 3 commits por ronda');
 
+	// A breaking change: "!" in the subject and the trailer; the alias type fixed;
+	// the branch's ticket next to the other trailers. "none" is not breaking.
+	const breaking = parseAutoCommitDecision(
+		JSON.stringify({
+			decision: 'commit',
+			commits: [
+				{
+					files: ['src/a.ts'],
+					subject: 'Feature(api): rename the token setting',
+					body: ['Settings now live under m365copilot.token.'],
+					breaking: 'The old setting is ignored; move its value.',
+				},
+				{ files: ['old.txt'], subject: 'chore: drop old.txt', breaking: 'none' },
+			],
+		}),
+		entries,
+		{ ticket: 'ABC-7' },
+	);
+	assert.deepEqual(breaking.kind === 'commit' && breaking.commits.map((group) => group.message), [
+		'feat(api)!: rename the token setting\n\n' +
+			'- Settings now live under m365copilot.token.\n\n' +
+			'BREAKING CHANGE: The old setting is ignored; move its value.\nRefs: ABC-7',
+		'chore: drop old.txt\n\nRefs: ABC-7',
+	]);
+
 	assert.equal(parseAutoCommitDecision('I think you should commit.', entries).kind, 'invalid');
 	assert.equal(parseAutoCommitDecision('{"decision":"maybe"}', entries).kind, 'invalid');
 	const badMessage = parseAutoCommitDecision('{"decision":"commit","commits":[{"files":["src/a.ts"],"subject":"Update stuff"}]}', entries);
@@ -1676,6 +1835,43 @@ function gitIn(root: string): GitRunner {
 		});
 }
 
+/** What the Source Control button describes, against a real repository. */
+async function testScmChanges() {
+	setLocale('en');
+	const root = mkdtempSync(join(tmpdir(), 'm365-scm-'));
+	const git = gitIn(root);
+	try {
+		await git(['init', '-q', '-b', 'main']);
+		for (const [key, value] of [['user.name', 'Test'], ['user.email', 't@example.com'], ['core.autocrlf', 'false'], ['commit.gpgsign', 'false']]) {
+			await git(['config', key, value]);
+		}
+		writeFileSync(join(root, 'a.txt'), 'a\n');
+		await git(['add', '-A']);
+		await git(['commit', '-q', '-m', 'chore: init']);
+		assert.equal(await readChangesToDescribe(git, root), undefined, 'sin cambios no hay nada que describir');
+
+		// Nothing staged: the working tree, and a new file inside a new folder
+		// with its content (git status alone would only say "?? src/").
+		writeFileSync(join(root, 'a.txt'), 'a\nb\n');
+		mkdirSync(join(root, 'src'));
+		writeFileSync(join(root, 'src', 'new.ts'), 'export const n = 1;\n');
+		const tree = await readChangesToDescribe(git, root);
+		assert.equal(tree?.staged, false);
+		assert.deepEqual(tree?.files, ['- a.txt (modified, +1 -0)', '- src/new.ts (new file, +1 -0)']);
+		assert.match(tree?.diff ?? '', /\+b\n[\s\S]*\+\+\+ b\/src\/new\.ts\n\+export const n = 1;/);
+
+		// Something staged: only that.
+		await git(['add', 'a.txt']);
+		const staged = await readChangesToDescribe(git, root);
+		assert.equal(staged?.staged, true);
+		assert.deepEqual(staged?.files, ['M\ta.txt\t+1 -0']);
+		assert.doesNotMatch(staged?.diff ?? '', /new\.ts/);
+		console.log('  ✓ botón de Source Control contra git real: stage o árbol de trabajo, archivos nuevos con contenido y líneas por archivo');
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+}
+
 /** commitFiles / undoCommits against a real repository. */
 async function testAutoCommitGit() {
 	const root = mkdtempSync(join(tmpdir(), 'm365-autocommit-'));
@@ -1687,6 +1883,7 @@ async function testAutoCommitGit() {
 			await git(['config', key, value]);
 		}
 		assert.equal((await readRepoState(git)).head, undefined, 'repo sin commits: no hay HEAD');
+		assert.deepEqual(await recentSubjects(git), [], 'repo sin commits: sin historial');
 
 		for (const file of ['a.txt', 'b.txt', 'c.txt', 'd.txt', '[x].txt']) write(file, `${file}\n`);
 		await git(['add', '-A']);
@@ -1742,6 +1939,11 @@ async function testAutoCommitGit() {
 		// Second commit: the glob-like name must be taken literally ([x] ≠ x).
 		const second = await commitFiles(git, afterFirst, ['[x].txt'], 'fix: update [x]');
 		assert.equal((await git(['show', '--name-only', '--format=', 'HEAD'])).trim(), '[x].txt');
+		assert.deepEqual(
+			await recentSubjects(git),
+			['fix: update [x]', 'refactor(core): reorganise files', 'chore: init'],
+			'historial del más nuevo al más viejo, sólo el subject',
+		);
 
 		// Undo both: the changes come back, unstaged; new files untracked again.
 		await undoCommits(git, {
@@ -2842,8 +3044,11 @@ async function main() {
 	console.log('participant / editor');
 	testParticipantPrompts();
 	testCommitMessageGeneration();
+	testCommitMessageNormalization();
+	testCommitContext();
 	testAutoCommitPrompt();
 	await testAutoCommitGit();
+	await testScmChanges();
 	testInlineEdit();
 	testTerminalPrompt();
 	testClipboardDetection();
