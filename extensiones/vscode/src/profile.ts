@@ -15,6 +15,7 @@ import {
 	extractClaims,
 	isSydneyToken,
 	isTokenUsable,
+	minutesUntilExpiry,
 	normalizeEndpoint,
 	tokenInSocketUrl,
 	TONE_PATTERN,
@@ -172,5 +173,38 @@ export function accountOf(profile: CopilotProfile | null | undefined): ProfileAc
 		sessionId: `${claims.tid ?? 'tenant'}/${accountId}`,
 		accountId,
 		label: upn || t('account.unknownUser'),
+	};
+}
+
+/**
+ * What a log may say about a profile — everything useful for diagnosing a
+ * connection (who, which tenant, audience, when it expires, what the browser
+ * captured) and never the token itself.
+ */
+export function describeProfile(profile: CopilotProfile | null | undefined): Record<string, unknown> | null {
+	if (!profile) return null;
+	let endpointHost: string | null = null;
+	try {
+		endpointHost = profile.endpoint ? new URL(profile.endpoint.replace(/^wss?:/, 'https:')).host : null;
+	} catch {
+		endpointHost = '<unparseable>';
+	}
+	const exp = profile.claims?.exp;
+	return {
+		user: profile.claims?.upn,
+		tenant: profile.claims?.tid,
+		objectId: profile.claims?.oid,
+		audience: profile.claims?.aud,
+		expiresAt: exp ? new Date(exp * 1000).toISOString() : null,
+		minutesLeft: minutesUntilExpiry(profile),
+		usable: isTokenUsable(profile),
+		tokenChars: profile.accessToken.length,
+		capturedAt: profile.capturedAt,
+		origin: profile.origin,
+		userAgent: profile.userAgent,
+		endpointHost,
+		hasInvocationTemplate: profile.invocationTemplate !== null,
+		invocationType: profile.invocationType,
+		observedTones: profile.observedTones ?? [],
 	};
 }

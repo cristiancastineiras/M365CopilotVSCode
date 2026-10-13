@@ -1,22 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
-import { foreignAudience, type CopilotProfile } from './profile';
+import { describeProfile, foreignAudience, type CopilotProfile } from './profile';
 import { prettyTone } from './modelCatalog';
 import { RunawayRepetitionGuard } from './repetitionGuard';
 import { bizChatLocale, t } from './i18n';
+import { debug, redactUrl, truncate } from './logger';
 
 /** SignalR frame terminator (record separator, U+001E). */
 const RS = String.fromCharCode(0x1e);
-
-/** Redact the access_token query param so logs are safe to share. */
-function redactUrl(url: string): string {
-	return url.replace(/(access_token=)[^&]+/i, '$1<REDACTED>');
-}
-
-/** Truncate a long frame for readable logs. */
-function truncate(text: string, max = 1200): string {
-	return text.length > max ? `${text.slice(0, max)}… (+${text.length - max} chars)` : text;
-}
 
 const DEFAULT_ENDPOINT_HOST = 'wss://substrate.office.com';
 const DEFAULT_ENDPOINT_PATH = '/m365Copilot/Chathub';
@@ -166,6 +157,25 @@ export async function streamCopilotTurn(options: {
 	log(`invocationType=${invocationType}, tone=${tone ?? AUTO_TONE}, mode=${mode}`);
 	log(`origin=${profile.origin}`);
 
+	// Deep-debug trace of this turn: one scope per turn, so interleaved turns
+	// (sub-agents run in parallel) can be told apart in the log.
+	const scope = `ws#${conversationId.slice(0, 8)}`;
+	const startedAt = Date.now();
+	const since = () => `+${Date.now() - startedAt}ms`;
+	let framesIn = 0;
+	let charsIn = 0;
+	let firstTextAt: number | undefined;
+	debug(scope, `turn start (mode=${mode}, tone=${tone ?? AUTO_TONE})`, () => ({
+		mode,
+		tone: tone ?? `${AUTO_TONE} (auto)`,
+		invocationType,
+		conversationId,
+		promptChars: prompt.length,
+		endpoint: redactUrl(url),
+		timeoutsMs: { handshake: HANDSHAKE_TIMEOUT_MS, idle: IDLE_TIMEOUT_MS, turn: MAX_TURN_MS },
+		profile: describeProfile(profile),
+	}));
+
 	const ws = new WebSocket(url, {
 		headers: {
 			Origin: profile.origin,
@@ -175,6 +185,17 @@ export async function streamCopilotTurn(options: {
 		// us set the headers Node's native WebSocket cannot.
 		followRedirects: true,
 	});
+	debug(scope, 'WebSocket created, upgrading', () => ({
+		url: redactUrl(url),
+		requestHeaders: { Origin: profile.origin, 'User-Agent': profile.userAgent },
+		followRedirects: true,
+	}));
+
+	/** Every frame that leaves goes through here, so the trace shows exactly what was sent. */
+	const send = (data: string, label: string, show = true) => {
+		debug(scope, `→ ${label} (${data.length} chars) ${since()}`, show ? data.replaceAll(RS, '␞') : undefined);
+		ws.send(data);
+	};
 
 	let settled = false;
 	let idleTimer: NodeJS.Timeout | undefined;
@@ -222,6 +243,14 @@ export async function streamCopilotTurn(options: {
 			settled = true;
 			if (error.message !== '__CANCELLED__') log(t('log.turnFailed', error.message));
 			else log(t('log.turnCancelled'));
+			debug(scope, `turn ended: ${error.message === '__CANCELLED__' ? 'cancelled' : 'failed'} ${since()}`, () => ({
+				error: error.message === '__CANCELLED__' ? 'cancelled by the caller' : error,
+				kind: error.constructor.name,
+				framesReceived: framesIn,
+				charsReceived: charsIn,
+				charsEmitted: totalEmittedChars,
+				wsReadyState: ws.readyState,
+			}));
 			if (error instanceof CopilotModelUnavailableError) modelOutcomeListener?.(error.tone, false, error.serverReply);
 			cleanup();
 			reject(error);
@@ -233,6 +262,12 @@ export async function streamCopilotTurn(options: {
 		 * the reason is plainly transient (throttling, capacity).
 		 */
 		const rejected = (error: CopilotClientError, reason: string) => {
+			debug(scope, 'the service turned the turn down', () => ({
+				reason,
+				forcedTone: tone,
+				charsEmittedSoFar: totalEmittedChars,
+				looksTransient: TRANSIENT_REJECTION.test(reason),
+			}));
 			if (tone && totalEmittedChars === 0 && !TRANSIENT_REJECTION.test(reason)) {
 				fail(new CopilotModelUnavailableError(tone, reason));
 			} else {
@@ -244,6 +279,7 @@ export async function streamCopilotTurn(options: {
 		// keeps receiving *something* (so IDLE_TIMEOUT_MS never fires) without
 		// ever actually finishing.
 		const turnTimer = setTimeout(() => {
+			debug(scope, `turn timer fired (${MAX_TURN_MS} ms ceiling)`);
 			fail(new CopilotClientError(t('client.error.turnTimeout')));
 		}, MAX_TURN_MS);
 
@@ -256,6 +292,7 @@ export async function streamCopilotTurn(options: {
 				fail(new CopilotClientError(t('client.error.repetition')));
 				return;
 			}
+			firstTextAt ??= Date.now();
 			callbacks.onText(text);
 		};
 
@@ -263,6 +300,13 @@ export async function streamCopilotTurn(options: {
 			if (settled) return;
 			settled = true;
 			log(t('log.turnCompleted', totalEmittedChars));
+			debug(scope, `turn ended: completed ${since()}`, () => ({
+				framesReceived: framesIn,
+				charsReceived: charsIn,
+				charsEmitted: totalEmittedChars,
+				timeToFirstTextMs: firstTextAt === undefined ? null : firstTextAt - startedAt,
+				messages: knownMessageText.size,
+			}));
 			if (totalEmittedChars === 0) log(t('log.turnEmpty'));
 			else if (tone) modelOutcomeListener?.(tone, true);
 			cleanup();
@@ -272,37 +316,52 @@ export async function streamCopilotTurn(options: {
 
 		const bumpIdle = () => {
 			if (idleTimer) clearTimeout(idleTimer);
-			idleTimer = setTimeout(
-				() => fail(new CopilotClientError(t('client.error.idle'))),
-				IDLE_TIMEOUT_MS,
-			);
+			idleTimer = setTimeout(() => {
+				debug(scope, `idle timer fired (no frame for ${IDLE_TIMEOUT_MS} ms)`);
+				fail(new CopilotClientError(t('client.error.idle')));
+			}, IDLE_TIMEOUT_MS);
 		};
 
-		const onAbort = () => fail(new CopilotClientError('__CANCELLED__'));
+		const onAbort = () => {
+			debug(scope, `abort signal received ${since()}`);
+			fail(new CopilotClientError('__CANCELLED__'));
+		};
 		if (signal.aborted) {
 			onAbort();
 			return;
 		}
 		signal.addEventListener('abort', onAbort, { once: true });
 
-		const handshakeTimer = setTimeout(
-			() => fail(new CopilotClientError(t('client.error.handshake'))),
-			HANDSHAKE_TIMEOUT_MS,
-		);
+		const handshakeTimer = setTimeout(() => {
+			debug(scope, `handshake timer fired (no ack within ${HANDSHAKE_TIMEOUT_MS} ms)`);
+			fail(new CopilotClientError(t('client.error.handshake')));
+		}, HANDSHAKE_TIMEOUT_MS);
 
 		let handshakeDone = false;
 
 		ws.on('open', () => {
 			log(t('log.wsOpen'));
+			debug(scope, `← socket open ${since()}`);
 			// SignalR JSON handshake.
-			ws.send(JSON.stringify({ protocol: 'json', version: 1 }) + RS);
+			send(JSON.stringify({ protocol: 'json', version: 1 }) + RS, 'SignalR handshake');
 		});
+
+		ws.on('upgrade', (res) => {
+			debug(scope, `← upgrade ${res.statusCode ?? '?'} ${res.statusMessage ?? ''}`.trimEnd() + ` ${since()}`, () => ({
+				headers: res.headers,
+			}));
+		});
+		ws.on('ping', (data: Buffer) => debug(scope, `← ws ping (${data.length} bytes) ${since()}`));
+		ws.on('pong', (data: Buffer) => debug(scope, `← ws pong (${data.length} bytes) ${since()}`));
 
 		ws.on('unexpected-response', (_req, res) => {
 			clearTimeout(handshakeTimer);
 			const status = res.statusCode ?? 0;
 			const statusMessage = res.statusMessage ?? '';
 			log(t('log.unexpectedResponse', `${status} ${statusMessage}`.trimEnd()));
+			debug(scope, `← upgrade refused: ${status} ${statusMessage}`.trimEnd() + ` ${since()}`, () => ({
+				headers: res.headers,
+			}));
 
 			// Azure AD / Substrate usually explain a 401/403 in a `WWW-Authenticate`
 			// header and a JSON body (`error`, `error_description`, correlation id).
@@ -318,6 +377,7 @@ export async function streamCopilotTurn(options: {
 			res.on('end', () => {
 				const body = Buffer.concat(bodyChunks).toString('utf8').trim();
 				if (body) log(t('log.body', truncate(body, 500)));
+				debug(scope, `← upgrade refused: body (${body.length} chars)`, body);
 				// A non-101 upgrade response means the socket will never open, so fail
 				// now with an accurate message instead of waiting out the generic
 				// handshake timeout — that 15 s stall misled users into thinking the
@@ -327,6 +387,7 @@ export async function streamCopilotTurn(options: {
 		});
 
 		ws.on('error', (err: Error) => {
+			debug(scope, `socket error ${since()}`, err);
 			clearTimeout(handshakeTimer);
 			fail(new CopilotClientError(t('client.error.connection', err.message)));
 		});
@@ -334,6 +395,11 @@ export async function streamCopilotTurn(options: {
 		ws.on('close', (code: number, reason: Buffer) => {
 			clearTimeout(handshakeTimer);
 			log(t('log.wsClosed', code, reason?.length ? `, ${reason.toString()}` : ''));
+			debug(scope, `← socket closed: code ${code}${reason?.length ? `, reason "${reason.toString()}"` : ''} ${since()}`, () => ({
+				settledBeforeClose: settled,
+				framesReceived: framesIn,
+				charsEmitted: totalEmittedChars,
+			}));
 			if (!settled) {
 				// A clean close after we have some text is a normal end for a few
 				// rings; treat any accumulated content as a completed turn.
@@ -346,13 +412,17 @@ export async function streamCopilotTurn(options: {
 			const text = raw.toString();
 			for (const chunk of text.split(RS)) {
 				if (!chunk) continue;
+				framesIn++;
+				charsIn += chunk.length;
 				let frame: Record<string, unknown>;
 				try {
 					frame = JSON.parse(chunk) as Record<string, unknown>;
 				} catch {
 					log(`<< (no-JSON) ${truncate(chunk, 300)}`);
+					debug(scope, `← frame #${framesIn} NOT JSON (${chunk.length} chars) ${since()}`, chunk);
 					continue;
 				}
+				debug(scope, `← frame #${framesIn} ${describeFrame(frame)} (${chunk.length} chars) ${since()}`, chunk);
 
 				// First non-empty frame after our handshake send is the server's
 				// handshake ack: `{}` (or `{ error }`).
@@ -365,7 +435,7 @@ export async function streamCopilotTurn(options: {
 						return;
 					}
 					log(t('log.sendingInvocation'));
-					sendInvocation(ws, profile, prompt, tone, invocationType, invocationId, conversationId, log, mode);
+					sendInvocation(send, profile, prompt, tone, invocationType, invocationId, conversationId, log, mode, scope);
 					bumpIdle();
 					// The `{}` ack frame carries no chat data; done with it.
 					continue;
@@ -418,10 +488,15 @@ export async function streamCopilotTurn(options: {
 						// The service's own canned reply instead of the forced
 						// model: that model did not run. With Auto, or after real
 						// text, it is just part of the answer.
+						debug(scope, 'canned reply from the service (contentOrigin=BotConnection)', () => ({
+							text,
+							forcedTone: tone,
+							treatedAsModelUnavailable: Boolean(tone) && totalEmittedChars === 0,
+						}));
 						if (tone && totalEmittedChars === 0) fail(new CopilotModelUnavailableError(tone, text));
 						else emitText(text, false, messageId);
 					},
-					respondPing: () => ws.send(JSON.stringify({ type: 6 }) + RS),
+					respondPing: () => send(JSON.stringify({ type: 6 }) + RS, 'SignalR ping reply'),
 					onSources: (sources) => callbacks.onSources?.(sources),
 				});
 			}
@@ -440,6 +515,40 @@ interface FrameHandlers {
 	onCannedReply: (text: string, messageId: string | undefined, emitText: FrameHandlers['emitText']) => void;
 	respondPing: () => void;
 	onSources: (sources: readonly WebSource[]) => void;
+}
+
+const FRAME_TYPES: Record<number, string> = {
+	1: 'Invocation',
+	2: 'StreamItem',
+	3: 'Completion',
+	4: 'StreamInvocation',
+	5: 'CancelInvocation',
+	6: 'Ping',
+	7: 'Close',
+};
+
+/** One line saying what a SignalR frame is and carries, to head its dump in the deep trace. */
+function describeFrame(frame: Record<string, unknown>): string {
+	const parts = [typeof frame.type === 'number' ? (FRAME_TYPES[frame.type] ?? `type ${frame.type}`) : 'handshake'];
+	if (typeof frame.target === 'string') parts.push(`target=${frame.target}`);
+	if (frame.error) parts.push('ERROR');
+	const args = Array.isArray(frame.arguments) ? (frame.arguments as unknown[]) : frame.item !== undefined ? [frame.item] : [];
+	for (const arg of args) {
+		if (!arg || typeof arg !== 'object') continue;
+		const payload = arg as Record<string, unknown>;
+		if (typeof payload.writeAtCursor === 'string') parts.push(`delta ${payload.writeAtCursor.length} chars`);
+		if (Array.isArray(payload.messages)) {
+			for (const message of payload.messages) {
+				if (!message || typeof message !== 'object') continue;
+				const m = message as Record<string, unknown>;
+				const size = typeof m.text === 'string' ? ` ${m.text.length} chars` : '';
+				parts.push(`message(${String(m.author ?? '?')}/${String(m.messageType ?? 'text')}${size})`);
+			}
+		}
+		const result = payload.result as { value?: unknown } | undefined;
+		if (result && typeof result.value === 'string') parts.push(`result=${result.value}`);
+	}
+	return parts.join(' ');
 }
 
 function handleFrame(
@@ -570,7 +679,7 @@ export function sourcesOf(message: Record<string, unknown>): WebSource[] {
 }
 
 function sendInvocation(
-	ws: WebSocket,
+	send: (data: string, label: string, show?: boolean) => void,
 	profile: CopilotProfile,
 	prompt: string,
 	tone: string | null,
@@ -579,6 +688,7 @@ function sendInvocation(
 	conversationId: string,
 	log: (message: string) => void,
 	mode: TurnMode,
+	scope: string,
 ): void {
 	const args =
 		mode === 'web' && profile.invocationTemplate
@@ -612,7 +722,10 @@ function sendInvocation(
 	// Full frame (untruncated) so the temp-file dump captures exactly what we
 	// sent — invaluable when a tenant returns InvalidRequest.
 	log(t('log.chatFrame', JSON.stringify(chatFrame)));
-	ws.send(JSON.stringify(chatFrame) + RS + JSON.stringify(metricsFrame) + RS);
+	// The chat frame is already logged whole just above; the trace only notes
+	// that it left, and shows the metrics frame (which carries nothing private).
+	debug(scope, 'metrics frame', metricsFrame);
+	send(JSON.stringify(chatFrame) + RS + JSON.stringify(metricsFrame) + RS, 'chat invocation + metrics', false);
 }
 
 /**
@@ -760,6 +873,7 @@ export async function streamCopilotTurnWithRetry(
 	} catch (error) {
 		if (emittedAny || options.signal.aborted || !isRetryableClientError(error)) throw error;
 		log(t('log.retrying', error instanceof Error ? error.message : String(error)));
+		debug('ws', `retrying the turn once in ${options.retryDelayMs ?? 1200} ms (nothing had been shown yet)`, error);
 		await delay(options.retryDelayMs ?? 1200, options.signal);
 		if (options.signal.aborted) throw error;
 		await streamCopilotTurn({ ...options, callbacks });

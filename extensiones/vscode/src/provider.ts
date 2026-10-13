@@ -8,7 +8,7 @@ import {
 	type TurnMode,
 	type WebSource,
 } from './client';
-import { log } from './logger';
+import { debug, log } from './logger';
 
 import { currentEnvironment } from './editorContext';
 import { MarkdownStreamFormatter } from './markdown';
@@ -24,6 +24,9 @@ import { t } from './i18n';
 
 /** Rough token estimate; BizChat exposes no tokenizer. */
 const CHARS_PER_TOKEN = 3.5;
+
+/** Numbers each chat request in the deep trace (`chat#3`), so interleaved requests can be told apart. */
+let chatSeq = 0;
 
 /** Cómo se describen en el prompt las herramientas que ofrece VS Code. */
 function readToolSettings(): {
@@ -68,7 +71,9 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 		const profile = await this.store.get();
 		const state: TokenState = !profile ? 'missing' : isTokenUsable(profile) ? 'ok' : 'expired';
 		const registry = modelRegistry();
-		return allModels().map((m) => toChatInformation(m, state, registry?.unavailability(m.tone)));
+		const infos = allModels().map((m) => toChatInformation(m, state, registry?.unavailability(m.tone)));
+		debug('chat', 'VS Code asked for the model list', () => ({ tokenState: state, models: infos.map((info) => info.id) }));
+		return infos;
 	}
 
 	async provideLanguageModelChatResponse(
@@ -78,12 +83,23 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 		progress: vscode.Progress<vscode.LanguageModelResponsePart>,
 		token: vscode.CancellationToken,
 	): Promise<void> {
+		const scope = `chat#${++chatSeq}`;
+		const started = Date.now();
+		debug(scope, `request received for ${model.id}`, () => ({
+			model: { id: model.id, name: model.name, family: model.family },
+			messages: describeMessages(messages),
+			toolMode: options.toolMode === undefined ? null : vscode.LanguageModelChatToolMode[options.toolMode],
+			tools: (options.tools ?? []).map((tool) => tool.name),
+			modelOptions: options.modelOptions,
+		}));
 		const profile = await this.store.get();
 		if (!profile) {
+			debug(scope, 'refused: no token stored');
 			throw new Error(t('provider.noToken'));
 		}
 		if (!isTokenUsable(profile)) {
 			const mins = minutesUntilExpiry(profile);
+			debug(scope, `refused: the stored token expired (${mins} min)`);
 			this.changeEmitter.fire();
 			throw new Error(t('provider.tokenExpired', mins !== null ? t('provider.expiredAgo', Math.abs(mins)) : ''));
 		}
@@ -99,18 +115,28 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 		// Without tools to call there is no text protocol to protect, so the
 		// turn can go out the way the web app sends it: with web search.
 		const webTurn = catalog.callable.size === 0 && webSearchEnabled() && Boolean(profile.invocationTemplate);
+		debug(scope, `turn mode decided: ${webTurn ? 'web (with BizChat plugins)' : 'tools (lean invocation)'}`, () => ({
+			callableTools: [...catalog.callable.keys()],
+			omittedTools: catalog.omitted,
+			toolsRequired,
+			webSearchEnabled: webSearchEnabled(),
+			hasInvocationTemplate: Boolean(profile.invocationTemplate),
+			selectedModel: selected ? { id: selected.id, tone: selected.tone, source: selected.source } : null,
+		}));
 		let projectContext: string | undefined;
 		try {
 			projectContext = await this.projectContext?.(retrievalText(recentUserTexts(messages, 2)));
 		} catch (error) {
 			log(t('log.indexContextFailed', error instanceof Error ? error.message : String(error)));
 		}
+		debug(scope, `project context (${projectContext?.length ?? 0} chars)`, projectContext);
 		const prompt = flattenMessages(messages, {
 			catalog,
 			toolsRequired,
 			environment: currentEnvironment(),
 			projectContext,
 		});
+		debug(scope, `prompt flattened (${prompt.length} chars) — exactly what goes to BizChat as the user message`, prompt);
 		log(
 			t(
 				'log.chatRequest',
@@ -132,13 +158,17 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 		const markdown = new MarkdownStreamFormatter();
 		const emitMarkdown = (text: string) => {
 			const formatted = markdown.push(text);
-			if (formatted) progress.report(new vscode.LanguageModelTextPart(formatted));
+			if (formatted) {
+				debug(scope, `→ text part to VS Code (${formatted.length} chars)`);
+				progress.report(new vscode.LanguageModelTextPart(formatted));
+			}
 		};
 		const toolDecoder = new ToolCallDecoder(
 			catalog.callable,
 			emitMarkdown,
 			(toolCall) => {
 				log(t('log.toolCallRequested', toolCall.name));
+				debug(scope, `→ tool call to VS Code: ${toolCall.name}`, toolCall.input);
 				progress.report(
 					new vscode.LanguageModelToolCallPart(randomUUID(), toolCall.name, toolCall.input),
 				);
@@ -147,8 +177,9 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 		const cancelListener = token.onCancellationRequested(() => controller.abort());
 		const sources: WebSource[] = [];
 		let emitted = false;
-		const run = (mode: TurnMode) =>
-			streamCopilotTurnWithRetry({
+		const run = (mode: TurnMode) => {
+			debug(scope, `starting the BizChat turn in "${mode}" mode`);
+			return streamCopilotTurnWithRetry({
 				profile,
 				prompt,
 				tone: selected?.tone ?? null,
@@ -163,6 +194,7 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 					onSources: (found) => sources.push(...found),
 				},
 			});
+		};
 
 		try {
 			try {
@@ -179,6 +211,7 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 					error.message !== '__CANCELLED__';
 				if (!retryable) throw error;
 				log(t('log.webFallback', error.message));
+				debug(scope, 'the web invocation was turned down; falling back to the lean "tools" invocation', error);
 				await run('tools');
 			}
 			toolDecoder.finish();
@@ -186,7 +219,12 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 			if (formatted) progress.report(new vscode.LanguageModelTextPart(formatted));
 			const cited = sourcesMarkdown(sources);
 			if (cited) progress.report(new vscode.LanguageModelTextPart(cited));
+			debug(scope, `request finished in ${Date.now() - started} ms`, () => ({
+				streamedAnyText: emitted,
+				sources: sources.map((source) => source.url),
+			}));
 		} catch (error) {
+			debug(scope, `request ended with an error after ${Date.now() - started} ms`, error);
 			if (error instanceof CopilotClientError && error.message === '__CANCELLED__') {
 				return; // user cancelled — swallow quietly
 			}
@@ -227,11 +265,30 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 							p instanceof vscode.LanguageModelTextPart ? p.value : JSON.stringify(p),
 						)
 						.join('');
-		return Promise.resolve(Math.ceil(raw.length / CHARS_PER_TOKEN));
+		const tokens = Math.ceil(raw.length / CHARS_PER_TOKEN);
+		debug('chat', `token count asked for ${raw.length} chars → ${tokens} (estimate: ${CHARS_PER_TOKEN} chars per token)`);
+		return Promise.resolve(tokens);
 	}
 
 	dispose(): void {
 		this.storeListener.dispose();
 		this.changeEmitter.dispose();
 	}
+}
+
+/** What a chat request carries, for the deep trace: roles and part sizes (the flattened prompt is logged whole separately). */
+function describeMessages(messages: readonly vscode.LanguageModelChatRequestMessage[]): unknown[] {
+	return messages.map((message, index) => ({
+		index,
+		role: vscode.LanguageModelChatMessageRole[message.role] ?? message.role,
+		name: message.name,
+		parts: message.content.map(describePart),
+	}));
+}
+
+function describePart(part: unknown): string {
+	if (part instanceof vscode.LanguageModelTextPart) return `text(${part.value.length} chars)`;
+	if (part instanceof vscode.LanguageModelToolCallPart) return `toolCall(${part.name}, ${part.callId})`;
+	if (part instanceof vscode.LanguageModelToolResultPart) return `toolResult(${part.callId}, ${part.content.length} parts)`;
+	return part && typeof part === 'object' ? (part.constructor?.name ?? 'object') : typeof part;
 }

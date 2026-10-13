@@ -10,7 +10,7 @@ import {
 } from '@m365copilot/core';
 import type { CopilotProfile } from './profile';
 import type { ProfileStore } from './secrets';
-import { log } from './logger';
+import { debug, isDeepDebug, log } from './logger';
 import { t } from './i18n';
 
 // Orígenes desde los que el userscript puede llegar a correr (mismo conjunto
@@ -42,6 +42,38 @@ function isAllowedOrigin(origin: string): boolean {
 // Un perfil capturado (token + endpoint + plantilla) no debería pasar de
 // pocos KB; un body mucho mayor no es un perfil legítimo.
 const MAX_BODY_BYTES = 256 * 1024;
+
+// Traza profunda (`m365copilot.debug.deep`): cada petición que llega a este
+// puerto —del navegador o de cualquiera— con sus cabeceras, su cuerpo y la
+// respuesta. El id enlaza la petición con su respuesta cuando llegan
+// intercaladas.
+let requestSeq = 0;
+const traces = new WeakMap<http.ServerResponse, { readonly scope: string; readonly at: number }>();
+
+function traceRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
+	if (!isDeepDebug()) return;
+	const scope = `http#${++requestSeq}`;
+	traces.set(res, { scope, at: Date.now() });
+	debug(scope, `← ${req.method} ${req.url}`, () => ({
+		from: `${req.socket.remoteAddress}:${req.socket.remotePort}`,
+		httpVersion: req.httpVersion,
+		headers: req.headers,
+	}));
+}
+
+/** Escribe la respuesta (JSON si hay `payload`) y la deja en la traza. */
+function respond(res: http.ServerResponse, status: number, payload?: unknown): void {
+	if (payload === undefined) res.writeHead(status);
+	else res.writeHead(status, { 'Content-Type': 'application/json' });
+	res.end(payload === undefined ? undefined : JSON.stringify(payload));
+	const trace = traces.get(res);
+	if (trace) {
+		debug(trace.scope, `→ ${status} (${Date.now() - trace.at} ms)`, () => ({
+			headers: res.getHeaders(),
+			body: payload,
+		}));
+	}
+}
 
 /**
  * Cierre de sesión pedido desde VS Code y aún sin atender. Se publica en el
@@ -92,12 +124,14 @@ export class TokenAutoRefreshServer implements vscode.Disposable {
 	requestSignOut(): PendingSignOut {
 		this.pendingSignOut = { id: crypto.randomUUID(), requestedAt: Date.now() };
 		log(t('log.server.signOutRequested', this.pendingSignOut.id));
+		debug('http', 'sign-out request published on /health until the browser picks it up', this.pendingSignOut);
 		return this.pendingSignOut;
 	}
 
 	/** Retira la petición (el usuario canceló, o se agotó la espera). */
 	cancelSignOut(id?: string): void {
 		if (id && this.pendingSignOut?.id !== id) return;
+		if (this.pendingSignOut) debug('http', `pending sign-out ${this.pendingSignOut.id} withdrawn`);
 		this.pendingSignOut = null;
 	}
 
@@ -105,6 +139,7 @@ export class TokenAutoRefreshServer implements vscode.Disposable {
 		if (this.server) return;
 
 		this.server = http.createServer(async (req, res) => {
+			traceRequest(req, res);
 			// GM_xmlhttpRequest (el que usa el userscript) no está sujeto a CORS y
 			// normalmente no manda `Origin`, así que esas peticiones legítimas no
 			// se ven afectadas por esta comprobación. Lo que sí bloqueamos es que
@@ -112,6 +147,7 @@ export class TokenAutoRefreshServer implements vscode.Disposable {
 			// consiga que su petición cross-origin se complete.
 			const origin = req.headers.origin;
 			const originAllowed = typeof origin === 'string' && isAllowedOrigin(origin);
+			debug('http', `origin check: ${typeof origin === 'string' && origin ? `${origin} → ${originAllowed ? 'allowed' : 'NOT allowed'}` : 'no Origin header (GM_xmlhttpRequest / extension background)'}`);
 			if (typeof origin === 'string' && origin) {
 				res.setHeader('Vary', 'Origin');
 				if (originAllowed) {
@@ -122,8 +158,7 @@ export class TokenAutoRefreshServer implements vscode.Disposable {
 			}
 
 			if (req.method === 'OPTIONS') {
-				res.writeHead(originAllowed || !origin ? 200 : 403);
-				res.end();
+				respond(res, originAllowed || !origin ? 200 : 403);
 				return;
 			}
 
@@ -131,10 +166,9 @@ export class TokenAutoRefreshServer implements vscode.Disposable {
 				const isSignOut = req.url === SIGNOUT_ENDPOINT_PATH;
 				if (typeof origin === 'string' && origin && !originAllowed) {
 					log(t('log.server.originRejected', req.url ?? '?', origin));
-					res.writeHead(403, { 'Content-Type': 'application/json' });
 					// API errors stay in English on purpose: they are read by the
 					// browser extension / userscript, not shown as UI text.
-					res.end(JSON.stringify({ success: false, error: 'Origin not allowed' }));
+					respond(res, 403, { success: false, error: 'Origin not allowed' });
 					return;
 				}
 
@@ -145,8 +179,7 @@ export class TokenAutoRefreshServer implements vscode.Disposable {
 					body += chunk;
 					if (body.length > MAX_BODY_BYTES) {
 						tooLarge = true;
-						res.writeHead(413, { 'Content-Type': 'application/json' });
-						res.end(JSON.stringify({ success: false, error: 'Payload too large' }));
+						respond(res, 413, { success: false, error: 'Payload too large' });
 						req.destroy();
 					}
 				});
@@ -155,28 +188,26 @@ export class TokenAutoRefreshServer implements vscode.Disposable {
 				});
 				req.on('end', async () => {
 					if (tooLarge) return;
+					const trace = traces.get(res);
+					if (trace) debug(trace.scope, `← body (${body.length} chars) for ${isSignOut ? 'sign-out' : 'token'}`, body);
 					try {
 						if (isSignOut) {
 							const outcome = this.acceptSignOut(body);
-							res.writeHead(200, { 'Content-Type': 'application/json' });
-							res.end(JSON.stringify({ success: true, id: outcome.id }));
+							respond(res, 200, { success: true, id: outcome.id });
 							return;
 						}
 						const profile = await this.store.setFromPaste(body);
 						log(t('log.server.renewed'));
 						this.onTokenReceived?.(profile);
-						res.writeHead(200, { 'Content-Type': 'application/json' });
-						res.end(
-							JSON.stringify({
-								success: true,
-								expiresAt: profile.claims?.exp,
-								user: profile.claims?.upn,
-							}),
-						);
+						respond(res, 200, {
+							success: true,
+							expiresAt: profile.claims?.exp,
+							user: profile.claims?.upn,
+						});
 					} catch (error) {
 						log(t('log.server.processError', String(error)));
-						res.writeHead(400, { 'Content-Type': 'application/json' });
-						res.end(JSON.stringify({ success: false, error: String(error) }));
+						debug(traces.get(res)?.scope ?? 'http', 'the body could not be processed', error);
+						respond(res, 400, { success: false, error: String(error) });
 					}
 				});
 				return;
@@ -186,19 +217,15 @@ export class TokenAutoRefreshServer implements vscode.Disposable {
 			// está activo. Lleva además el cierre de sesión pendiente, si hay
 			// alguno: es el único canal de ida hacia el navegador.
 			if (req.method === 'GET' && req.url === HEALTH_ENDPOINT_PATH) {
-				res.writeHead(200, { 'Content-Type': 'application/json' });
-				res.end(
-					JSON.stringify({
-						status: 'ok',
-						service: 'm365-copilot-vscode',
-						pendingSignOut: this.pendingSignOut,
-					}),
-				);
+				respond(res, 200, {
+					status: 'ok',
+					service: 'm365-copilot-vscode',
+					pendingSignOut: this.pendingSignOut,
+				});
 				return;
 			}
 
-			res.writeHead(404);
-			res.end();
+			respond(res, 404);
 		});
 
 		this.server.listen(this.port, 'localhost', () => {
@@ -235,6 +262,7 @@ export class TokenAutoRefreshServer implements vscode.Disposable {
 		this.cancelSignOut(id ?? undefined);
 		void this.store.clear();
 		log(t('log.server.signedOut', id ?? '—'));
+		debug('http', 'the browser confirmed the sign-out', () => ({ id, report }));
 		const outcome: SignOutOutcome = { id, report };
 		this.signedOut.fire(outcome);
 		return outcome;

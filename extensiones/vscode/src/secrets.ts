@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { parsePastedProfile, type CopilotProfile } from './profile';
+import { describeProfile, parsePastedProfile, type CopilotProfile } from './profile';
+import { debug } from './logger';
 
 const SECRET_KEY = 'm365copilot.profile.v1';
 
@@ -18,6 +19,7 @@ export class ProfileStore {
 		// this window's cache and picker.
 		this.disposable = secrets.onDidChange((e) => {
 			if (e.key === SECRET_KEY) {
+				debug('profile', 'the stored secret changed (this or another window); cache dropped');
 				this.cached = undefined;
 				this.changeEmitter.fire();
 			}
@@ -53,6 +55,7 @@ export class ProfileStore {
 	/** Store an already parsed profile (see {@link parsePastedProfile}). */
 	async set(profile: CopilotProfile): Promise<CopilotProfile> {
 		await this.secrets.store(SECRET_KEY, JSON.stringify(profile));
+		debug('profile', 'profile stored in SecretStorage', () => describeProfile(profile));
 		this.cached = profile;
 		this.changeEmitter.fire();
 		return profile;
@@ -60,6 +63,7 @@ export class ProfileStore {
 
 	async clear(): Promise<void> {
 		await this.secrets.delete(SECRET_KEY);
+		debug('profile', 'profile deleted from SecretStorage');
 		this.cached = null;
 		this.changeEmitter.fire();
 	}
