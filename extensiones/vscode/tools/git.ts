@@ -1,12 +1,15 @@
 import { execFile } from 'node:child_process';
 import * as vscode from 'vscode';
 import { t } from '../src/i18n';
+import { debug } from '../src/logger';
 import { ensureNotCancelled, resolveWorkspacePath } from './common';
 import { buildGitArgs, normalizeGitAction, type GitAction } from './gitArgs';
 
 const GIT_TIMEOUT_MS = 15_000;
 const MAX_OUTPUT_CHARS = 20_000;
 const MAX_BUFFER_BYTES = 4 * 1024 * 1024;
+/** Numbers each git process in the deep trace (`git#4`). */
+let gitSeq = 0;
 
 export interface GitInfoInput {
 	readonly action?: string;
@@ -48,12 +51,20 @@ export function execGit(
 	options: { readonly timeoutMs?: number } = {},
 ): Promise<string> {
 	return new Promise((resolve, reject) => {
+		const scope = `git#${++gitSeq}`;
+		const started = Date.now();
+		debug(scope, `$ git ${args.join(' ')}`, { cwd, timeoutMs: options.timeoutMs ?? GIT_TIMEOUT_MS });
 		const child = execFile(
 			'git',
 			args,
 			{ cwd, timeout: options.timeoutMs ?? GIT_TIMEOUT_MS, maxBuffer: MAX_BUFFER_BYTES, windowsHide: true },
 			(error, stdout, stderr) => {
 				cancelListener.dispose();
+				debug(scope, `git exited ${error ? `with an error (${(error as NodeJS.ErrnoException).code ?? error.message})` : 'ok'} in ${Date.now() - started} ms`, () => ({
+					stdoutChars: stdout.length,
+					stderr: stderr.trim() || undefined,
+					stdout: stdout.length <= 4000 ? stdout : `${stdout.slice(0, 4000)}… (+${stdout.length - 4000} chars)`,
+				}));
 				if (error) {
 					const err = error as NodeJS.ErrnoException;
 					if (err.code === 'ENOENT') {

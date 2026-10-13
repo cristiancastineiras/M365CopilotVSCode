@@ -11,6 +11,7 @@ import {
 	type ModelEntry,
 } from './modelCatalog';
 import type { ProfileStore } from './secrets';
+import { debug } from './logger';
 
 /**
  * M365 Copilot / BizChat selects a model through the `tone` field of the chat
@@ -121,15 +122,29 @@ export class ModelRegistry implements vscode.Disposable {
 	 * parsed — the cached copy (or the built-ins) stay in use.
 	 */
 	async refreshCatalog(): Promise<boolean> {
-		if (!catalogEnabled()) return false;
+		if (!catalogEnabled()) {
+			debug('models', 'catalog refresh skipped: m365copilot.models.updateFromCatalog is off');
+			return false;
+		}
+		const started = Date.now();
 		try {
+			debug('models', `→ GET ${MODEL_CATALOG_URL}`, { timeoutMs: CATALOG_TIMEOUT_MS, headers: { Accept: 'application/json' } });
 			const response = await fetch(MODEL_CATALOG_URL, {
 				signal: AbortSignal.timeout(CATALOG_TIMEOUT_MS),
 				headers: { Accept: 'application/json' },
 			});
+			debug('models', `← ${response.status} ${response.statusText} (${Date.now() - started} ms)`, () => {
+				const headers: Record<string, string> = {};
+				response.headers.forEach((value, key) => {
+					headers[key] = value;
+				});
+				return headers;
+			});
 			if (!response.ok) throw new Error(`HTTP ${response.status}`);
-			const entries = parseModelCatalog(await response.json());
+			const payload: unknown = await response.json();
+			const entries = parseModelCatalog(payload);
 			if (!entries) throw new Error('models.json has no "models" array');
+			debug('models', `catalog parsed: ${entries.length} entries`, entries);
 			await this.memento.update(CATALOG_CACHE_KEY, { entries, fetchedAt: Date.now() } satisfies CatalogCache);
 			this.log(t('log.modelsCatalog', entries.length));
 			this.recompute();
@@ -194,6 +209,9 @@ export class ModelRegistry implements vscode.Disposable {
 		const before = this.current.map((model) => `${model.id}|${model.name}|${model.tone}`).join(',');
 		const after = next.map((model) => `${model.id}|${model.name}|${model.tone}`).join(',');
 		this.current = next;
+		debug('models', `model list recomputed: ${next.length} models${before !== after ? ' (changed)' : ' (same as before)'}`, () =>
+			next.map((model) => ({ id: model.id, tone: model.tone, source: model.source })),
+		);
 		if (before !== after) this.changed.fire();
 		if (announce) void this.announce(next);
 	}

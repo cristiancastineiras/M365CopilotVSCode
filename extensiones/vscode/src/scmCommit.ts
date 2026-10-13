@@ -13,6 +13,7 @@
  * review.
  */
 import * as vscode from 'vscode';
+import { registerTracedCommand } from './debugMode';
 import { streamCopilotTurnWithRetry } from './client';
 import { requireUsableProfile } from './commands';
 import { editorTone } from './models';
@@ -34,7 +35,7 @@ import { t } from './i18n';
 
 export function registerScmCommands(store: ProfileStore, log: (message: string) => void): vscode.Disposable[] {
 	return [
-		vscode.commands.registerCommand('m365copilot.generateCommitMessage', (source?: unknown) =>
+		registerTracedCommand('m365copilot.generateCommitMessage', (source?: unknown) =>
 			generateCommitMessage(store, log, source),
 		),
 	];

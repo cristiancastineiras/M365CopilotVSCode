@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { streamCopilotTurn, CopilotClientError } from './client';
 import { cleanCompletion, reuseForExtendedPrefix } from './completionText';
-import { log } from './logger';
+import { debug, log } from './logger';
 import { findModel } from './models';
 import { isTokenUsable } from './profile';
 import type { ProfileStore } from './secrets';
@@ -120,10 +120,16 @@ export class M365InlineCompletionProvider implements vscode.InlineCompletionItem
 		// A cache hit costs nothing and is the difference between ghost text
 		// that sticks and ghost text that blinks in and out while you type.
 		const cached = this.fromCache(document, prefix);
-		if (cached) return [toItem(cached, position)];
+		if (cached) {
+			debug('complete', `served from cache (${cached.length} chars)`, { file: document.uri.toString(), line: position.line + 1 });
+			return [toItem(cached, position)];
+		}
 
 		const profile = await this.store.get();
-		if (!profile || !isTokenUsable(profile)) return undefined;
+		if (!profile || !isTokenUsable(profile)) {
+			debug('complete', 'skipped: no usable token');
+			return undefined;
+		}
 
 		if (!invokedByHand && settings.debounceMs > 0) {
 			await delay(settings.debounceMs, token);
@@ -142,6 +148,17 @@ export class M365InlineCompletionProvider implements vscode.InlineCompletionItem
 
 		const started = Date.now();
 		this.status.setBusy(true);
+		debug('complete', 'requesting a completion', () => ({
+			file: document.uri.toString(),
+			language: document.languageId,
+			position: `${position.line + 1}:${position.character + 1}`,
+			prefixChars: prefix.length,
+			suffixChars: suffix.length,
+			invokedByHand,
+			model: settings.modelId,
+			timeoutMs: settings.timeoutMs,
+			maxLines: settings.maxLines,
+		}));
 		try {
 			const raw = await this.requestCompletion(profile, document, prefix, suffix, settings, controller);
 			if (raw === undefined || token.isCancellationRequested) return undefined;
@@ -154,6 +171,7 @@ export class M365InlineCompletionProvider implements vscode.InlineCompletionItem
 				languageId: document.languageId,
 			});
 			log(t('log.completion', Date.now() - started, raw.length, completion.length));
+			debug('complete', 'completion received', () => ({ raw, cleaned: completion }));
 			if (!completion) return undefined;
 
 			this.remember(document, prefix, completion);
@@ -161,6 +179,7 @@ export class M365InlineCompletionProvider implements vscode.InlineCompletionItem
 		} catch (error) {
 			if (error instanceof CopilotClientError && error.message === '__CANCELLED__') return undefined;
 			log(t('log.completionFailed', error instanceof Error ? error.message : String(error)));
+			debug('complete', 'completion failed', error);
 			return undefined;
 		} finally {
 			if (this.inFlight === controller) this.inFlight = undefined;

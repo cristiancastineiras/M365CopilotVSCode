@@ -185,7 +185,8 @@ spinner while a suggestion is on its way. Its tooltip shows the account, the
 minutes left and the agent changes pending review. Clicking it opens the
 **M365 Copilot menu**: paste token, token status, open M365 Copilot, open the
 chat, toggle inline completions, review pending changes, generate a commit
-message, auto-commit, language, settings, walkthrough, log and delete credentials.
+message, auto-commit, language, settings, walkthrough, deep debug mode, log,
+export log and delete credentials.
 
 When the token is about to expire **without having been renewed** (5 minutes
 left) or expires during the session, a notification offers **Paste token** /
@@ -540,6 +541,40 @@ while you type exactly what it proposed, so it does not flicker.
 
 Output panes, read-only diff sides and git views never trigger a suggestion.
 
+## Deep debug mode
+
+For when something does not work and "it fails" is not enough information.
+Turn on the **`m365copilot.debug.deep`** setting (Settings → search
+"M365 Copilot deep debug"), or pick **Deep debug mode** in the quick menu, or run
+**Toggle deep debug mode**. The **M365 Copilot** console opens and a 🐞 appears
+on the status bar item. From then on the extension traces, in detail:
+
+- **What it receives:** every request the browser extension or the userscript
+  makes to the local server (method, URL, origin check, headers, body and the
+  answer), and every frame M365 Copilot streams back (type, size, time since the
+  turn started, full content).
+- **What it sends, and where:** the BizChat connection (endpoint, headers,
+  upgrade, handshake), the exact prompt as readable text and the frames that
+  leave, the model-catalog download, every `git` process and shell command
+  (command, folder, exit code, output, time).
+- **What it does:** each chat request VS Code makes (messages, tools offered,
+  the mode chosen), tool calls with their input and result, the commands you run,
+  the edits staged and kept or undone, the project-index context, inline
+  completions, auto-commit decisions, token state changes and every change of a
+  setting.
+
+Tokens, `Authorization` headers, cookies and `access_token=` values are
+**always hidden** (a JWT shows up as `<JWT 1234 chars>`). Prompts, answers, file
+paths and tool output are **not**: read an exported log before sharing it.
+
+The log is kept in memory (the last ~40 000 entries, up to ~8 MB) with the mode
+on or off — off, it holds only the normal log. **Export log (.txt)** (a link in
+the setting's description, the quick menu or the command palette) saves it as a
+text file with a header (versions, system, mode) and a UTC timestamp per entry;
+**Clear log** empties it, to reproduce a problem from a clean slate. With the
+mode off nothing extra is computed — one boolean check per call. The log also
+keeps streaming to `m365copilot-debug.log` in the system temp folder, as before.
+
 ## Commands
 
 All of them are in the menu behind the **M365** status item, and in the command
@@ -573,6 +608,9 @@ palette under **M365 Copilot**.
 | `Rebuild project index` | Indexes the workspace again. |
 | `Get started` | Opens the walkthrough. |
 | `Show log (diagnostics)` | Opens the "M365 Copilot" output channel. |
+| `Toggle deep debug mode` | Turns the [deep debug mode](#deep-debug-mode) on or off. |
+| `Export log (.txt)` | Saves the whole log as a text file (tokens hidden). |
+| `Clear log` | Empties the log and the console. |
 | `Review pending agent changes` | Diff of the changes awaiting review. |
 | `Keep agent changes` / `Undo agent changes` / `Show diff of agent changes` | Review actions for a whole file (also in the editor title bar). |
 | `Next agent change` / `Previous agent change` | Jump between pending changes, across files. |

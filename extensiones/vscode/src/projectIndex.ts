@@ -18,6 +18,7 @@
  * to send parts of them to Microsoft 365 Copilot.
  */
 import * as vscode from 'vscode';
+import { registerTracedCommand, registerTracedTool } from './debugMode';
 import { languageOf } from './rag/code';
 import {
 	formatAutoContext,
@@ -37,6 +38,7 @@ import { execGit } from '../tools/git';
 import { buildExcludeGlob } from '../tools/excludes';
 import { boundedInteger, errorMessage } from '../tools/common';
 import { t } from './i18n';
+import { debug } from './logger';
 
 const START_DELAY_MS = 3_000;
 const BATCH_SIZE = 24;
@@ -462,18 +464,25 @@ export class ProjectIndexService implements vscode.Disposable {
 		const value = formatAutoContext(summary, rendered, notRendered(hits, rendered), (path) => this.fenceLanguage(path));
 		this.contextCache = { key, value };
 		this.log(t('log.indexContext', hits.length, rendered.length, value.length));
+		debug('index', `context for the request (${value.length} chars)`, () => ({
+			query,
+			activePath,
+			excluded: exclude,
+			hits: hits.map((hit) => `${hit.path}:${hit.startLine}-${hit.endLine} (score ${hit.score.toFixed(2)})`),
+			context: value,
+		}));
 		return value;
 	}
 
 	registerTools(): vscode.Disposable[] {
 		return [
-			vscode.lm.registerTool<SearchProjectInput>(M365_TOOL_NAMES.searchProject, {
+			registerTracedTool<SearchProjectInput>(M365_TOOL_NAMES.searchProject, {
 				prepareInvocation: (options) => ({
 					invocationMessage: t('tool.searchingProject', typeof options.input.query === 'string' ? options.input.query : ''),
 				}),
 				invoke: (options) => toolResult(() => this.searchTool(options.input)),
 			}),
-			vscode.lm.registerTool<ProjectMapInput>(M365_TOOL_NAMES.projectMap, {
+			registerTracedTool<ProjectMapInput>(M365_TOOL_NAMES.projectMap, {
 				prepareInvocation: (options) => ({
 					invocationMessage:
 						typeof options.input.path === 'string' && options.input.path
@@ -521,9 +530,9 @@ export class ProjectIndexService implements vscode.Disposable {
 
 	registerCommands(): vscode.Disposable[] {
 		return [
-			vscode.commands.registerCommand('m365copilot.searchProject', () => this.searchQuickPick()),
-			vscode.commands.registerCommand('m365copilot.showProjectMap', () => this.showMap()),
-			vscode.commands.registerCommand('m365copilot.rebuildIndex', () => this.rebuildWithFeedback()),
+			registerTracedCommand('m365copilot.searchProject', () => this.searchQuickPick()),
+			registerTracedCommand('m365copilot.showProjectMap', () => this.showMap()),
+			registerTracedCommand('m365copilot.rebuildIndex', () => this.rebuildWithFeedback()),
 		];
 	}
 

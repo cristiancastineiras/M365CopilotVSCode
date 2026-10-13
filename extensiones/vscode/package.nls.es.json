@@ -65,6 +65,9 @@
   "command.selectLanguage": "Cambiar idioma",
   "command.openWalkthrough": "Primeros pasos",
   "command.showLog": "Mostrar registro (diagnóstico)",
+  "command.toggleDebug": "Alternar modo debug profundo",
+  "command.exportLog": "Exportar registro (.txt)",
+  "command.clearLog": "Limpiar registro",
   "command.reviewPendingEdits": "Revisar cambios de agente pendientes",
   "command.keepEdits": "Aceptar (Keep) los cambios del agente",
   "command.undoEdits": "Revertir (Undo) los cambios del agente",
@@ -137,5 +140,6 @@
   "config.web.enabled": "Dejar que M365 Copilot busque en internet: con la herramienta `m365_web_search` (agente y `@m365`), y directamente en las peticiones del chat que no usan herramientas. Necesita la sesión capturada por la extensión de navegador o el userscript.",
   "command.searchProject": "Buscar en el proyecto…",
   "command.showProjectMap": "Ver el mapa del proyecto",
-  "command.rebuildIndex": "Reconstruir el índice del proyecto"
+  "command.rebuildIndex": "Reconstruir el índice del proyecto",
+  "config.debug.deep": "Modo debug profundo. Abre la consola de **M365 Copilot** y traza con todo detalle lo que la extensión recibe (lo que el navegador envía al servidor local, cada trama que M365 Copilot devuelve), envía (el prompt exacto, cabeceras y tramas, las llamadas web y de procesos) y hace (comandos, herramientas, ediciones, ajustes). Los tokens siempre se ocultan; los prompts, las respuestas y las rutas de archivos, no. [Mostrar consola](command:m365copilot.showLog) · [Exportar registro (.txt)](command:m365copilot.exportLog) · [Limpiar registro](command:m365copilot.clearLog)"
 }

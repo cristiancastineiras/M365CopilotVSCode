@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { registerTracedCommand } from './debugMode';
 import { captureCodeContext, currentTextEditor, type CodeContext } from './editorContext';
 import type { ParticipantCommand } from './participantPrompts';
 import type { TerminalHistory } from './terminalHistory';
@@ -53,13 +54,13 @@ export function registerEditorActions(handoff: EditorHandoff, terminals: Termina
 	];
 	return [
 		...ACTION_COMMANDS.map(([id, command]) =>
-			vscode.commands.registerCommand(id, (uri?: vscode.Uri, range?: vscode.Range) =>
+			registerTracedCommand(id, (uri?: vscode.Uri, range?: vscode.Range) =>
 				runEditorAction(handoff, command, uri, range),
 			),
 		),
-		vscode.commands.registerCommand('m365copilot.askAboutCode', () => askAboutCode()),
-		vscode.commands.registerCommand('m365copilot.explainTerminal', () => explainTerminal(terminals)),
-		vscode.commands.registerCommand('m365copilot.openChat', () => openChat(`@${PARTICIPANT_NAME} `, true)),
+		registerTracedCommand('m365copilot.askAboutCode', () => askAboutCode()),
+		registerTracedCommand('m365copilot.explainTerminal', () => explainTerminal(terminals)),
+		registerTracedCommand('m365copilot.openChat', () => openChat(`@${PARTICIPANT_NAME} `, true)),
 		vscode.languages.registerCodeActionsProvider(selector, new M365CodeActionProvider(), {
 			providedCodeActionKinds: M365CodeActionProvider.kinds,
 		}),

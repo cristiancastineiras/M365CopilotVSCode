@@ -44,6 +44,8 @@ import type { TerminalHistory } from './terminalHistory';
 import type { ContextOptions } from './projectIndex';
 import { errorMessage, relativePathForUri } from '../tools/common';
 import { t, type MessageKey } from './i18n';
+import { debug } from './logger';
+import { traceInvokeTool } from './debugMode';
 
 export const PARTICIPANT_ID = 'm365copilot.m365';
 const VENDOR = 'm365copilot';
@@ -81,6 +83,18 @@ async function handleRequest(
 ): Promise<vscode.ChatResult> {
 	const command = asParticipantCommand(request.command);
 	const metadata: ParticipantResultMetadata = { command };
+	debug('participant', `@m365 request${command ? ` /${command}` : ''}`, () => ({
+		command: request.command ?? null,
+		prompt: request.prompt,
+		model: { id: request.model.id, vendor: request.model.vendor },
+		references: request.references.map((reference) => ({
+			id: reference.id,
+			description: reference.modelDescription,
+			value: describeReferenceValue(reference.value),
+		})),
+		toolReferences: request.toolReferences.map((reference) => reference.name),
+		historyTurns: context.history.length,
+	}));
 
 	const profile = await deps.store.get();
 	if (!profile || !isTokenUsable(profile)) {
@@ -149,6 +163,8 @@ async function handleRequest(
 	});
 	const wanted = new Set(toolsForCommand(command));
 	const offeredTools = vscode.lm.tools.filter((tool) => wanted.has(tool.name));
+	debug('participant', `tools offered to the loop (${offeredTools.length})`, () => offeredTools.map((tool) => tool.name));
+	debug('participant', `framing built (${framing.length} chars)`, framing);
 
 	const controller = new AbortController();
 	const cancel = token.onCancellationRequested(() => controller.abort());
@@ -186,10 +202,8 @@ async function handleRequest(
 			},
 			executeTool: async (name, input) => {
 				try {
-					const result = await vscode.lm.invokeTool(
-						name,
-						{ input, toolInvocationToken: request.toolInvocationToken },
-						token,
+					const result = await traceInvokeTool('participant', name, input, () =>
+						vscode.lm.invokeTool(name, { input, toolInvocationToken: request.toolInvocationToken }, token),
 					);
 					return toolResultToText(result);
 				} catch (error) {
@@ -198,6 +212,7 @@ async function handleRequest(
 			},
 		});
 		flush();
+		debug('participant', `tool loop finished: ${result.outcome}`, () => ({ steps: result.steps, summary: result.summary }));
 
 		switch (result.outcome) {
 			case 'error':
@@ -302,3 +317,11 @@ const FOLLOWUP_LABELS: Readonly<Record<ParticipantCommand, MessageKey>> = {
 	tests: 'participant.followup.tests',
 	terminal: 'participant.followup.terminal',
 };
+
+/** A chat reference's value in a form worth reading in a log: Uris and locations as text, the rest by type. */
+function describeReferenceValue(value: unknown): string {
+	if (value instanceof vscode.Uri) return value.toString();
+	if (value instanceof vscode.Location) return `${value.uri.toString()}#L${value.range.start.line + 1}-L${value.range.end.line + 1}`;
+	if (typeof value === 'string') return `text(${value.length} chars)`;
+	return value && typeof value === 'object' ? (value.constructor?.name ?? 'object') : typeof value;
+}

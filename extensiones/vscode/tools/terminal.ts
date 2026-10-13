@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { boundedInteger, ensureNotCancelled, resolveWorkspacePath } from './common';
 import { cleanTerminalOutput, truncateOutput } from './terminalOutput';
 import { t } from '../src/i18n';
+import { debug } from '../src/logger';
 
 export { looksRisky } from './commandSafety';
 
@@ -15,6 +16,8 @@ const TERMINAL_NAME = 'M365 Copilot';
 /** How long to wait for the shell to complete VS Code's shell-integration
  * handshake before giving up and running the command headlessly. */
 const SHELL_INTEGRATION_TIMEOUT_MS = 5000;
+/** Numbers each command the model runs in the deep trace (`run#2`). */
+let runSeq = 0;
 
 export interface RunCommandInput {
 	readonly command: string;
@@ -58,9 +61,18 @@ export async function runWorkspaceCommand(
 	const timeoutSeconds = boundedInteger(input.timeoutSeconds, DEFAULT_TIMEOUT_SECONDS, 1, MAX_TIMEOUT_SECONDS);
 	ensureNotCancelled(token);
 
+	const scope = `run#${++runSeq}`;
+	const started = Date.now();
+	debug(scope, `$ ${command}`, { cwd: target.uri.fsPath, timeoutSeconds });
 	const result =
 		(await runInIntegratedTerminal(command, target.uri, timeoutSeconds * 1000, token)) ??
 		(await runHeadless(command, target.uri.fsPath, timeoutSeconds * 1000, token));
+	debug(scope, `finished via ${result.channel} in ${Date.now() - started} ms`, () => ({
+		exitCode: result.exitCode,
+		timedOut: result.timedOut,
+		outputChars: result.output.length,
+		output: result.output,
+	}));
 
 	const body = truncateOutput(result.output, MAX_OUTPUT_CHARS) || t('run.noOutput');
 	const status = result.timedOut
@@ -133,7 +145,10 @@ async function runInIntegratedTerminal(
 	}
 
 	const shell = await awaitShellIntegration(terminal);
-	if (!shell) return undefined;
+	if (!shell) {
+		debug('run', 'no shell integration in the terminal: falling back to a headless process');
+		return undefined;
+	}
 
 	terminal.show(true);
 	const execution = shell.executeCommand(command);

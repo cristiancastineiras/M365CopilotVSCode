@@ -13,6 +13,26 @@ export const en = {
 	'ext.languageChanged':
 		'M365 Copilot now speaks {0}. Command titles and settings follow VS Code’s own display language.',
 
+	// ------------------------------------------------------------ deep debug mode
+	'debug.enabled':
+		'🐞 Deep debug mode ON: everything the extension receives, sends and does is traced in this console. Tokens are hidden; prompts, answers and paths are not. Export it with “M365 Copilot: Export log (.txt)”.',
+	'debug.disabled': '🐞 Deep debug mode OFF.',
+	'debug.toggledOn': 'Deep debug mode is on: the “M365 Copilot” console now traces everything the extension does.',
+	'debug.toggledOff': 'Deep debug mode is off.',
+	'debug.toggleFailed': 'Could not change the setting: {0}',
+	'debug.button.show': 'Show console',
+	'debug.button.export': 'Export log (.txt)',
+	'debug.export.title': 'Export the M365 Copilot log',
+	'debug.export.filter': 'Text',
+	'debug.export.save': 'Export',
+	'debug.export.empty': 'The log is empty: there is nothing to export yet.',
+	'debug.export.saved':
+		'Log saved to {0}. Tokens are hidden, but prompts, answers and paths are in it: read it before sharing it.',
+	'debug.export.open': 'Open',
+	'debug.export.reveal': 'Show in folder',
+	'debug.export.failed': 'Could not save the log: {0}',
+	'debug.cleared': 'Log cleared.',
+
 	// ------------------------------------------------------------ languages
 	'language.en': 'English',
 	'language.es': 'Spanish',
@@ -91,6 +111,7 @@ export const en = {
 	'statusbar.tooltip.completionsOn': 'Inline completions: on',
 	'statusbar.tooltip.completionsOff': 'Inline completions: off',
 	'statusbar.tooltip.busy': 'Thinking of a suggestion…',
+	'statusbar.tooltip.debug': 'Deep debug mode on: everything is being traced',
 	'statusbar.tooltip.pendingEdits': 'Agent changes awaiting review: {0}',
 	'statusbar.tooltip.click': 'Click to open the M365 Copilot menu.',
 	'statusbar.renewed': 'M365 Copilot: token renewed automatically ({0} min left).',
@@ -112,6 +133,10 @@ export const en = {
 	'menu.language': 'Language: {0}',
 	'menu.settings': 'Settings',
 	'menu.log': 'Show log (diagnostics)',
+	'menu.debug.on': 'Deep debug mode: on (click to turn off)',
+	'menu.debug.off': 'Deep debug mode: off',
+	'menu.debug.detail': 'Traces everything the extension receives, sends and does; the log can be exported to a .txt',
+	'menu.exportLog': 'Export log (.txt)',
 	'menu.walkthrough': 'Get started',
 	'menu.openM365': 'Open M365 Copilot in the browser',
 	'menu.signOut': 'Sign out and sign in again',

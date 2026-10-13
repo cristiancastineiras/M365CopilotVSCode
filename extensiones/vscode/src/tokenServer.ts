@@ -147,7 +147,7 @@ export class TokenAutoRefreshServer implements vscode.Disposable {
 			// consiga que su petición cross-origin se complete.
 			const origin = req.headers.origin;
 			const originAllowed = typeof origin === 'string' && isAllowedOrigin(origin);
-			debug('http', `origin check: ${typeof origin === 'string' && origin ? `${origin} → ${originAllowed ? 'allowed' : 'NOT allowed'}` : 'no Origin header (GM_xmlhttpRequest / extension background)'}`);
+			debug(traces.get(res)?.scope ?? 'http', `origin check:${typeof origin === 'string' && origin ? `${origin} → ${originAllowed ? 'allowed' : 'NOT allowed'}` : 'no Origin header (GM_xmlhttpRequest / extension background)'}`);
 			if (typeof origin === 'string' && origin) {
 				res.setHeader('Vary', 'Origin');
 				if (originAllowed) {

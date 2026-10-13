@@ -806,6 +806,12 @@
             "plaintext"
           ],
           "markdownDescription": "%config.inlineCompletions.disabledLanguages%"
+        },
+        "m365copilot.debug.deep": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "markdownDescription": "%config.debug.deep%"
         }
       }
     },
@@ -973,6 +979,24 @@
         "command": "m365copilot.showLog",
         "title": "%command.showLog%",
         "category": "M365 Copilot"
+      },
+      {
+        "command": "m365copilot.toggleDebug",
+        "title": "%command.toggleDebug%",
+        "category": "M365 Copilot",
+        "icon": "$(bug)"
+      },
+      {
+        "command": "m365copilot.exportLog",
+        "title": "%command.exportLog%",
+        "category": "M365 Copilot",
+        "icon": "$(save)"
+      },
+      {
+        "command": "m365copilot.clearLog",
+        "title": "%command.clearLog%",
+        "category": "M365 Copilot",
+        "icon": "$(clear-all)"
       },
       {
         "command": "m365copilot.reviewPendingEdits",

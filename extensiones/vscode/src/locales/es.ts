@@ -12,6 +12,26 @@ import type { en } from './en';
 export const es: Record<keyof typeof en, string> = {
 	// ------------------------------------------------------------ activación
 	'ext.activated': 'Extensión M365 Copilot activada. Registro de diagnóstico en: {0}',
+	// ------------------------------------------------------------ modo debug profundo
+	'debug.enabled':
+		'🐞 Modo debug profundo ACTIVADO: todo lo que la extensión recibe, envía y hace se traza en esta consola. Los tokens se ocultan; los prompts, las respuestas y las rutas, no. Expórtalo con «M365 Copilot: Exportar registro (.txt)».',
+	'debug.disabled': '🐞 Modo debug profundo DESACTIVADO.',
+	'debug.toggledOn': 'Modo debug profundo activado: la consola «M365 Copilot» traza ahora todo lo que hace la extensión.',
+	'debug.toggledOff': 'Modo debug profundo desactivado.',
+	'debug.toggleFailed': 'No se pudo cambiar el ajuste: {0}',
+	'debug.button.show': 'Mostrar consola',
+	'debug.button.export': 'Exportar registro (.txt)',
+	'debug.export.title': 'Exportar el registro de M365 Copilot',
+	'debug.export.filter': 'Texto',
+	'debug.export.save': 'Exportar',
+	'debug.export.empty': 'El registro está vacío: todavía no hay nada que exportar.',
+	'debug.export.saved':
+		'Registro guardado en {0}. Los tokens están ocultos, pero lleva prompts, respuestas y rutas: léelo antes de compartirlo.',
+	'debug.export.open': 'Abrir',
+	'debug.export.reveal': 'Mostrar en la carpeta',
+	'debug.export.failed': 'No se pudo guardar el registro: {0}',
+	'debug.cleared': 'Registro limpiado.',
+
 	'ext.languageChanged':
 		'M365 Copilot ahora habla {0}. Los títulos de comandos y ajustes siguen el idioma de visualización de VS Code.',
 
@@ -94,6 +114,7 @@ export const es: Record<keyof typeof en, string> = {
 	'statusbar.tooltip.completionsOn': 'Autocompletado en línea: activado',
 	'statusbar.tooltip.completionsOff': 'Autocompletado en línea: desactivado',
 	'statusbar.tooltip.busy': 'Pensando una sugerencia…',
+	'statusbar.tooltip.debug': 'Modo debug profundo activado: se está trazando todo',
 	'statusbar.tooltip.pendingEdits': 'Cambios del agente pendientes de revisar: {0}',
 	'statusbar.tooltip.click': 'Clic para abrir el menú de M365 Copilot.',
 	'statusbar.renewed': 'M365 Copilot: token renovado automáticamente (quedan {0} min).',
@@ -115,6 +136,10 @@ export const es: Record<keyof typeof en, string> = {
 	'menu.language': 'Idioma: {0}',
 	'menu.settings': 'Ajustes',
 	'menu.log': 'Mostrar registro (diagnóstico)',
+	'menu.debug.on': 'Modo debug profundo: activado (clic para desactivarlo)',
+	'menu.debug.off': 'Modo debug profundo: desactivado',
+	'menu.debug.detail': 'Traza todo lo que la extensión recibe, envía y hace; el registro se puede exportar a un .txt',
+	'menu.exportLog': 'Exportar registro (.txt)',
 	'menu.walkthrough': 'Primeros pasos',
 	'menu.openM365': 'Abrir M365 Copilot en el navegador',
 	'menu.signOut': 'Cerrar sesión y volver a entrar',

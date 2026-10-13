@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { registerTracedCommand } from './debugMode';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -11,7 +12,8 @@ import { TokenAutoRefreshServer } from './tokenServer';
 import { WorkspaceEditManager } from '../tools/writeFile';
 import { minutesUntilExpiry } from './profile';
 import { installModelRegistry } from './models';
-import { initLogger, log, showLog, type LogSink } from './logger';
+import { debug, initLogger, log, showLog, type LogSink } from './logger';
+import { clearDebugLog, DebugSession, exportDebugLog, toggleDeepDebug } from './debugMode';
 import { getLocale, resolveLocale, setLocale, t } from './i18n';
 import { M365StatusBar } from './statusBar';
 import { TokenWatcher } from './tokenWatcher';
@@ -90,14 +92,24 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
 			}
 		},
 		show: (preserve) => channel.show(preserve),
+		clear: () => channel.clear(),
 	};
 	initLogger(sink);
+	const activationStarted = Date.now();
 	log(t('ext.activated', DEBUG_FILE));
 	// Settings of the `ms365-copilot-vscode` builds; the listeners below pick them up.
 	void migrateFromLegacy(context, log);
 
 	const store = new ProfileStore(context.secrets);
 	const statusBar = new M365StatusBar(store);
+	// Right after the store and the status bar, before the first request can
+	// arrive: deep debug mode (m365copilot.debug.deep) has to be on by then.
+	const debugSession = new DebugSession({
+		context,
+		store,
+		debugFile: DEBUG_FILE,
+		onChange: (on) => statusBar.setDebug(on),
+	});
 	const tokenServer = new TokenAutoRefreshServer(store, (profile) => {
 		const minutes = minutesUntilExpiry(profile);
 		if (minutes !== null) void vscode.window.setStatusBarMessage(t('statusbar.renewed', minutes), 5000);
@@ -132,6 +144,7 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
 		channel,
 		store,
 		statusBar,
+		debugSession,
 		tokenServer,
 		provider,
 		workspaceEdits,
@@ -176,40 +189,44 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
 		...registerReview({ store, log }, reviewComments),
 		...registerM365WorkspaceTools(workspaceEdits),
 		...registerM365SubagentTools(store, log),
-		vscode.commands.registerCommand('m365copilot.showMenu', () =>
+		registerTracedCommand('m365copilot.showMenu', () =>
 			showMenu(store, workspaceEdits, projectIndex.status(), autoCommit.enabled),
 		),
-		vscode.commands.registerCommand('m365copilot.toggleInlineCompletions', () => toggleInlineCompletions()),
-		vscode.commands.registerCommand('m365copilot.pasteProfile', () => pasteProfile(store)),
-		vscode.commands.registerCommand('m365copilot.clearProfile', () => clearProfile(store)),
-		vscode.commands.registerCommand('m365copilot.signOut', () => signOutAndSignIn(store, tokenServer)),
-		vscode.commands.registerCommand('m365copilot.showStatus', () => showStatus(store)),
-		vscode.commands.registerCommand('m365copilot.selectLanguage', () => selectLanguage()),
-		vscode.commands.registerCommand('m365copilot.refreshModels', () => refreshModels(modelRegistry, store)),
-		vscode.commands.registerCommand('m365copilot.checkModels', () => checkModels(modelRegistry, store)),
-		vscode.commands.registerCommand('m365copilot.openWalkthrough', () => openWalkthrough()),
-		vscode.commands.registerCommand('m365copilot.showLog', () => showLog()),
-		vscode.commands.registerCommand('m365copilot.reviewPendingEdits', () => workspaceEdits.reviewPendingEdits()),
-		vscode.commands.registerCommand('m365copilot.keepEdits', (uri?: vscode.Uri) => workspaceEdits.keep(asUri(uri))),
-		vscode.commands.registerCommand('m365copilot.undoEdits', (uri?: vscode.Uri) => workspaceEdits.undo(asUri(uri))),
-		vscode.commands.registerCommand('m365copilot.showEditDiff', (uri?: vscode.Uri) =>
+		registerTracedCommand('m365copilot.toggleInlineCompletions', () => toggleInlineCompletions()),
+		registerTracedCommand('m365copilot.pasteProfile', () => pasteProfile(store)),
+		registerTracedCommand('m365copilot.clearProfile', () => clearProfile(store)),
+		registerTracedCommand('m365copilot.signOut', () => signOutAndSignIn(store, tokenServer)),
+		registerTracedCommand('m365copilot.showStatus', () => showStatus(store)),
+		registerTracedCommand('m365copilot.selectLanguage', () => selectLanguage()),
+		registerTracedCommand('m365copilot.refreshModels', () => refreshModels(modelRegistry, store)),
+		registerTracedCommand('m365copilot.checkModels', () => checkModels(modelRegistry, store)),
+		registerTracedCommand('m365copilot.openWalkthrough', () => openWalkthrough()),
+		registerTracedCommand('m365copilot.showLog', () => showLog()),
+		registerTracedCommand('m365copilot.toggleDebug', () => toggleDeepDebug()),
+		registerTracedCommand('m365copilot.exportLog', () => exportDebugLog()),
+		registerTracedCommand('m365copilot.clearLog', () => clearDebugLog()),
+		registerTracedCommand('m365copilot.reviewPendingEdits', () => workspaceEdits.reviewPendingEdits()),
+		registerTracedCommand('m365copilot.keepEdits', (uri?: vscode.Uri) => workspaceEdits.keep(asUri(uri))),
+		registerTracedCommand('m365copilot.undoEdits', (uri?: vscode.Uri) => workspaceEdits.undo(asUri(uri))),
+		registerTracedCommand('m365copilot.showEditDiff', (uri?: vscode.Uri) =>
 			workspaceEdits.showDiff(asUri(uri)),
 		),
-		vscode.commands.registerCommand('m365copilot.discardPendingEdits', () => workspaceEdits.undo()),
+		registerTracedCommand('m365copilot.discardPendingEdits', () => workspaceEdits.undo()),
 		// Per-hunk actions come from CodeLens only, with the hunk as argument.
-		vscode.commands.registerCommand('m365copilot.keepHunk', (uri?: unknown, hunk?: unknown) =>
+		registerTracedCommand('m365copilot.keepHunk', (uri?: unknown, hunk?: unknown) =>
 			asUri(uri) && isHunk(hunk) ? workspaceEdits.keepHunk(asUri(uri)!, hunk) : undefined,
 		),
-		vscode.commands.registerCommand('m365copilot.undoHunk', (uri?: unknown, hunk?: unknown) =>
+		registerTracedCommand('m365copilot.undoHunk', (uri?: unknown, hunk?: unknown) =>
 			asUri(uri) && isHunk(hunk) ? workspaceEdits.undoHunk(asUri(uri)!, hunk) : undefined,
 		),
-		vscode.commands.registerCommand('m365copilot.nextChange', () => workspaceEdits.goToChange(1)),
-		vscode.commands.registerCommand('m365copilot.previousChange', () => workspaceEdits.goToChange(-1)),
-		vscode.commands.registerCommand('m365copilot.undoLastAgentEdit', () => workspaceEdits.undoLastBatch()),
+		registerTracedCommand('m365copilot.nextChange', () => workspaceEdits.goToChange(1)),
+		registerTracedCommand('m365copilot.previousChange', () => workspaceEdits.goToChange(-1)),
+		registerTracedCommand('m365copilot.undoLastAgentEdit', () => workspaceEdits.undoLastBatch()),
 	);
 
 	// Nudge Copilot Chat to pick up our models on activation.
 	void activateCopilotChat().then(() => provider.refresh());
+	debug('ext', `activate() finished in ${Date.now() - activationStarted} ms`);
 
 	// Only when VS Code runs the extension's tests (--extensionTestsPath): lets
 	// them drive the Keep/Undo review directly, without the chat UI or the
@@ -229,7 +246,7 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
 }
 
 export function deactivate(): void {
-	/* disposables handle cleanup */
+	debug('ext', 'deactivate(): the disposables clean up');
 }
 
 /**

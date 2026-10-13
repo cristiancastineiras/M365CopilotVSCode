@@ -3,6 +3,7 @@ import { M365_CHAT_URL } from '@m365copilot/core';
 import { isTokenUsable, minutesUntilExpiry } from './profile';
 import type { ProfileStore } from './secrets';
 import { t } from './i18n';
+import { debug } from './logger';
 
 const TICK_MS = 30_000;
 /**
@@ -45,7 +46,12 @@ export class TokenWatcher implements vscode.Disposable {
 		const profile = await this.store.get();
 		const usable = profile ? isTokenUsable(profile) : false;
 		const wasUsable = this.lastUsable;
-		if (wasUsable !== undefined && usable !== wasUsable) this.onStateChange();
+		if (wasUsable !== undefined && usable !== wasUsable) {
+			debug('token', `the stored token flipped to ${usable ? 'usable' : 'expired/missing'}`, () => ({
+				minutesLeft: profile ? minutesUntilExpiry(profile) : null,
+			}));
+			this.onStateChange();
+		}
 		this.lastUsable = usable;
 		this.onTick();
 
@@ -60,6 +66,7 @@ export class TokenWatcher implements vscode.Disposable {
 			// already warned that this very token was about to expire.
 			if (wasUsable !== true || this.warnedExpiredFor === exp || this.warnedSoonFor === exp) return;
 			this.warnedExpiredFor = exp;
+			debug('token', 'notifying: the token expired without being renewed');
 			void this.notify(t('watcher.expired'), 'warning');
 			return;
 		}
@@ -67,6 +74,7 @@ export class TokenWatcher implements vscode.Disposable {
 		const minutes = minutesUntilExpiry(profile);
 		if (minutes !== null && minutes <= WARN_MINUTES && this.warnedSoonFor !== exp) {
 			this.warnedSoonFor = exp;
+			debug('token', `notifying: the token expires in ${minutes} min and has not been renewed`);
 			void this.notify(t('watcher.expiringSoon', minutes), 'info');
 		}
 	}

@@ -10,6 +10,7 @@
  * its answer with the sources to the turn that asked.
  */
 import * as vscode from 'vscode';
+import { registerTracedTool } from './debugMode';
 import { streamCopilotTurnWithRetry, CopilotClientError, type WebSource } from './client';
 import { isTokenUsable } from './profile';
 import type { ProfileStore } from './secrets';
@@ -18,6 +19,7 @@ import { toolResult } from './agentTools';
 import { M365_TOOL_NAMES } from './toolProtocol';
 import { CancelledError } from '../tools/common';
 import { t } from './i18n';
+import { debug } from './logger';
 
 export interface WebSearchInput {
 	readonly query?: unknown;
@@ -29,7 +31,7 @@ export function webSearchEnabled(): boolean {
 }
 
 export function registerWebSearchTool(store: ProfileStore, log: (message: string) => void): vscode.Disposable {
-	return vscode.lm.registerTool<WebSearchInput>(M365_TOOL_NAMES.webSearch, {
+	return registerTracedTool<WebSearchInput>(M365_TOOL_NAMES.webSearch, {
 		prepareInvocation: (options) => ({
 			invocationMessage: t('tool.webSearching', typeof options.input.query === 'string' ? options.input.query : ''),
 		}),
@@ -44,11 +46,18 @@ async function searchWeb(
 	log: (message: string) => void,
 ): Promise<string> {
 	const query = typeof input.query === 'string' ? input.query.trim() : '';
+	debug('web', 'web search requested', { query });
 	if (!query) throw new Error(t('web.noQuery'));
-	if (!webSearchEnabled()) return t('web.disabled');
+	if (!webSearchEnabled()) {
+		debug('web', 'refused: m365copilot.web.enabled is off');
+		return t('web.disabled');
+	}
 	const profile = await store.get();
 	if (!profile || !isTokenUsable(profile)) throw new Error(t(profile ? 'participant.tokenExpired' : 'participant.noToken'));
-	if (!profile.invocationTemplate) return t('web.noTemplate');
+	if (!profile.invocationTemplate) {
+		debug('web', 'refused: no web invocation captured yet (needs the browser extension or userscript)');
+		return t('web.noTemplate');
+	}
 
 	const controller = new AbortController();
 	const cancel = token.onCancellationRequested(() => controller.abort());
@@ -77,5 +86,6 @@ async function searchWeb(
 		cancel.dispose();
 	}
 	log(t('log.webSearchDone', answer.length, sources.length));
+	debug('web', `web search answered (${answer.length} chars)`, () => ({ sources: sources.map((source) => `${source.title} — ${source.url}`), answer }));
 	return formatWebResult(query, answer, sources);
 }

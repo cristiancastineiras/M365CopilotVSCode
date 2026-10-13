@@ -24,6 +24,7 @@ export class M365StatusBar implements CompletionBusySink, vscode.Disposable {
 	private profile: CopilotProfile | null = null;
 	private busy = false;
 	private pendingEdits = 0;
+	private debugOn = false;
 
 	constructor(private readonly store: ProfileStore) {
 		this.item = vscode.window.createStatusBarItem('m365copilot.status', vscode.StatusBarAlignment.Right, 90);
@@ -49,6 +50,13 @@ export class M365StatusBar implements CompletionBusySink, vscode.Disposable {
 	setPendingEdits(count: number): void {
 		if (this.pendingEdits === count) return;
 		this.pendingEdits = count;
+		this.render();
+	}
+
+	/** Deep debug mode on or off: the item says so, so nobody forgets it is tracing everything. */
+	setDebug(on: boolean): void {
+		if (this.debugOn === on) return;
+		this.debugOn = on;
 		this.render();
 	}
 
@@ -82,7 +90,7 @@ export class M365StatusBar implements CompletionBusySink, vscode.Disposable {
 		}
 		if (this.busy) icon = '$(loading~spin)';
 
-		this.item.text = `${icon} M365${suffix}`;
+		this.item.text = `${icon} M365${suffix}${this.debugOn ? ' $(bug)' : ''}`;
 		this.item.backgroundColor = background;
 		this.item.tooltip = this.tooltip(profile, usable, minutes, completionsOn);
 	}
@@ -111,6 +119,7 @@ export class M365StatusBar implements CompletionBusySink, vscode.Disposable {
 		);
 		if (this.busy) lines.push(`$(loading~spin) ${t('statusbar.tooltip.busy')}`);
 		if (this.pendingEdits > 0) lines.push(`$(edit) ${t('statusbar.tooltip.pendingEdits', this.pendingEdits)}`);
+		if (this.debugOn) lines.push(`$(bug) ${t('statusbar.tooltip.debug')}`);
 		lines.push('', t('statusbar.tooltip.click'));
 
 		// Markdown collapses single newlines; two trailing spaces force a hard

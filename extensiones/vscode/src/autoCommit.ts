@@ -19,6 +19,7 @@
  */
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { registerTracedCommand } from './debugMode';
 import {
 	commitFiles,
 	cooldownRemaining,
@@ -41,7 +42,7 @@ import {
 	type AutoCommitGroup,
 } from './autoCommitPrompt';
 import { streamCopilotTurnWithRetry } from './client';
-import { showLog, truncate } from './logger';
+import { debug, showLog, truncate } from './logger';
 import { editorTone } from './models';
 import { isTokenUsable, type CopilotProfile } from './profile';
 import type { ProfileStore } from './secrets';
@@ -122,10 +123,10 @@ export class AutoCommitter implements vscode.Disposable {
 
 	registerCommands(): vscode.Disposable[] {
 		return [
-			vscode.commands.registerCommand('m365copilot.toggleAutoCommit', () => this.toggle()),
-			vscode.commands.registerCommand('m365copilot.autoCommitNow', (source?: unknown) => this.checkNow(source)),
-			vscode.commands.registerCommand('m365copilot.undoAutoCommit', () => this.undo()),
-			vscode.commands.registerCommand(MENU_COMMAND, () => this.showMenu()),
+			registerTracedCommand('m365copilot.toggleAutoCommit', () => this.toggle()),
+			registerTracedCommand('m365copilot.autoCommitNow', (source?: unknown) => this.checkNow(source)),
+			registerTracedCommand('m365copilot.undoAutoCommit', () => this.undo()),
+			registerTracedCommand(MENU_COMMAND, () => this.showMenu()),
 		];
 	}
 
@@ -420,9 +421,11 @@ class RepositoryWatch implements vscode.Disposable {
 	async evaluate(force: boolean): Promise<AutoCommitOutcome> {
 		if (this.running) {
 			// Whatever made the timer fire must still get its look.
+			debug('autocommit', `${this.name}: look requested but one is already running`, { force });
 			if (!force) this.poke();
 			return { kind: 'busy' };
 		}
+		debug('autocommit', `${this.name}: looking at the repository`, { force, phaseBefore: this.phase });
 		clearTimeout(this.timer);
 		const source = new vscode.CancellationTokenSource();
 		this.running = source;
@@ -431,6 +434,9 @@ class RepositoryWatch implements vscode.Disposable {
 		this.owner.render();
 		try {
 			const outcome = await this.look(force, source.token);
+			debug('autocommit', `${this.name}: outcome "${outcome.kind}"`, () =>
+				outcome.kind === 'wait' ? { reason: outcome.reason, retryInMs: outcome.retryInMs } : undefined,
+			);
 			if (outcome.kind === 'unchanged') {
 				this.phase = before.phase;
 				this.reason = before.reason;
@@ -449,6 +455,7 @@ class RepositoryWatch implements vscode.Disposable {
 			}
 			return outcome;
 		} catch (error) {
+			debug('autocommit', `${this.name}: the look failed`, error);
 			const reason = source.token.isCancellationRequested
 				? t('autoCommit.status.watching')
 				: t('autoCommit.reason.failed', errorMessage(error));

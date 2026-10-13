@@ -65,6 +65,9 @@
   "command.selectLanguage": "Change language",
   "command.openWalkthrough": "Get started",
   "command.showLog": "Show log (diagnostics)",
+  "command.toggleDebug": "Toggle deep debug mode",
+  "command.exportLog": "Export log (.txt)",
+  "command.clearLog": "Clear log",
   "command.reviewPendingEdits": "Review pending agent changes",
   "command.keepEdits": "Keep agent changes",
   "command.undoEdits": "Undo agent changes",
@@ -137,5 +140,6 @@
   "config.web.enabled": "Let M365 Copilot search the internet: through the `m365_web_search` tool (agent and `@m365`), and directly in chat requests that use no tools. Needs the session captured by the browser extension or the userscript.",
   "command.searchProject": "Search the project…",
   "command.showProjectMap": "Show project map",
-  "command.rebuildIndex": "Rebuild project index"
+  "command.rebuildIndex": "Rebuild project index",
+  "config.debug.deep": "Deep debug mode. Opens the **M365 Copilot** console and traces, in great detail, everything the extension receives (what the browser sends to the local server, every frame M365 Copilot streams back), sends (the exact prompt, headers and frames, the web and process calls) and does (commands, tools, edits, settings). Tokens are always hidden; prompts, answers and file paths are not. [Show console](command:m365copilot.showLog) · [Export log (.txt)](command:m365copilot.exportLog) · [Clear log](command:m365copilot.clearLog)"
 }

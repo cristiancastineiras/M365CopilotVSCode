@@ -11,6 +11,7 @@ import { replaceTextOnce, requireText } from './replaceText';
 import { createContentOf, replaceNewTextOf } from './editFields';
 import { acceptHunk, describeChange, describeHunks, diffLines, revertHunkEdit, type Hunk } from './lineDiff';
 import { t } from '../src/i18n';
+import { debug } from '../src/logger';
 
 const PREVIEW_SCHEME = 'm365copilot-edit-preview';
 const MAX_EDIT_COUNT = 20;
@@ -177,6 +178,14 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 		token: vscode.CancellationToken,
 	): Promise<string> {
 		const files = await this.planFiles(input, token);
+		debug('edits', `staging ${files.length} file(s) from the model`, () =>
+			files.map((file) => ({
+				path: file.relativePath,
+				change: describeChange(file.before, file.after),
+				charsBefore: file.before?.length ?? null,
+				charsAfter: file.after?.length ?? null,
+			})),
+		);
 		await this.applyToEditor(files);
 
 		for (const file of files) this.track(file);
@@ -379,6 +388,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 	async keep(uri?: vscode.Uri): Promise<void> {
 		const files = this.take(uri);
 		if (files.length === 0) return;
+		debug('edits', `keeping ${files.length} file(s)`, () => files.map((file) => file.relativePath));
 		this.lastKept = await Promise.all(files.map((file) => this.snapshot(file)));
 		this.changed();
 		void vscode.window.setStatusBarMessage(t('edit.kept', files.length), 5000);
@@ -388,6 +398,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 	async undo(uri?: vscode.Uri): Promise<void> {
 		const files = this.take(uri);
 		if (files.length === 0) return;
+		debug('edits', `undoing ${files.length} file(s)`, () => files.map((file) => file.relativePath));
 		try {
 			await this.revert(await Promise.all(files.map((file) => this.snapshot(file))));
 			void vscode.window.setStatusBarMessage(t('edit.reverted', files.length), 5000);
@@ -408,6 +419,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 		const document = await vscode.workspace.openTextDocument(uri);
 		const live = this.liveHunk(file, document, hunk);
 		if (!live) return;
+		debug('edits', `keeping one hunk of ${file.relativePath}`, live);
 		file.baseline = acceptHunk(file.baseline, document.getText(), live);
 		this.hunkCache.delete(uri.toString());
 		this.reconcile();
@@ -420,6 +432,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 		const document = await vscode.workspace.openTextDocument(uri);
 		const live = this.liveHunk(file, document, hunk);
 		if (!live) return;
+		debug('edits', `undoing one hunk of ${file.relativePath}`, live);
 		const change = revertHunkEdit(document.getText(), file.baseline, live);
 		const edit = new vscode.WorkspaceEdit();
 		edit.replace(
@@ -442,6 +455,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 		}
 		const files = this.lastKept;
 		this.lastKept = [];
+		debug('edits', `undoing the last kept batch (${files.length} file(s))`);
 		try {
 			await this.revert(files);
 			void vscode.window.showInformationMessage(t('edit.batchUndone', files.length));

@@ -18,6 +18,7 @@
  * can pass along the toolInvocationToken it received").
  */
 import * as vscode from 'vscode';
+import { registerTracedTool, traceInvokeTool } from './debugMode';
 import { boundedInteger, errorMessage } from '../tools/common';
 import { currentEnvironment } from './editorContext';
 import { findModel } from './models';
@@ -63,7 +64,7 @@ interface SubagentSettings {
 
 export function registerM365SubagentTools(store: ProfileStore, log: (message: string) => void): vscode.Disposable[] {
 	return [
-		vscode.lm.registerTool<SpawnAgentsInput>(M365_TOOL_NAMES.spawnAgents, {
+		registerTracedTool<SpawnAgentsInput>(M365_TOOL_NAMES.spawnAgents, {
 			prepareInvocation: (options) => {
 				const count = Array.isArray(options.input.tasks) ? options.input.tasks.length : 0;
 				return {
@@ -160,8 +161,10 @@ function makeExecutor(
 	token: vscode.CancellationToken,
 ) {
 	return async (name: string, input: Record<string, unknown>): Promise<string> => {
-		// `invokeTool` returns a `Thenable`, not a real `Promise` — `ConcurrencyLimiter.run` needs the latter.
-		const invoke = () => Promise.resolve(vscode.lm.invokeTool(name, { input, toolInvocationToken }, token));
+		// `invokeTool` returns a `Thenable`, not a real `Promise` — `ConcurrencyLimiter.run` needs the latter
+		// (traceInvokeTool is an async function, so it hands back a real one).
+		const invoke = () =>
+			traceInvokeTool('subagent', name, input, () => vscode.lm.invokeTool(name, { input, toolInvocationToken }, token));
 		try {
 			const result = MUTATING_TOOLS.has(name) ? await mutateLimiter.run(invoke) : await invoke();
 			return toolResultToText(result);

@@ -9,6 +9,7 @@
  * it once per block of code with errors or warnings.
  */
 import * as vscode from 'vscode';
+import { registerTracedCommand } from './debugMode';
 import { streamCopilotTurnWithRetry, CopilotClientError } from './client';
 import { requireUsableProfile } from './commands';
 import { captureCodeContext, currentTextEditor, type CodeContext } from './editorContext';
@@ -51,7 +52,7 @@ export function registerInlineEdit(deps: InlineEditDeps): vscode.Disposable[] {
 	});
 	return [
 		editing,
-		vscode.commands.registerCommand(
+		registerTracedCommand(
 			'm365copilot.editCode',
 			(uri?: unknown, range?: unknown, instruction?: unknown) =>
 				editCode(
@@ -62,7 +63,7 @@ export function registerInlineEdit(deps: InlineEditDeps): vscode.Disposable[] {
 					typeof instruction === 'string' ? instruction : undefined,
 				),
 		),
-		vscode.commands.registerCommand('m365copilot.fixAllProblems', (uri?: unknown) =>
+		registerTracedCommand('m365copilot.fixAllProblems', (uri?: unknown) =>
 			fixAllProblems(deps, editing, uri instanceof vscode.Uri ? uri : undefined),
 		),
 	];

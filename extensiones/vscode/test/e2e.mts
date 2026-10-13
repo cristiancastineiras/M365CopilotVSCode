@@ -119,7 +119,19 @@ import {
 	unannounced,
 } from '../src/modelCatalog.ts';
 import { acceptHunk, diffLines, revertHunkEdit, splitLines, type Hunk, type LineEdit } from '../tools/lineDiff.ts';
-import type { CopilotProfile } from '../src/profile.ts';
+import { describeProfile, type CopilotProfile } from '../src/profile.ts';
+import {
+	clearLog,
+	debug,
+	formatDebugData,
+	initLogger,
+	isDeepDebug,
+	log,
+	logEntryCount,
+	redactSecrets,
+	renderLogText,
+	setDeepDebug,
+} from '../src/logger.ts';
 
 const RS = String.fromCharCode(0x1e);
 const b64url = (o: unknown) =>
@@ -3114,6 +3126,181 @@ function testModelCatalog() {
 	console.log('  ✓ modelos dinámicos: catálogo validado, detectados en la web, propios, ocultar retirados y anuncio único');
 }
 
+
+// ---- logger.ts (deep debug mode) ---------------------------------------------
+
+function testLoggerRedaction() {
+	const jwt = fakeJwt();
+	const redacted = redactSecrets(
+		[
+			`wss://substrate.office.com/m365Copilot/Chathub/o@t?access_token=${jwt}&X-SessionId=abc`,
+			`Authorization: Bearer ${jwt}`,
+			`{"accessToken":"${jwt}","refresh_token":"opaque-refresh-value","user":"someone@contoso.com"}`,
+			`bare ${jwt} token`,
+			'Cookie: session=abc123',
+		].join('\n'),
+	);
+	assert.ok(!redacted.includes(jwt), 'a JWT survived the redaction');
+	assert.ok(!redacted.includes('opaque-refresh-value'), 'an opaque token in JSON survived');
+	assert.ok(!redacted.includes('session=abc123'), 'a cookie survived');
+	assert.match(redacted, /access_token=<REDACTED>&X-SessionId=abc/);
+	assert.match(redacted, /Authorization: <REDACTED>/);
+	assert.match(redacted, /<JWT \d+ chars>/, 'a bare JWT is shown as its length');
+	assert.match(redacted, /someone@contoso\.com/, 'what is not a secret stays readable');
+
+	// What a log may say about a profile never includes the token itself.
+	const summary = JSON.stringify(describeProfile(makeProfile(1234)));
+	assert.ok(!summary.includes(makeProfile(1).accessToken.slice(0, 20)), 'describeProfile leaked the token');
+	assert.match(summary, /"user":"someone@contoso\.com"|"tenant":"t"/);
+	assert.equal(describeProfile(null), null);
+	console.log('  ✓ redactSecrets oculta JWT, access_token=, Bearer, JSON y cabeceras; describeProfile no lleva el token');
+}
+
+function testDeepDebugGate() {
+	const lines: string[] = [];
+	initLogger({ appendLine: (line) => lines.push(line), clear: () => void (lines.length = 0) });
+	clearLog();
+	setDeepDebug(false);
+	assert.equal(isDeepDebug(), false);
+
+	// Off: the data is never even built.
+	let built = 0;
+	debug('x', 'off', () => {
+		built++;
+		return 'never';
+	});
+	assert.equal(built, 0, 'con el modo apagado no se construye nada');
+	assert.equal(logEntryCount(), 0);
+
+	// The standard log is always written.
+	log('always');
+	assert.equal(logEntryCount(), 1);
+
+	setDeepDebug(true);
+	debug('ws#1', 'on', () => {
+		built++;
+		return { a: 1 };
+	});
+	assert.equal(built, 1);
+	assert.equal(logEntryCount(), 2);
+	assert.match(lines.at(-1) ?? '', /^\[\d\d:\d\d:\d\d\.\d{3}\] \[ws#1\] on\n {4}\{\n {6}"a": 1\n {4}\}$/);
+	// A throwing builder never takes the caller down.
+	debug('x', 'boom', () => {
+		throw new Error('builder failed');
+	});
+	assert.match(lines.at(-1) ?? '', /could not format the data: Error: builder failed/);
+
+	// Strings stay readable (a prompt is not JSON-escaped); secrets inside are still hidden.
+	debug('chat#1', 'prompt', `line one\nline two ${fakeJwt()}`);
+	const prompt = lines.at(-1) ?? '';
+	assert.match(prompt, /\n {4}line one\n {4}line two <JWT \d+ chars>$/);
+
+	setDeepDebug(false);
+	clearLog();
+	assert.equal(logEntryCount(), 0);
+	assert.equal(lines.length, 0, 'clearLog also clears the Output channel');
+	console.log('  ✓ debug() no hace nada con el modo apagado, aplica la redacción y nunca lanza');
+}
+
+function testDebugDataFormatting() {
+	const cyclic: Record<string, unknown> = { name: 'a' };
+	cyclic.self = cyclic;
+	const text = formatDebugData({
+		cyclic,
+		error: new Error('boom'),
+		map: new Map([['k', 1]]),
+		set: new Set([1, 2]),
+		big: 10n,
+		bytes: Buffer.from('abc'),
+		fn: () => 1,
+	});
+	assert.match(text, /\[Circular\]/);
+	assert.match(text, /"message": "boom"/);
+	assert.match(text, /"k": 1/);
+	assert.match(text, /"big": "10"/);
+	assert.match(text, /"bytes": "<3 bytes>"/);
+	assert.doesNotMatch(text, /"fn"/);
+	assert.equal(formatDebugData('plain'), 'plain');
+	assert.match(formatDebugData(new Error('x')), /Error: x/);
+	console.log('  ✓ formatDebugData sobrevive a ciclos, errores, Map/Set, bigint y binarios');
+}
+
+function testLogBufferAndExport() {
+	initLogger({ appendLine: () => {} });
+	setDeepDebug(false);
+	clearLog();
+	for (let i = 0; i < 40_500; i++) log(`line ${i}`);
+	assert.ok(logEntryCount() <= 40_000, 'the buffer is bounded');
+	log('x'.repeat(250_000));
+
+	const text = renderLogText('HEADER https://x/y?access_token=sekret');
+	assert.match(text, /^HEADER https:\/\/x\/y\?access_token=<REDACTED>\n/, 'the header is redacted too');
+	assert.match(text, /# \d+ older entries were dropped/);
+	assert.match(text, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z line 40499$/m, 'entries carry a full UTC timestamp');
+	assert.doesNotMatch(text, /^\S+ line 0$/m, 'the oldest entries are the ones dropped');
+	assert.match(text, /chars not kept\)/, 'one huge entry is cut');
+	assert.ok(text.length < 8_500_000, 'the whole export stays within the memory bound');
+	clearLog();
+	console.log('  ✓ el búfer es circular (entradas y tamaño acotados) y la exportación lleva cabecera y hora completa');
+}
+
+async function testDeepDebugTraceOfATurn() {
+	initLogger({ appendLine: () => {} });
+	clearLog();
+	setDeepDebug(true);
+	const server = await startMockServer('snapshot');
+	const profile = makeProfile(server.port);
+	let text = '';
+	try {
+		await streamCopilotTurn({
+			profile,
+			endpointBase: mockBase(server.port),
+			prompt: 'PROMPT',
+			tone: null,
+			signal: new AbortController().signal,
+			callbacks: { onText: (d) => (text += d) },
+		});
+		await new Promise((resolve) => setTimeout(resolve, 80)); // the socket's close event
+	} finally {
+		setDeepDebug(false);
+		server.close();
+	}
+	assert.equal(text, 'Hola, mundo');
+
+	const trace = renderLogText('test');
+	assert.match(trace, /\[ws#[0-9a-f]{8}\] turn start \(mode=tools, tone=magic\)/);
+	assert.match(trace, /→ SignalR handshake \(\d+ chars\) \+\d+ms/);
+	assert.match(trace, /← socket open/);
+	assert.match(trace, /← upgrade 101/);
+	assert.match(trace, /← frame #\d+ Invocation target=update message\(bot\/text 4 chars\)/);
+	assert.match(trace, /← frame #\d+ Invocation target=update message\(bot\/EndOfRequest\)/);
+	assert.match(trace, /→ chat invocation \+ metrics/);
+	assert.match(trace, /turn ended: completed/);
+	assert.match(trace, /← socket closed: code \d+/);
+	// The request URL is traced, with the token hidden.
+	assert.match(trace, /"endpoint": "ws:\/\/127\.0\.0\.1:\d+\/m365Copilot\/Chathub\/o@t\?access_token=<REDACTED>/);
+	assert.ok(!trace.includes(profile.accessToken), 'the token reached the trace');
+	assert.doesNotMatch(trace, /access_token=ey/);
+
+	// Mode off: a whole turn leaves no deep trace at all.
+	clearLog();
+	const quiet = await startMockServer('snapshot');
+	try {
+		await streamCopilotTurn({
+			profile: makeProfile(quiet.port),
+			endpointBase: mockBase(quiet.port),
+			prompt: 'PROMPT',
+			tone: null,
+			signal: new AbortController().signal,
+			callbacks: { onText: () => {} },
+		});
+	} finally {
+		quiet.close();
+	}
+	assert.equal(logEntryCount(), 0, 'with the mode off, the client (given no log) writes nothing');
+	console.log('  ✓ con el modo profundo, un turno deja su traza (URL, tramas, tiempos) sin el token; apagado no deja nada');
+}
+
 async function main() {
 	// The assertions below were written against the Spanish catalog (the
 	// extension's original language); the i18n tests switch locale themselves
@@ -3182,6 +3369,12 @@ async function main() {
 	testWebHelpers();
 	await testWebTurn();
 	await testInvocationLocale();
+	console.log('logger / deep debug');
+	testLoggerRedaction();
+	testDeepDebugGate();
+	testDebugDataFormatting();
+	testLogBufferAndExport();
+	await testDeepDebugTraceOfATurn();
 	setLocale('es');
 	console.log('\nAll tests passed.');
 }

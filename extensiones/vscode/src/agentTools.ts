@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { registerTracedTool } from './debugMode';
 import { listWorkspaceFiles, searchWorkspaceText, type ListFilesInput, type SearchTextInput } from '../tools/listFiles';
 import { readWorkspaceFile, type ReadFileInput } from '../tools/readFile';
 import { WorkspaceEditManager, type ApplyWorkspaceEditsInput } from '../tools/writeFile';
@@ -19,25 +20,25 @@ import { t } from './i18n';
 export function registerM365WorkspaceTools(manager: WorkspaceEditManager): vscode.Disposable[] {
 	return [
 		registerTerminalCleanup(),
-		vscode.lm.registerTool<ListFilesInput>(M365_TOOL_NAMES.listFiles, {
+		registerTracedTool<ListFilesInput>(M365_TOOL_NAMES.listFiles, {
 			prepareInvocation: (options) => ({
 				invocationMessage: t('tool.listing', options.input.path || t('tool.listing.workspace')),
 			}),
 			invoke: (options, token) => toolResult(() => listWorkspaceFiles(options.input, token)),
 		}),
-		vscode.lm.registerTool<SearchTextInput>(M365_TOOL_NAMES.searchText, {
+		registerTracedTool<SearchTextInput>(M365_TOOL_NAMES.searchText, {
 			prepareInvocation: (options) => ({
 				invocationMessage: t('tool.searching', options.input.query),
 			}),
 			invoke: (options, token) => toolResult(() => searchWorkspaceText(options.input, token)),
 		}),
-		vscode.lm.registerTool<ReadFileInput>(M365_TOOL_NAMES.readFile, {
+		registerTracedTool<ReadFileInput>(M365_TOOL_NAMES.readFile, {
 			prepareInvocation: (options) => ({
 				invocationMessage: t('tool.reading', options.input.path),
 			}),
 			invoke: (options, token) => toolResult(() => readWorkspaceFile(options.input, token)),
 		}),
-		vscode.lm.registerTool<ApplyWorkspaceEditsInput>(M365_TOOL_NAMES.applyWorkspaceEdits, {
+		registerTracedTool<ApplyWorkspaceEditsInput>(M365_TOOL_NAMES.applyWorkspaceEdits, {
 			prepareInvocation: (options) => ({
 				invocationMessage: t('tool.preparingEdits', Array.isArray(options.input.edits) ? options.input.edits.length : 0),
 				confirmationMessages: {
@@ -47,7 +48,7 @@ export function registerM365WorkspaceTools(manager: WorkspaceEditManager): vscod
 			}),
 			invoke: (options, token) => toolResult(() => manager.stageEdits(options.input, token)),
 		}),
-		vscode.lm.registerTool<GetDiagnosticsInput>(M365_TOOL_NAMES.getDiagnostics, {
+		registerTracedTool<GetDiagnosticsInput>(M365_TOOL_NAMES.getDiagnostics, {
 			prepareInvocation: (options) => ({
 				invocationMessage: options.input.path
 					? t('tool.diagnostics.file', options.input.path)
@@ -55,19 +56,19 @@ export function registerM365WorkspaceTools(manager: WorkspaceEditManager): vscod
 			}),
 			invoke: (options, token) => toolResult(() => getWorkspaceDiagnostics(options.input, token)),
 		}),
-		vscode.lm.registerTool<GitInfoInput>(M365_TOOL_NAMES.gitInfo, {
+		registerTracedTool<GitInfoInput>(M365_TOOL_NAMES.gitInfo, {
 			prepareInvocation: (options) => ({
 				invocationMessage: t('tool.git', options.input.action ?? ''),
 			}),
 			invoke: (options, token) => toolResult(() => getGitInfo(options.input, token)),
 		}),
-		vscode.lm.registerTool<GenerateCommitMessageInput>(M365_TOOL_NAMES.generateCommitMessage, {
+		registerTracedTool<GenerateCommitMessageInput>(M365_TOOL_NAMES.generateCommitMessage, {
 			prepareInvocation: () => ({
 				invocationMessage: t('tool.generatingCommit'),
 			}),
 			invoke: (options, token) => toolResult(() => generateCommitMessage(options.input, token)),
 		}),
-		vscode.lm.registerTool<GitCommitInput>(M365_TOOL_NAMES.gitCommit, {
+		registerTracedTool<GitCommitInput>(M365_TOOL_NAMES.gitCommit, {
 			prepareInvocation: (options) => {
 				const message = typeof options.input.message === 'string' ? options.input.message : '';
 				const subject = message.split('\n', 1)[0] || t('tool.commit.noMessage');
@@ -86,7 +87,7 @@ export function registerM365WorkspaceTools(manager: WorkspaceEditManager): vscod
 			},
 			invoke: (options, token) => toolResult(() => commitWorkspace(options.input, token)),
 		}),
-		vscode.lm.registerTool<RunCommandInput>(M365_TOOL_NAMES.runCommand, {
+		registerTracedTool<RunCommandInput>(M365_TOOL_NAMES.runCommand, {
 			prepareInvocation: (options) => {
 				const command = typeof options.input.command === 'string' ? options.input.command : '';
 				const warning = looksRisky(command) ? t('tool.run.risky') : '';

@@ -192,7 +192,8 @@ tooltip muestra la cuenta, los minutos restantes y los cambios del agente
 pendientes de revisar. Al pulsarlo se abre el **menú de M365 Copilot**: pegar
 token, estado del token, abrir M365 Copilot, abrir el chat, activar/desactivar
 el autocompletado, revisar cambios pendientes, generar mensaje de commit,
-autocommit, idioma, ajustes, primeros pasos, registro y borrar credenciales.
+autocommit, idioma, ajustes, primeros pasos, modo debug profundo, registro,
+exportar registro y borrar credenciales.
 
 Cuando el token está a punto de caducar **sin haberse renovado** (quedan 5
 minutos) o caduca durante la sesión, una notificación ofrece **Pegar token** /
@@ -570,6 +571,44 @@ parpadee.
 Los paneles de salida, el lado de sólo lectura de los diffs y las vistas de git
 nunca disparan una sugerencia.
 
+## Modo debug profundo
+
+Para cuando algo no funciona y «falla» no da información suficiente. Activa el
+ajuste **`m365copilot.debug.deep`** (Ajustes → busca «M365 Copilot debug
+profundo»), o elige **Modo debug profundo** en el menú rápido, o ejecuta
+**Alternar modo debug profundo**. Se abre la consola **M365 Copilot** y aparece
+un 🐞 en el elemento de la barra de estado. A partir de ahí la extensión traza
+con todo detalle:
+
+- **Lo que recibe:** cada petición que la extensión de navegador o el userscript
+  hace al servidor local (método, URL, comprobación de origen, cabeceras, cuerpo
+  y respuesta), y cada trama que M365 Copilot devuelve (tipo, tamaño, tiempo desde
+  que empezó el turno, contenido completo).
+- **Lo que envía y adónde:** la conexión con BizChat (endpoint, cabeceras,
+  upgrade, handshake), el prompt exacto como texto legible y las tramas que
+  salen, la descarga del catálogo de modelos, cada proceso `git` y comando de
+  shell (comando, carpeta, código de salida, salida, tiempo).
+- **Lo que hace:** cada petición de chat que hace VS Code (mensajes,
+  herramientas ofrecidas, el modo elegido), las llamadas a herramientas con su
+  entrada y su resultado, los comandos que ejecutas, las ediciones propuestas y
+  aceptadas o revertidas, el contexto del índice del proyecto, el autocompletado,
+  las decisiones del autocommit, los cambios de estado del token y cada cambio de
+  un ajuste.
+
+Los tokens, las cabeceras `Authorization`, las cookies y los valores de
+`access_token=` **siempre se ocultan** (un JWT sale como `<JWT 1234 chars>`). Los
+prompts, las respuestas, las rutas de archivos y la salida de las herramientas
+**no**: lee un registro exportado antes de compartirlo.
+
+El registro se guarda en memoria (las últimas ~40 000 entradas, hasta ~8 MB) con
+el modo activado o no — apagado, sólo lleva el registro normal. **Exportar
+registro (.txt)** (un enlace en la descripción del ajuste, el menú rápido o la
+paleta de comandos) lo guarda como archivo de texto con una cabecera (versiones,
+sistema, modo) y una hora UTC por entrada; **Limpiar registro** lo vacía, para
+reproducir un problema desde cero. Con el modo apagado no se calcula nada de más:
+una comprobación booleana por llamada. El registro sigue además volcándose a
+`m365copilot-debug.log` en la carpeta temporal del sistema, como antes.
+
 ## Comandos
 
 Todos están en el menú del elemento **M365** de la barra de estado, y en la
@@ -603,6 +642,9 @@ paleta de comandos bajo **M365 Copilot**.
 | `Reconstruir el índice del proyecto` | Vuelve a indexar el workspace. |
 | `Primeros pasos` | Abre el recorrido de bienvenida. |
 | `Mostrar registro (diagnóstico)` | Abre el canal de salida «M365 Copilot». |
+| `Alternar modo debug profundo` | Activa o desactiva el [modo debug profundo](#modo-debug-profundo). |
+| `Exportar registro (.txt)` | Guarda todo el registro en un archivo de texto (con los tokens ocultos). |
+| `Limpiar registro` | Vacía el registro y la consola. |
 | `Revisar cambios de agente pendientes` | Diff de los cambios sin revisar. |
 | `Aceptar (Keep)` / `Revertir (Undo)` / `Ver diff de los cambios del agente` | Acciones de revisión de un archivo entero (también en la barra de título). |
 | `Siguiente cambio del agente` / `Cambio anterior del agente` | Salta entre los cambios pendientes, también entre archivos. |

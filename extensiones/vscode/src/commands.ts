@@ -18,7 +18,7 @@ import type { ProfileStore } from './secrets';
 import type { WorkspaceEditManager } from '../tools/writeFile';
 import type { CopilotModel, ModelRegistry } from './models';
 import { CopilotClientError, CopilotModelUnavailableError, streamCopilotTurn } from './client';
-import { log } from './logger';
+import { isDeepDebug, log } from './logger';
 import type { IndexStatus } from './projectIndex';
 import { getLocale, resolveLocale, t, type LanguageSetting, type Locale } from './i18n';
 
@@ -92,7 +92,13 @@ export async function showMenu(
 		},
 		{ label: `$(gear) ${t('menu.settings')}`, run: () => openSettings() },
 		{ label: `$(book) ${t('menu.walkthrough')}`, run: () => openWalkthrough() },
+		{
+			label: `$(bug) ${t(isDeepDebug() ? 'menu.debug.on' : 'menu.debug.off')}`,
+			detail: isDeepDebug() ? undefined : t('menu.debug.detail'),
+			run: command('m365copilot.toggleDebug'),
+		},
 		{ label: `$(output) ${t('menu.log')}`, run: command('m365copilot.showLog') },
+		{ label: `$(save) ${t('menu.exportLog')}`, run: command('m365copilot.exportLog') },
 		...(profile ? [{ label: `$(trash) ${t('menu.clear')}`, run: command('m365copilot.clearProfile') }] : []),
 	];
 

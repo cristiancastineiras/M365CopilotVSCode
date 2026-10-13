@@ -11,6 +11,7 @@
  *    comments on — the changed lines.
  */
 import * as vscode from 'vscode';
+import { registerTracedCommand } from './debugMode';
 import { streamCopilotTurnWithRetry, CopilotClientError } from './client';
 import { requireUsableProfile } from './commands';
 import { captureCodeContext, currentTextEditor } from './editorContext';
@@ -59,15 +60,15 @@ interface ReviewDeps {
 
 export function registerReview(deps: ReviewDeps, comments: ReviewComments): vscode.Disposable[] {
 	return [
-		vscode.commands.registerCommand('m365copilot.reviewCode', (uri?: unknown) =>
+		registerTracedCommand('m365copilot.reviewCode', (uri?: unknown) =>
 			reviewCode(deps, comments, uri instanceof vscode.Uri ? uri : undefined),
 		),
-		vscode.commands.registerCommand('m365copilot.reviewChanges', (source?: unknown) =>
+		registerTracedCommand('m365copilot.reviewChanges', (source?: unknown) =>
 			reviewChanges(deps, comments, source),
 		),
-		vscode.commands.registerCommand('m365copilot.review.applyFix', (thread?: unknown) => comments.applyFix(thread)),
-		vscode.commands.registerCommand('m365copilot.review.dismiss', (thread?: unknown) => comments.dismiss(thread)),
-		vscode.commands.registerCommand('m365copilot.review.clear', () => comments.clear()),
+		registerTracedCommand('m365copilot.review.applyFix', (thread?: unknown) => comments.applyFix(thread)),
+		registerTracedCommand('m365copilot.review.dismiss', (thread?: unknown) => comments.dismiss(thread)),
+		registerTracedCommand('m365copilot.review.clear', () => comments.clear()),
 	];
 }
 
