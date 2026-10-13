@@ -1,5 +1,36 @@
 # m365-copilot-vscode
 
+## 3.0.2
+
+### Patch Changes
+
+- **Arreglado: el token no se capturaba cuando el chat de Copilot vivía en un iframe o fuera de `m365.cloud.microsoft`.**
+
+  Los content scripts (interceptor y puente) sólo se inyectaban en el documento
+  de arriba y en una lista de dominios más estrecha que los permisos del
+  manifest. Ahora comparten una única lista (`COPILOT_CONTENT_MATCHES` en
+  `@m365copilot/core`: `*.cloud.microsoft`, `*.microsoft365.com`,
+  `*.office.com` y `teams.microsoft.com`) y corren en todos los frames, así que
+  el chat embebido en el portal de Microsoft 365, Outlook u Office en la web o
+  Teams también entrega el token.
+
+  Además, `diagnoseToken` explica por qué se acepta o se descarta cada token
+  candidato (no es un JWT, no es de Copilot, ha caducado, es el mismo o es más
+  viejo que el guardado), con trazas de diagnóstico opcionales para el WebSocket
+  y la caché de MSAL. El userscript de Tampermonkey usa la misma lógica de
+  captura y se ha regenerado con ella.
+
+- **Los artefactos se publican sólo en las releases de GitHub, y el userscript va con ellos.**
+
+  La carpeta `releases/` ya no se versiona en el repositorio. Cada release de
+  GitHub trae el `.vsix` de VS Code, los zips de Chrome, Edge y Firefox (más el
+  `.xpi` firmado cuando está disponible) y, como novedad, el userscript de
+  Tampermonkey `m365copilot-token.user.js`. En local, `pnpm package` los deja en
+  `releases/{vscode,chrome,edge,firefox,tampermonkey}/`.
+
+- Updated dependencies
+  - @m365copilot/core@3.0.2
+
 ## 3.0.1
 
 ### Patch Changes
