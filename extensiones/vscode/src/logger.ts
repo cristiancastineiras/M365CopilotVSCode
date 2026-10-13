@@ -74,12 +74,11 @@ export function isDeepDebug(): boolean {
 export function debug(scope: string, message: string, data?: unknown): void {
 	if (!deep) return;
 	let detail: string | undefined;
-	if (data !== undefined) {
-		try {
-			detail = formatDebugData(typeof data === 'function' ? (data as () => unknown)() : data);
-		} catch (error) {
-			detail = `<could not format the data: ${String(error)}>`;
-		}
+	try {
+		const value = typeof data === 'function' ? (data as () => unknown)() : data;
+		if (value !== undefined) detail = formatDebugData(value);
+	} catch (error) {
+		detail = `<could not format the data: ${String(error)}>`;
 	}
 	record(scope, message, detail);
 }

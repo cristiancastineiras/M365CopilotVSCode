@@ -72,7 +72,8 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 		const state: TokenState = !profile ? 'missing' : isTokenUsable(profile) ? 'ok' : 'expired';
 		const registry = modelRegistry();
 		const infos = allModels().map((m) => toChatInformation(m, state, registry?.unavailability(m.tone)));
-		debug('chat', 'VS Code asked for the model list', () => ({ tokenState: state, models: infos.map((info) => info.id) }));
+		// One line: VS Code asks again every time the picker refreshes.
+		debug('chat', `VS Code asked for the model list (${infos.length} models, token ${state})`);
 		return infos;
 	}
 
