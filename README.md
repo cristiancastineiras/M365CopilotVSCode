@@ -47,7 +47,7 @@ inline completions — and keep its token in sync. Everything is available in
 pnpm install
 pnpm build        # core → VS Code extension → browser extension
 pnpm test
-pnpm package      # .vsix + Chrome/Firefox zips into releases/
+pnpm package      # .vsix + Chrome/Edge/Firefox zips into releases/
 ```
 
 Requires Node ≥ 22.18 and pnpm 10.

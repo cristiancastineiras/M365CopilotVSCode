@@ -10,10 +10,10 @@ import type { ConfigEnv, UserManifest } from 'wxt';
 import { MICROSOFT_HOST_PERMISSIONS } from '../../packages/core/src/signOut';
 
 /**
- * Piezas compartidas por wxt.config.ts (Chrome) y wxt.config.firefox.ts:
- * antes vivían duplicadas en los dos archivos, así que un permiso o una
- * opción de build que se tocaba en uno y se olvidaba en el otro se
- * desincronizaba en silencio (el mismo tipo de bug que ya sufrió este
+ * Piezas compartidas por wxt.config.ts (Chrome), wxt.config.edge.ts (Edge) y
+ * wxt.config.firefox.ts: antes vivían duplicadas en los archivos de configuración,
+ * así que un permiso o una opción de build que se tocaba en uno y se olvidaba en
+ * el otro se desincronizaba en silencio (el mismo tipo de bug que ya sufrió este
  * proyecto con el puerto del servidor local — ver constants.ts en
  * @m365copilot/core). Ahora hay un único sitio que editar.
  */
@@ -75,8 +75,8 @@ export const sharedManifest: UserManifest = {
 export const FIREFOX_ADDON_ID = 'm365-copilot-vscode@cristiancastineiras.github.io';
 
 /**
- * Manifest por navegador. Chrome no conoce `browser_specific_settings` (lo
- * ignora con un aviso en chrome://extensions), así que sólo va en Firefox.
+ * Manifest por navegador. Chrome y Edge no conocen `browser_specific_settings`
+ * (Edge Partner Center lo rechaza o ignora), así que sólo va en Firefox.
  */
 export function manifestFor({ browser }: ConfigEnv): UserManifest {
   if (browser !== 'firefox') return sharedManifest;

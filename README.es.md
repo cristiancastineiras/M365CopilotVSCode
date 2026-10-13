@@ -48,7 +48,7 @@ disponible en **inglés y español**.
 pnpm install
 pnpm build        # core → extensión de VS Code → extensión de navegador
 pnpm test
-pnpm package      # .vsix + zips de Chrome/Firefox en releases/
+pnpm package      # .vsix + zips de Chrome/Edge/Firefox en releases/
 ```
 
 Requiere Node ≥ 22.18 y pnpm 10.

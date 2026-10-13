@@ -32,8 +32,10 @@ the extension's name and description.
 Download it from the
 [releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases):
 
-- **Chrome / Edge:** unzip `m365-copilot-vscode-extension-chrome.zip` →
+- **Chrome:** unzip `m365-copilot-vscode-extension-chrome.zip` →
   `chrome://extensions` → *Developer mode* → *Load unpacked*.
+- **Edge:** unzip `m365-copilot-vscode-extension-edge.zip` →
+  `edge://extensions` → *Developer mode* → *Load unpacked*.
 - **Firefox (permanent):** open `m365-copilot-vscode-extension-firefox.xpi` in
   Firefox (or drag it onto `about:addons`). It is the Mozilla-signed build, the
   only kind Firefox Release installs permanently; releases without the `.xpi`
@@ -92,10 +94,13 @@ browser asks for them again and the extension stays disabled until you accept.
 
 ```bash
 pnpm install            # from the repository root
-pnpm dev                # Chrome/Edge with HMR
+pnpm dev                # Chrome with HMR
+pnpm dev:edge           # Edge with HMR
 pnpm dev:firefox
 pnpm build              # → ../../releases/chrome
-pnpm zip && pnpm zip:firefox
+pnpm build:edge         # → ../../releases/edge
+pnpm build:firefox      # → ../../releases/firefox
+pnpm zip && pnpm zip:edge && pnpm zip:firefox
 pnpm sign:firefox       # Mozilla-signed .xpi (AMO, unlisted): needs WEB_EXT_API_KEY / WEB_EXT_API_SECRET
 pnpm typecheck
 pnpm test               # refresh policy and refresh cycle against a fake `chrome`
