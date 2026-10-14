@@ -687,7 +687,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "pattern": "^[A-Za-z][A-Za-z0-9_.-]{1,63}$"
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]{1,63}(@paid)?$"
               },
               {
                 "type": "object",
@@ -697,7 +697,7 @@
                 "properties": {
                   "tone": {
                     "type": "string",
-                    "pattern": "^[A-Za-z][A-Za-z0-9_.-]{1,63}$"
+                    "pattern": "^[A-Za-z][A-Za-z0-9_.-]{1,63}(@paid)?$"
                   },
                   "name": {
                     "type": "string"
@@ -812,6 +812,12 @@
           "default": false,
           "scope": "application",
           "markdownDescription": "%config.debug.deep%"
+        },
+        "m365copilot.history.save": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "markdownDescription": "%config.history.save%"
         }
       }
     },

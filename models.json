@@ -1,7 +1,7 @@
 {
-  "$comment": "Online catalog of M365 Copilot models, downloaded by the VS Code extension on start and every 12 h (setting m365copilot.models.updateFromCatalog). Add an entry to offer a new model to every user without a release; set \"hidden\": true to retire one (also for installed versions that ship it). 'tone' is the BizChat tone the web app sends (the browser extension and userscript also detect them automatically). 'name' is shown after 'M365 Copilot · ' — use the web app's own labels. Only list tones seen working: a tone the service knows can still be refused, or answered with a canned reply instead of the model.",
+  "$comment": "Online catalog of M365 Copilot models, downloaded by the VS Code extension on start and every 12 h (setting m365copilot.models.updateFromCatalog). Add an entry to offer a new model to every user without a release; set \"hidden\": true to retire one (also for installed versions that ship it). 'tone' is the BizChat tone the web app sends (the browser extension and userscript also detect them automatically). 'name' is shown after 'M365 Copilot · ' — use the web app's own labels. 'Tone@paid' is that tone on the paid scenario (a Microsoft 365 Copilot licence: Claude Opus 5.5, Claude Sonnet 5 / 5.5, GPT-6); versions without paid models skip such entries. Only list tones seen working: a tone the service knows can still be refused, or answered with a canned reply instead of the model.",
   "version": 1,
-  "updated": "2026-10-08",
+  "updated": "2026-10-14",
   "models": [
     {
       "tone": "Chat",
@@ -59,7 +59,62 @@
         "es": "Claude Sonnet pensando más a fondo. Tu administrador tiene que tener activados los modelos de Anthropic. Más lento."
       }
     },
-    { "tone": "Gpt_5_6_Chat", "hidden": true },
+    {
+      "tone": "Gpt_61_Sol_Reasoning",
+      "name": "GPT-6.1 Sol",
+      "detail": {
+        "en": "GPT-6.1 Sol, a reasoning model: it thinks before answering, so it is slower.",
+        "es": "GPT-6.1 Sol, un modelo de razonamiento: piensa antes de responder, así que es más lento."
+      }
+    },
+    {
+      "tone": "Gpt_6_Sol_Reasoning",
+      "name": "GPT 6.0 Sol",
+      "detail": {
+        "en": "GPT-6 Sol, a reasoning model: it thinks before answering, so it is slower.",
+        "es": "GPT-6 Sol, un modelo de razonamiento: piensa antes de responder, así que es más lento."
+      }
+    },
+    {
+      "tone": "Gpt_5_6_Chat",
+      "name": "GPT 5.6 Quick response",
+      "detail": {
+        "en": "GPT 5.6, quick response. For agent work, GPT 5.5 or a “Think deeper” model usually does better.",
+        "es": "GPT 5.6, respuesta rápida. Para tareas de agente suele ir mejor GPT 5.5 o un modelo «Pensar más a fondo»."
+      }
+    },
+    {
+      "tone": "Claude_Opus@paid",
+      "name": "Claude Opus 5.5",
+      "detail": {
+        "en": "Anthropic’s Claude Opus 5.5. Needs a Microsoft 365 Copilot licence and Anthropic models enabled by your admin. Priority access: 40 turns a day and 75 a week — each agent step is a turn.",
+        "es": "Claude Opus 5.5 de Anthropic. Necesita una licencia de Microsoft 365 Copilot y que tu administrador active los modelos de Anthropic. Acceso prioritario: 40 turnos al día y 75 a la semana — cada paso del agente es un turno."
+      }
+    },
+    {
+      "tone": "Claude_Sonnet@paid",
+      "name": "Claude Sonnet 5.5",
+      "detail": {
+        "en": "Anthropic’s Claude Sonnet 5.5: the web app’s “Claude Sonnet” on a Microsoft 365 Copilot licence, which it needs. Priority access: 80 turns a day.",
+        "es": "Claude Sonnet 5.5 de Anthropic: el «Claude Sonnet» de la web con una licencia de Microsoft 365 Copilot, que necesita. Acceso prioritario: 80 turnos al día."
+      }
+    },
+    {
+      "tone": "Claude_Sonnet_5@paid",
+      "name": "Claude Sonnet 5",
+      "detail": {
+        "en": "Anthropic’s Claude Sonnet 5. Needs a Microsoft 365 Copilot licence; no daily allowance.",
+        "es": "Claude Sonnet 5 de Anthropic. Necesita una licencia de Microsoft 365 Copilot; sin cupo diario."
+      }
+    },
+    {
+      "tone": "Gpt_6_Reasoning@paid",
+      "name": "GPT-6 Think deeper",
+      "detail": {
+        "en": "GPT-6 thinking deeper. Needs a Microsoft 365 Copilot licence; slower.",
+        "es": "GPT-6 pensando más a fondo. Necesita una licencia de Microsoft 365 Copilot; más lento."
+      }
+    },
     { "tone": "Gpt_5_4_Reasoning", "hidden": true },
     { "tone": "Gpt_5_4_Quick", "hidden": true },
     { "tone": "Gpt_5_3_Reasoning", "hidden": true },

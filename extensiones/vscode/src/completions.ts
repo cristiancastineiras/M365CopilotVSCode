@@ -5,7 +5,8 @@ import { debug, log } from './logger';
 import { findModel } from './models';
 import { isTokenUsable } from './profile';
 import type { ProfileStore } from './secrets';
-import { t } from './i18n';
+import { formatMoment, t } from './i18n';
+import { accountThrottledUntil } from './throttle';
 
 const CONFIG_SECTION = 'm365copilot.inlineCompletions';
 
@@ -116,6 +117,18 @@ export class M365InlineCompletionProvider implements vscode.InlineCompletionItem
 		const prefix = textBefore(document, position);
 		const suffix = textAfter(document, position);
 		if (!prefix.trim()) return undefined;
+
+		// M365 is limiting the account: every suggestion is a request and would
+		// only extend it, so wait it out (an answer to anything else clears it).
+		const throttledUntil = accountThrottledUntil();
+		if (throttledUntil !== undefined) {
+			debug('complete', 'skipped: the account is throttled', { until: new Date(throttledUntil).toISOString() });
+			if (invokedByHand) {
+				log(t('log.completionThrottled', formatMoment(throttledUntil)));
+				void vscode.window.setStatusBarMessage(t('completions.throttled', formatMoment(throttledUntil)), 5000);
+			}
+			return undefined;
+		}
 
 		// A cache hit costs nothing and is the difference between ghost text
 		// that sticks and ghost text that blinks in and out while you type.

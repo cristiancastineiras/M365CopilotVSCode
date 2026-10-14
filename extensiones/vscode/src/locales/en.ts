@@ -112,6 +112,7 @@ export const en = {
 	'statusbar.tooltip.completionsOff': 'Inline completions: off',
 	'statusbar.tooltip.busy': 'Thinking of a suggestion…',
 	'statusbar.tooltip.debug': 'Deep debug mode on: everything is being traced',
+	'statusbar.tooltip.throttled': 'M365 Copilot is limiting your account: automatic requests paused until about {0}',
 	'statusbar.tooltip.pendingEdits': 'Agent changes awaiting review: {0}',
 	'statusbar.tooltip.click': 'Click to open the M365 Copilot menu.',
 	'statusbar.renewed': 'M365 Copilot: token renewed automatically ({0} min left).',
@@ -155,6 +156,7 @@ export const en = {
 	// ------------------------------------------------------------ inline completions
 	'completions.toggledOn': 'M365 Copilot inline completions turned on.',
 	'completions.toggledOff': 'M365 Copilot inline completions turned off.',
+	'completions.throttled': 'M365 Copilot is limiting your account until about {0}: no suggestions until then.',
 	'completion.prompt.role': 'You are a code completion engine, not a conversational assistant.',
 	'completion.prompt.continue': 'Continue the code EXACTLY at the position marked ⟦CURSOR⟧, in {0}.',
 	'completion.prompt.rules': 'Strict rules:',
@@ -177,6 +179,8 @@ export const en = {
 	'model.claude.detail': 'Anthropic’s Claude Sonnet. Your admin must have Anthropic models enabled.',
 	'model.claudeThinkDeeper.detail': 'Claude Sonnet thinking deeper. Your admin must have Anthropic models enabled. Slower.',
 	'model.unavailable': 'Not available on your account right now — use Auto, or check the models again later.',
+	'model.quotaUntil': 'Priority access used up until {0} — pick another model in the meantime.',
+	'model.needsPremium': 'Needs a Microsoft 365 Copilot licence — the web app showed your account with Copilot Chat only.',
 	'model.needsToken': 'Paste your M365 Copilot token to enable it.',
 	'model.tokenExpired': 'Token expired — paste a new one to use it.',
 	'models.new': 'M365 Copilot: new model available — {0}. Pick it in the chat model picker.',
@@ -199,6 +203,7 @@ export const en = {
 	'models.check.empty': 'It answered with nothing.',
 	'models.check.works': 'Works on your account.',
 	'models.check.summary': '{0} of {1} models work on your account',
+	'models.check.throttled': 'M365 Copilot is limiting your account until about {0}: check the models after that.',
 	'log.modelAvailable': 'model {0} answered: no longer flagged as unavailable',
 	'log.modelUnavailable': 'model {0} flagged as unavailable for this account: {1}',
 	'models.rejectedHint': ' — “{0}” may not be available in your tenant (any more); try M365 Copilot (Auto) or another model.',
@@ -208,6 +213,7 @@ export const en = {
 
 	// ------------------------------------------------------------ provider
 	'provider.noToken': 'There is no M365 Copilot token. Run “M365 Copilot: Paste profile or token”.',
+	'provider.imageSkipped': '⚠️ An image could not be attached ({0}); the answer goes on without it.\n\n',
 	'provider.tokenExpired':
 		'The M365 Copilot token has expired{0}. Capture it again (browser extension or userscript) and paste it once more.',
 	'provider.expiredAgo': ' ({0} min ago)',
@@ -241,7 +247,35 @@ export const en = {
 		'M365 Copilot did not run “{0}” for your account ({1}). New models reach organisations in phases, and the ' +
 		'Anthropic and OpenAI ones need your admin to enable them. Pick “M365 Copilot (Auto)”, or run ' +
 		'“M365 Copilot: Check models” to see which ones you have.',
-	'client.filtered': '\n\n_(Microsoft 365 Copilot did not generate an answer for this request.)_',
+	'client.error.disengaged': 'M365 Copilot declined to answer this request (it ended the conversation without a reply).',
+	'client.error.serverSaid': ' M365 Copilot said: “{0}”',
+	'client.error.throttled':
+		'M365 Copilot is limiting requests from your account ({0}): too many in a short time. It lifts by itself after ' +
+		'about an hour without requests; retrying sooner only makes it last longer. Inline completions and the automatic ' +
+		'checks are paused until about {1}.',
+	'client.error.quotaDay':
+		'Your priority access to {0} is used up for today. It resets at midnight UTC ({1} your time); until then, pick ' +
+		'another model.',
+	'client.error.quotaWeek':
+		'Your priority access to {0} is used up for this week. It resets on Monday at midnight UTC ({1} your time); ' +
+		'until then, pick another model.',
+	'client.error.license':
+		'M365 Copilot says your account does not have a valid licence for this request ({0}). Check with your ' +
+		'Microsoft 365 administrator.',
+	'client.error.premiumRequired':
+		'“{0}” needs a Microsoft 365 Copilot licence, and M365 Copilot says your account does not have one (Copilot ' +
+		'Chat alone is not enough). Pick another model, such as “M365 Copilot (Auto)”.',
+	'client.image.tooMany': 'only the last {1} images go with a request ({0} left out)',
+	'client.image.type': '{0} images are not supported (PNG, JPEG, GIF, WebP or BMP)',
+	'client.image.tooBig': 'an image of {0} MB is over the {1} MB limit',
+	'client.image.upload': 'the upload failed: {0}',
+	'turn.remoteSandbox':
+		'\n\n⚠️ M365 Copilot worked in its own cloud sandbox (/mnt/data or similar), not in your workspace: nothing ' +
+		'has changed here, and any file or link it mentions lives there. Try again, or pick another model such as ' +
+		'GPT 5.5 Think deeper.',
+	'throttle.notice':
+		'M365 Copilot is limiting requests from your account (too many in a short time). Inline completions and the ' +
+		'automatic checks are paused until about {0}; it lifts by itself if you wait.',
 
 	// ------------------------------------------------------------ logs (output channel)
 	'log.newTurn': '--- new turn ---',
@@ -264,6 +298,14 @@ export const en = {
 	'log.toolCallRequested': 'tool call requested: {0}',
 	'log.completion': 'inline completion: {0} ms, {1} raw chars → {2} usable',
 	'log.completionFailed': 'inline completion failed: {0}',
+	'log.completionThrottled': 'inline completion skipped: M365 Copilot is limiting the account until {0}',
+	'log.throttled': 'M365 Copilot is limiting the account ({0}); automatic requests paused until {1}',
+	'log.disengaged': 'M365 Copilot declined to answer (Disengaged)',
+	'log.stopSent': 'stop sent to M365 Copilot (the turn ended on our side)',
+	'log.turnStoppedEarly': 'turn ended as soon as the tool call was complete ({0} chars received)',
+	'log.imageSkipped': 'image not attached: {0}',
+	'log.remoteWork': 'the model is working in M365\'s own cloud sandbox, not here: {0}',
+	'log.forcedRetry': 'the reply called no tool ({0}): retrying the turn once with a note',
 	'log.subagentStep': '[sub-agent {0}] step {1} ({2}): {3}',
 	'log.participantRequest': '@m365 request: command={0}, tone={1}, context={2}',
 	'log.participantNoToken': '@m365 request (command={0}) without a usable token',
@@ -320,6 +362,8 @@ export const en = {
 	'prompt.toolCall': '[tool call {0}({1})]',
 	'prompt.nonTextOmitted': '[non-text attachment omitted]',
 	'prompt.attachmentOmitted': '[attachment {0}, {1} KB, omitted]',
+	'prompt.imageAttached': '[image attached to this request: {0}, {1} KB]',
+	'prompt.imagesAttached': '[{0} image(s) from the user are attached to this request]',
 	'prompt.earlierOmitted': '[earlier turns omitted to keep the relevant context]',
 	'prompt.charsOmitted': '[... {0} characters omitted ...]',
 	'prompt.role.request': 'User (current request)',
@@ -366,6 +410,10 @@ export const en = {
 	'protocol.rule.batches':
 		'- If you have to create many files (more than ~5), do it in several successive calls with a few files each, not in ' +
 		'one giant batch: short turns fail much less often.',
+	'protocol.rule.outputLimit':
+		'- A reply has room for about {0} characters: past that, M365 Copilot ends it early without an error, so a file ' +
+		'written in one go comes out cut short while looking finished. Write anything longer than about 8,000 characters ' +
+		'in parts: create the file with the first part, then add the rest with further edits in the next turns.',
 	'protocol.rule.diagnostics':
 		'- After applying an edit, check with the diagnostics tool that you did not introduce new errors.',
 	'protocol.rule.native':
@@ -418,6 +466,18 @@ export const en = {
 	'protocol.incompleteCall':
 		'\n\n⚠️ The call to `{0}` was incomplete: the model cut off the text of the blocks and nothing was run. Ask again, ' +
 		'ideally for a smaller change.',
+	'protocol.incompleteCallLimit':
+		'\n\n⚠️ The call to `{0}` was cut off: the reply reached M365 Copilot\'s output limit (about {1} characters) and ' +
+		'nothing was run. Ask for it in smaller parts — create the file with the first part, then add the rest.',
+	'protocol.force.giveUp':
+		'Note: in an earlier attempt at this request you answered that you could not reach the workspace, without calling ' +
+		'any tool. You can: the files and commands of this workspace are real and reachable through the tools listed ' +
+		'above, and the marker runs them on the user\'s machine. Do not ask the user to paste or upload anything; reply ' +
+		'with the tool call for the next step.',
+	'protocol.force.sandbox':
+		'Note: in an earlier attempt at this request you worked in your own cloud sandbox (/mnt/data, /home/…). That is ' +
+		'not the user\'s machine: nothing in it is in this workspace, and nothing you create there reaches it. Use only ' +
+		'the tools listed above, through the marker, for files and commands; reply with the tool call for the next step.',
 
 	// ------------------------------------------------------------ tool hints (model-facing)
 	'hint.listFiles': 'Lists workspace files without loading their contents. Workspace-relative paths.',
@@ -869,6 +929,7 @@ export const en = {
 	'autoCommit.busy': 'M365 Copilot is already looking at the changes of {0}.',
 	'autoCommit.noWatchedRepo': 'M365 Copilot auto-commit is not watching any git repository of this workspace.',
 	'autoCommit.reason.noToken': 'no usable M365 token — paste one to resume',
+	'autoCommit.reason.throttled': 'M365 Copilot is limiting the account until about {0}',
 	'autoCommit.reason.pendingEdits': '{0} agent edit(s) waiting for Keep/Undo',
 	'autoCommit.reason.unsaved': 'unsaved files: {0}',
 	'autoCommit.reason.noHead': 'the repository has no commits yet — make the first one yourself',
@@ -1094,8 +1155,6 @@ export const en = {
 	'web.empty': 'The web search for “{0}” returned nothing.',
 	'web.noQuery': 'Say what to search for in `query`.',
 	'web.disabled': 'Web search is turned off (m365copilot.web.enabled).',
-	'web.noTemplate':
-		'Web search needs the session captured by the browser extension or the userscript (a pasted bare token is not enough): the user has to open Microsoft 365 Copilot in the browser once with either of them installed.',
 
 	// ------------------------------------------------------------ project index (RAG) — for the user
 	'tool.searchingProject': 'Searching the project for “{0}”...',
@@ -1116,8 +1175,6 @@ export const en = {
 	'menu.searchProject': 'Search the project…',
 	'menu.projectMap': 'Project map',
 	'menu.rebuildIndex': 'Rebuild project index',
-	'client.error.noWebTemplate':
-		'web search needs the session captured by the browser extension or the userscript (a pasted bare token is not enough)',
 	'log.indexBuilt': 'project index: {0} files, {1} chunks in {2} ms{3}',
 	'log.indexFailed': 'project index failed: {0}',
 	'log.indexContext': 'project context: {0} hits, {1} snippets, {2} chars',

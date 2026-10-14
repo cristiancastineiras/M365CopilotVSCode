@@ -115,6 +115,7 @@ export const es: Record<keyof typeof en, string> = {
 	'statusbar.tooltip.completionsOff': 'Autocompletado en línea: desactivado',
 	'statusbar.tooltip.busy': 'Pensando una sugerencia…',
 	'statusbar.tooltip.debug': 'Modo debug profundo activado: se está trazando todo',
+	'statusbar.tooltip.throttled': 'M365 Copilot está limitando tu cuenta: peticiones automáticas en pausa hasta {0} aprox.',
 	'statusbar.tooltip.pendingEdits': 'Cambios del agente pendientes de revisar: {0}',
 	'statusbar.tooltip.click': 'Clic para abrir el menú de M365 Copilot.',
 	'statusbar.renewed': 'M365 Copilot: token renovado automáticamente (quedan {0} min).',
@@ -158,6 +159,7 @@ export const es: Record<keyof typeof en, string> = {
 	// ------------------------------------------------------------ autocompletado en línea
 	'completions.toggledOn': 'Autocompletado de M365 Copilot activado.',
 	'completions.toggledOff': 'Autocompletado de M365 Copilot desactivado.',
+	'completions.throttled': 'M365 Copilot está limitando tu cuenta hasta {0} aprox.: no habrá sugerencias hasta entonces.',
 	'completion.prompt.role': 'Actúas como un motor de autocompletado de código, no como un asistente conversacional.',
 	'completion.prompt.continue': 'Continúa el código EXACTAMENTE en la posición marcada con ⟦CURSOR⟧, en {0}.',
 	'completion.prompt.rules': 'Reglas estrictas:',
@@ -182,6 +184,8 @@ export const es: Record<keyof typeof en, string> = {
 	'model.claudeThinkDeeper.detail':
 		'Claude Sonnet pensando más a fondo. Tu administrador tiene que tener activados los modelos de Anthropic. Más lento.',
 	'model.unavailable': 'No disponible en tu cuenta ahora mismo — usa Auto, o vuelve a comprobar los modelos más tarde.',
+	'model.quotaUntil': 'Acceso prioritario agotado hasta {0} — mientras tanto, elige otro modelo.',
+	'model.needsPremium': 'Necesita una licencia de Microsoft 365 Copilot — la web mostró tu cuenta solo con Copilot Chat.',
 	'model.needsToken': 'Pega tu token de M365 Copilot para activarlo.',
 	'model.tokenExpired': 'Token caducado — pega uno nuevo para usarlo.',
 	'models.new': 'M365 Copilot: nuevo modelo disponible — {0}. Elígelo en el selector de modelos del chat.',
@@ -205,6 +209,7 @@ export const es: Record<keyof typeof en, string> = {
 	'models.check.empty': 'No contestó nada.',
 	'models.check.works': 'Funciona en tu cuenta.',
 	'models.check.summary': '{0} de {1} modelos funcionan en tu cuenta',
+	'models.check.throttled': 'M365 Copilot está limitando tu cuenta hasta {0} aprox.: comprueba los modelos después.',
 	'log.modelAvailable': 'el modelo {0} contestó: ya no se marca como no disponible',
 	'log.modelUnavailable': 'el modelo {0} queda marcado como no disponible en esta cuenta: {1}',
 	'models.rejectedHint': ' — puede que «{0}» no esté (ya) disponible en tu tenant; prueba M365 Copilot (Auto) u otro modelo.',
@@ -214,6 +219,7 @@ export const es: Record<keyof typeof en, string> = {
 
 	// ------------------------------------------------------------ proveedor
 	'provider.noToken': 'No hay token de M365 Copilot. Ejecuta «M365 Copilot: Pegar perfil o token».',
+	'provider.imageSkipped': '⚠️ No se ha podido adjuntar una imagen ({0}); la respuesta sigue sin ella.\n\n',
 	'provider.tokenExpired':
 		'El token de M365 Copilot ha caducado{0}. Vuelve a capturarlo (extensión de navegador o userscript) y pégalo de nuevo.',
 	'provider.expiredAgo': ' (hace {0} min)',
@@ -248,7 +254,35 @@ export const es: Record<keyof typeof en, string> = {
 		'M365 Copilot no ha ejecutado «{0}» en tu cuenta ({1}). Los modelos nuevos llegan a las organizaciones por ' +
 		'fases, y los de Anthropic y OpenAI necesitan que tu administrador los active. Elige «M365 Copilot (Auto)», o ' +
 		'ejecuta «M365 Copilot: Comprobar modelos» para ver cuáles tienes.',
-	'client.filtered': '\n\n_(Microsoft 365 Copilot no generó respuesta para esta petición.)_',
+	'client.error.disengaged': 'M365 Copilot ha rehusado responder a esta petición (terminó la conversación sin respuesta).',
+	'client.error.serverSaid': ' M365 Copilot dijo: «{0}»',
+	'client.error.throttled':
+		'M365 Copilot está limitando las peticiones de tu cuenta ({0}): demasiadas en poco tiempo. Se levanta sola tras ' +
+		'alrededor de una hora sin peticiones; reintentar antes solo lo alarga. El autocompletado y las comprobaciones ' +
+		'automáticas quedan en pausa hasta {1} aprox.',
+	'client.error.quotaDay':
+		'Has agotado por hoy tu acceso prioritario a {0}. Se renueva a medianoche UTC ({1} en tu hora); mientras tanto, ' +
+		'elige otro modelo.',
+	'client.error.quotaWeek':
+		'Has agotado esta semana tu acceso prioritario a {0}. Se renueva el lunes a medianoche UTC ({1} en tu hora); ' +
+		'mientras tanto, elige otro modelo.',
+	'client.error.license':
+		'M365 Copilot dice que tu cuenta no tiene una licencia válida para esta petición ({0}). Consúltalo con el ' +
+		'administrador de Microsoft 365.',
+	'client.error.premiumRequired':
+		'«{0}» necesita una licencia de Microsoft 365 Copilot, y M365 Copilot dice que tu cuenta no la tiene (con ' +
+		'Copilot Chat no basta). Elige otro modelo, como «M365 Copilot (Auto)».',
+	'client.image.tooMany': 'con cada petición solo van las {1} últimas imágenes ({0} se quedan fuera)',
+	'client.image.type': 'las imágenes {0} no son compatibles (PNG, JPEG, GIF, WebP o BMP)',
+	'client.image.tooBig': 'una imagen de {0} MB supera el límite de {1} MB',
+	'client.image.upload': 'la subida ha fallado: {0}',
+	'turn.remoteSandbox':
+		'\n\n⚠️ M365 Copilot ha trabajado en su propio sandbox en la nube (/mnt/data o parecido), no en tu workspace: ' +
+		'aquí no ha cambiado nada, y los archivos o enlaces que mencione están allí. Vuelve a intentarlo, o elige otro ' +
+		'modelo como GPT 5.5 Think deeper.',
+	'throttle.notice':
+		'M365 Copilot está limitando las peticiones de tu cuenta (demasiadas en poco tiempo). El autocompletado y las ' +
+		'comprobaciones automáticas quedan en pausa hasta {0} aprox.; se levanta sola si esperas.',
 
 	// ------------------------------------------------------------ registro (canal de salida)
 	'log.newTurn': '--- nuevo turno ---',
@@ -271,6 +305,14 @@ export const es: Record<keyof typeof en, string> = {
 	'log.toolCallRequested': 'llamada de herramienta solicitada: {0}',
 	'log.completion': 'autocompletado: {0} ms, {1} chars crudos → {2} usables',
 	'log.completionFailed': 'autocompletado falló: {0}',
+	'log.completionThrottled': 'autocompletado omitido: M365 Copilot limita la cuenta hasta {0}',
+	'log.throttled': 'M365 Copilot está limitando la cuenta ({0}); peticiones automáticas en pausa hasta {1}',
+	'log.disengaged': 'M365 Copilot ha rehusado responder (Disengaged)',
+	'log.stopSent': 'stop enviado a M365 Copilot (el turno terminó por nuestra parte)',
+	'log.turnStoppedEarly': 'turno terminado en cuanto la llamada a herramienta estuvo completa ({0} chars recibidos)',
+	'log.imageSkipped': 'imagen no adjuntada: {0}',
+	'log.remoteWork': 'el modelo está trabajando en el sandbox en la nube de M365, no aquí: {0}',
+	'log.forcedRetry': 'la respuesta no llamó a ninguna herramienta ({0}): se repite el turno una vez con una nota',
 	'log.subagentStep': '[sub-agente {0}] paso {1} ({2}): {3}',
 	'log.participantRequest': 'petición a @m365: comando={0}, tone={1}, contexto={2}',
 	'log.participantNoToken': 'petición a @m365 (comando={0}) sin un token utilizable',
@@ -324,6 +366,8 @@ export const es: Record<keyof typeof en, string> = {
 	'prompt.toolCall': '[llamada a herramienta {0}({1})]',
 	'prompt.nonTextOmitted': '[contenido adjunto no textual omitido]',
 	'prompt.attachmentOmitted': '[adjunto {0}, {1} KB, omitido]',
+	'prompt.imageAttached': '[imagen adjunta a esta petición: {0}, {1} KB]',
+	'prompt.imagesAttached': '[{0} imagen(es) del usuario van adjuntas a esta petición]',
 	'prompt.earlierOmitted': '[turnos anteriores omitidos para conservar el contexto relevante]',
 	'prompt.charsOmitted': '[... {0} caracteres omitidos ...]',
 	'prompt.role.request': 'Usuario (petición actual)',
@@ -368,6 +412,10 @@ export const es: Record<keyof typeof en, string> = {
 		'- En {0} cada operación usa SUS campos: replace → oldText + newText; create → content (NO newText); delete → sólo path.',
 	'protocol.rule.batches':
 		'- Si tienes que crear muchos archivos (más de ~5), hazlo en varias llamadas sucesivas de pocos archivos cada una, no en un único lote gigante: los turnos cortos fallan mucho menos.',
+	'protocol.rule.outputLimit':
+		'- Una respuesta tiene sitio para unos {0} caracteres: a partir de ahí M365 Copilot la termina antes, sin error, ' +
+		'así que un archivo escrito de una vez queda cortado aunque parezca terminado. Escribe lo que pase de unos 8.000 ' +
+		'caracteres por partes: crea el archivo con la primera parte y añade el resto con más ediciones en los turnos siguientes.',
 	'protocol.rule.diagnostics':
 		'- Tras aplicar una edición, comprueba con la herramienta de diagnósticos que no introdujiste errores nuevos.',
 	'protocol.rule.native':
@@ -423,6 +471,19 @@ export const es: Record<keyof typeof en, string> = {
 	'protocol.incompleteCall':
 		'\n\n⚠️ La llamada a `{0}` quedó incompleta: el modelo cortó el texto de los bloques ' +
 		'y no se ha ejecutado nada. Pídeselo de nuevo, a ser posible en un cambio más pequeño.',
+	'protocol.incompleteCallLimit':
+		'\n\n⚠️ La llamada a `{0}` se cortó: la respuesta llegó al límite de salida de M365 Copilot (unos {1} ' +
+		'caracteres) y no se ha ejecutado nada. Pídeselo por partes — que cree el archivo con la primera y añada el resto.',
+	'protocol.force.giveUp':
+		'Nota: en un intento anterior de esta petición respondiste que no podías acceder al workspace, sin llamar a ' +
+		'ninguna herramienta. Sí puedes: los archivos y comandos de este workspace son reales y están a tu alcance con las ' +
+		'herramientas de la lista de arriba, y el marcador las ejecuta en la máquina del usuario. No le pidas que pegue ' +
+		'ni suba nada; responde con la llamada a herramienta del siguiente paso.',
+	'protocol.force.sandbox':
+		'Nota: en un intento anterior de esta petición trabajaste en tu propio sandbox en la nube (/mnt/data, /home/…). ' +
+		'Esa no es la máquina del usuario: nada de lo que hay allí está en este workspace, y nada de lo que crees allí ' +
+		'llega a él. Usa solo las herramientas de la lista de arriba, con el marcador, para archivos y comandos; responde ' +
+		'con la llamada a herramienta del siguiente paso.',
 
 	// ------------------------------------------------------------ descripciones de herramientas (las lee el modelo)
 	'hint.listFiles': 'Lista archivos del workspace sin cargar su contenido. Rutas relativas al workspace.',
@@ -881,6 +942,7 @@ export const es: Record<keyof typeof en, string> = {
 	'autoCommit.busy': 'M365 Copilot ya está mirando los cambios de {0}.',
 	'autoCommit.noWatchedRepo': 'El autocommit de M365 Copilot no está vigilando ningún repositorio git de este workspace.',
 	'autoCommit.reason.noToken': 'no hay un token de M365 válido — pega uno para continuar',
+	'autoCommit.reason.throttled': 'M365 Copilot está limitando la cuenta hasta {0} aprox.',
 	'autoCommit.reason.pendingEdits': '{0} edición(es) del agente esperando Keep/Undo',
 	'autoCommit.reason.unsaved': 'archivos sin guardar: {0}',
 	'autoCommit.reason.noHead': 'el repositorio aún no tiene commits — haz tú el primero',
@@ -1106,8 +1168,6 @@ export const es: Record<keyof typeof en, string> = {
 	'web.empty': 'La búsqueda web de «{0}» no ha devuelto nada.',
 	'web.noQuery': 'Indica qué buscar en `query`.',
 	'web.disabled': 'La búsqueda web está desactivada (m365copilot.web.enabled).',
-	'web.noTemplate':
-		'La búsqueda web necesita la sesión capturada por la extensión de navegador o el userscript (un token pegado a mano no basta): el usuario tiene que abrir Microsoft 365 Copilot en el navegador una vez con cualquiera de los dos instalado.',
 
 	// ------------------------------------------------------------ índice del proyecto (RAG) — para el usuario
 	'tool.searchingProject': 'Buscando en el proyecto «{0}»...',
@@ -1128,8 +1188,6 @@ export const es: Record<keyof typeof en, string> = {
 	'menu.searchProject': 'Buscar en el proyecto…',
 	'menu.projectMap': 'Mapa del proyecto',
 	'menu.rebuildIndex': 'Reconstruir el índice del proyecto',
-	'client.error.noWebTemplate':
-		'la búsqueda web necesita la sesión capturada por la extensión de navegador o el userscript (un token pegado a mano no basta)',
 	'log.indexBuilt': 'índice del proyecto: {0} archivos, {1} fragmentos en {2} ms{3}',
 	'log.indexFailed': 'el índice del proyecto ha fallado: {0}',
 	'log.indexContext': 'contexto del proyecto: {0} resultados, {1} fragmentos, {2} caracteres',

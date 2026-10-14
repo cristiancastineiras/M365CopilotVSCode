@@ -23,7 +23,11 @@ export interface CatalogModel {
 	readonly id: string;
 	readonly name: string;
 	readonly family: string;
-	/** `tone` to send, or null for Auto (BizChat's own routing). */
+	/**
+	 * `tone` to send, or null for Auto (BizChat's own routing). A tone the paid
+	 * scenario serves as another model carries {@link PAID_SUFFIX}
+	 * (`Claude_Sonnet@paid` is Claude Sonnet 5.5): see {@link parseToneSelector}.
+	 */
 	readonly tone: string | null;
 	readonly source: ModelSource;
 	/** Built-ins describe themselves through the i18n catalog… */
@@ -34,6 +38,7 @@ export interface CatalogModel {
 
 /** One entry of models.json or of the `custom` setting. */
 export interface ModelEntry {
+	/** A tone, or `Tone@paid` (see {@link normalizeSelector}). */
 	readonly tone: string;
 	readonly name?: string;
 	readonly detail?: Readonly<{ en?: string; es?: string }>;
@@ -52,10 +57,11 @@ const MAX_DETAIL_CHARS = 200;
  * What the M365 Copilot web app's model menu offers, with its own labels: the
  * three modes that let M365 pick the model (Auto = `magic`, Quick response =
  * `Chat`, Think deeper = `Reasoning`) and the named models. The tones come from
- * the web app's own menu and from tones seen answering live; `Gpt_5_6_Chat`
- * (offered until 2.0) is not among them and is gone. Newer models (GPT-6.1 Sol,
- * Claude Sonnet 5.5…) arrive in phases per tenant and their tones are not
- * public: they show up by themselves once the web app uses them (observed).
+ * the web app's own menu and from tones seen answering live. Newer models
+ * arrive in phases per tenant, so they come from the online catalog
+ * (models.json) instead — GPT 6.0 Sol, GPT-6.1 Sol and GPT 5.6 Quick response
+ * (`Gpt_5_6_Chat`, which serves again since 2026-09-24) are there — or show up
+ * by themselves once the web app uses them (observed).
  * The ids of models kept from earlier versions do not change: settings and
  * the chat's picker refer to them.
  */
@@ -91,6 +97,58 @@ export const BUILTIN_MODELS: readonly CatalogModel[] = BUILTIN_SPECS.map((model)
 	source: 'builtin' as const,
 }));
 
+/**
+ * The models a tone reaches only on the paid scenario (`scenario=
+ * OfficeWebPaidCopilot`, `licenseType=Premium`): the one an account with a
+ * Microsoft 365 Copilot licence uses, where one with only Copilot Chat uses
+ * `OfficeWebIncludedCopilot`. On the included scenario these tones answer with
+ * the canned apology (Claude Opus, GPT-6) or are another, older model (Claude
+ * Sonnet 5 is Sonnet 4.6 there). Measured by github.com/cramt/m365-copilot-proxy
+ * (docs/m365-copilot-api.md §5): Claude Opus 5.5, Claude Sonnet 5, GPT-6.
+ */
+export const PAID_ONLY_TONES: ReadonlySet<string> = new Set(['Claude_Opus', 'Claude_Sonnet_5', 'Gpt_6_Reasoning']);
+
+/**
+ * `Tone@paid`: the same tone on the paid scenario, where it is another model —
+ * `Claude_Sonnet` is Claude Sonnet 4.6 on the included scenario and Claude
+ * Sonnet 5.5 (metered: 80 turns a day) on the paid one. Not a valid BizChat tone
+ * on purpose: versions without paid models skip such an entry of models.json.
+ */
+export const PAID_SUFFIX = '@paid';
+
+export interface ToneSelector {
+	/** The tone BizChat receives. */
+	readonly tone: string;
+	/** Whether the turn goes on the paid scenario. */
+	readonly paid: boolean;
+}
+
+/** What a model's `tone` asks for: the tone to send and the scenario. */
+export function parseToneSelector(selector: string): ToneSelector {
+	const suffixed = selector.endsWith(PAID_SUFFIX);
+	const tone = suffixed ? selector.slice(0, -PAID_SUFFIX.length) : selector;
+	return { tone, paid: suffixed || PAID_ONLY_TONES.has(tone) };
+}
+
+/** Whether a model needs the paid scenario (a Microsoft 365 Copilot licence). */
+export function isPaidSelector(selector: string | null): boolean {
+	return selector !== null && parseToneSelector(selector).paid;
+}
+
+/**
+ * A tone or `Tone@paid` from models.json or the settings, or null if it is not
+ * one. A paid-only tone drops the suffix — it is paid anyway — so that a tone
+ * the web app was seen using (`Claude_Opus`) and the catalog's entry for it are
+ * the same model.
+ */
+export function normalizeSelector(raw: string): string | null {
+	const text = raw.trim();
+	const suffixed = text.endsWith(PAID_SUFFIX);
+	const tone = suffixed ? text.slice(0, -PAID_SUFFIX.length) : text;
+	if (!TONE_PATTERN.test(tone)) return null;
+	return suffixed && !PAID_ONLY_TONES.has(tone) ? `${tone}${PAID_SUFFIX}` : tone;
+}
+
 /** The web app's names for its modes, which also end the named tones. */
 const MODE_LABELS: Readonly<Record<string, string>> = {
 	chat: 'Quick response',
@@ -106,6 +164,7 @@ const MODE_LABELS: Readonly<Record<string, string>> = {
  * "Claude Opus 4.1", `Reasoning` → "Think deeper".
  */
 export function prettyTone(tone: string): string {
+	if (tone.endsWith(PAID_SUFFIX)) return `${prettyTone(tone.slice(0, -PAID_SUFFIX.length))} (paid)`;
 	const tokens = tone.split(/[_\-\s]+/).filter(Boolean);
 	const last = tokens[tokens.length - 1];
 	const mode = last !== undefined ? MODE_LABELS[last.toLowerCase()] : undefined;
@@ -151,11 +210,14 @@ function cleanDetail(value: unknown): ModelEntry['detail'] {
 }
 
 function entryOf(raw: unknown): ModelEntry | null {
-	if (typeof raw === 'string') return TONE_PATTERN.test(raw.trim()) ? { tone: raw.trim() } : null;
+	if (typeof raw === 'string') {
+		const tone = normalizeSelector(raw);
+		return tone ? { tone } : null;
+	}
 	if (!raw || typeof raw !== 'object') return null;
 	const record = raw as Record<string, unknown>;
-	const tone = typeof record.tone === 'string' ? record.tone.trim() : '';
-	if (!TONE_PATTERN.test(tone)) return null;
+	const tone = typeof record.tone === 'string' ? normalizeSelector(record.tone) : null;
+	if (!tone) return null;
 	return {
 		tone,
 		name: cleanText(record.name, MAX_NAME_CHARS),

@@ -50,7 +50,8 @@ import { ticketFromBranch } from '../tools/commitContext';
 import { execGit } from '../tools/git';
 import { getGitApi, type GitApi, type GitRepository } from '../tools/gitExtension';
 import { errorMessage } from '../tools/common';
-import { t } from './i18n';
+import { formatMoment, t } from './i18n';
+import { accountThrottledUntil } from './throttle';
 
 const SECTION = 'm365copilot.autoCommit';
 /** In workspaceState: turning it on in one project must not start committing in every other one. */
@@ -503,6 +504,11 @@ class RepositoryWatch implements vscode.Disposable {
 
 		const profile = await this.owner.deps.store.get();
 		if (!profile || !isTokenUsable(profile)) return wait(t('autoCommit.reason.noToken'));
+		// While M365 limits the account, the idle look waits it out; "check now" still asks.
+		const throttledUntil = accountThrottledUntil();
+		if (!force && throttledUntil !== undefined) {
+			return wait(t('autoCommit.reason.throttled', formatMoment(throttledUntil)), throttledUntil - Date.now() + 1000);
+		}
 		const pendingEdits = this.owner.deps.edits.pendingCount;
 		if (pendingEdits > 0) return wait(t('autoCommit.reason.pendingEdits', pendingEdits));
 		const unsaved = vscode.workspace.textDocuments.filter(

@@ -115,7 +115,7 @@
   "command.checkModels": "Check models",
   "config.models.updateFromCatalog": "Download the list of M365 Copilot models from the project’s online catalog (`models.json` on GitHub) on start and every 12 hours, so new models appear — and retired ones disappear — without updating the extension. Only that file is downloaded; nothing is sent.",
   "config.models.detectFromBrowser": "Add the models the M365 Copilot web app itself uses: the browser extension and the userscript see which model (`tone`) each chat uses and send it along with the token. Proof that the model exists for your account.",
-  "config.models.custom": "Extra models by their BizChat `tone`, e.g. `[\"Gpt_5_7_Chat\", { \"tone\": \"Claude_Opus\", \"name\": \"Claude Opus\" }]`. Use it to try a model before it reaches the catalog.",
+  "config.models.custom": "Extra models by their BizChat `tone`, e.g. `[\"Gpt_5_7_Chat\", { \"tone\": \"Claude_Sonnet@paid\", \"name\": \"Claude Sonnet 5.5\" }]`. `@paid` sends that tone on the paid scenario (a Microsoft 365 Copilot licence), where it can be another model. Use it to try a model before it reaches the catalog.",
   "command.reviewCode": "Review code",
   "command.fixAllProblems": "Fix all problems in this file",
   "command.reviewChanges": "Review changes with M365 Copilot",
@@ -141,5 +141,6 @@
   "command.searchProject": "Search the project…",
   "command.showProjectMap": "Show project map",
   "command.rebuildIndex": "Rebuild project index",
+  "config.history.save": "Keep the conversations the extension has with M365 Copilot in your Copilot history (the list of chats in the web app). Off (default), they are temporary chats: each one works the same while it runs, but leaves nothing in that history — otherwise every agent step and every inline suggestion would add a chat of its own.",
   "config.debug.deep": "Deep debug mode. Opens the **M365 Copilot** console and traces, in great detail, everything the extension receives (what the browser sends to the local server, every frame M365 Copilot streams back), sends (the exact prompt, headers and frames, the web and process calls) and does (commands, tools, edits, settings). Tokens are always hidden; prompts, answers and file paths are not. [Show console](command:m365copilot.showLog) · [Export log (.txt)](command:m365copilot.exportLog) · [Clear log](command:m365copilot.clearLog)"
 }

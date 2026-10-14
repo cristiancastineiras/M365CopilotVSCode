@@ -14,7 +14,7 @@ import { minutesUntilExpiry } from './profile';
 import { installModelRegistry } from './models';
 import { debug, initLogger, log, showLog, type LogSink } from './logger';
 import { clearDebugLog, DebugSession, exportDebugLog, toggleDeepDebug } from './debugMode';
-import { getLocale, resolveLocale, setLocale, t } from './i18n';
+import { formatMoment, getLocale, resolveLocale, setLocale, t } from './i18n';
 import { M365StatusBar } from './statusBar';
 import { TokenWatcher } from './tokenWatcher';
 import { EditorHandoff, registerEditorActions } from './editorActions';
@@ -26,7 +26,8 @@ import { TerminalHistory } from './terminalHistory';
 import { M365AuthenticationProvider } from './account';
 import { registerReview, ReviewComments } from './review';
 import { migrateFromLegacy } from './migration';
-import { setTestEndpointBase } from './client';
+import { setTemporaryChat, setTestEndpointBase } from './client';
+import { onThrottleChange } from './throttle';
 import { signOutAndSignIn } from './signOut';
 import { ProjectIndexService } from './projectIndex';
 import { registerWebSearchTool } from './webSearch';
@@ -100,8 +101,18 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
 	// Settings of the `ms365-copilot-vscode` builds; the listeners below pick them up.
 	void migrateFromLegacy(context, log);
 
+	// Temporary chats unless the user wants VS Code's turns in the Copilot history.
+	setTemporaryChat(!saveHistorySetting());
 	const store = new ProfileStore(context.secrets);
 	const statusBar = new M365StatusBar(store);
+	// M365 limits the account for about an hour: the status bar says so the whole
+	// time, and one notification explains it when it starts.
+	const stopWatchingThrottle = onThrottleChange((change) => {
+		statusBar.refresh();
+		if (change.began && change.until !== undefined) {
+			void vscode.window.showWarningMessage(t('throttle.notice', formatMoment(change.until)));
+		}
+	});
 	// Right after the store and the status bar, before the first request can
 	// arrive: deep debug mode (m365copilot.debug.deep) has to be on by then.
 	const debugSession = new DebugSession({
@@ -145,6 +156,7 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
 		store,
 		statusBar,
 		debugSession,
+		{ dispose: stopWatchingThrottle },
 		tokenServer,
 		provider,
 		workspaceEdits,
@@ -164,6 +176,7 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
 		vscode.languages.registerInlineCompletionItemProvider({ pattern: '**' }, completions),
 		vscode.workspace.onDidChangeConfiguration((event) => {
 			if (event.affectsConfiguration('m365copilot.inlineCompletions')) completions.clearCache();
+			if (event.affectsConfiguration('m365copilot.history.save')) setTemporaryChat(!saveHistorySetting());
 			if (event.affectsConfiguration('m365copilot.language')) {
 				applyLanguage(() => {
 					statusBar.refresh();
@@ -261,6 +274,11 @@ function applyLanguage(rerender: () => void): void {
 	setLocale(next);
 	rerender();
 	if (next !== before) void vscode.window.showInformationMessage(t('ext.languageChanged', languageName(next)));
+}
+
+/** `m365copilot.history.save`: keep the extension's turns in the Copilot history (off: temporary chats). */
+function saveHistorySetting(): boolean {
+	return vscode.workspace.getConfiguration('m365copilot.history').get<boolean>('save', false);
 }
 
 /**

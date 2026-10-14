@@ -192,9 +192,11 @@ asked for credentials again.
 ### Status bar and quick menu
 
 The **M365** status item shows the token state (🔑 none yet, ⚠ expired, 🕑 a
-countdown in its last 10 minutes), whether inline completions are on, and a
-spinner while a suggestion is on its way. Its tooltip shows the account, the
-minutes left and the agent changes pending review. Clicking it opens the
+countdown in its last 10 minutes), whether inline completions are on, a ⌚ while
+M365 Copilot is [limiting the account](#limits-and-refusals-from-m365-copilot),
+and a spinner while a suggestion is on its way. Its tooltip shows the account,
+the minutes left, until when the limit lasts and the agent changes pending
+review. Clicking it opens the
 **M365 Copilot menu**: paste token, token status, open M365 Copilot, open the
 chat, toggle inline completions, review pending changes, generate a commit
 message, auto-commit, language, settings, walkthrough, deep debug mode, log,
@@ -366,10 +368,13 @@ Copilot decides the model and how long to think — recommended), **Quick
 response** and **Think deeper** (M365 Copilot picks the model, fast or
 thorough), then the named models: GPT 5.6 Think deeper, GPT 5.5 Quick response
 / Think deeper, Claude Sonnet and Claude Sonnet Think deeper. Claude needs your
-admin to have Anthropic models enabled. The newest models (GPT-6.1 Sol, Claude
-Sonnet 5.5, Claude Opus 5.5…) reach organisations in phases and their `tone`s
-are not public: use one once on M365 Copilot with the browser extension or the
-userscript installed and it appears in VS Code.
+admin to have Anthropic models enabled. The online catalog adds newer ones:
+**GPT-6.1 Sol** and **GPT 6.0 Sol** (reasoning models: they think before
+answering, so they are slower) and **GPT 5.6 Quick response**, available again
+(for agent work, GPT 5.5 or a Think deeper model does better). Models whose
+`tone` is not public yet (they reach organisations in phases) appear in VS Code
+once you use them on M365 Copilot with the browser extension or the userscript
+installed.
 
 | Source | How it works |
 |--------|--------------|
@@ -387,9 +392,11 @@ service may turn the request down, or answer with its own canned "I can't help
 with that" instead of the model. Either way the extension says so — with the
 service's reason, and suggesting Auto — instead of showing that reply as the
 answer, and flags the model in the picker (⚠ "not available on your account
-right now") for 12 hours or until it works again. **M365 Copilot: Check
-models** (also the first entry of *Update models*) sends a short message to
-each model, one conversation each, and lists which ones work for you.
+right now") for 12 hours or until it works again — or, when its priority
+access is used up, until it refills (see
+[Limits and refusals](#limits-and-refusals-from-m365-copilot)). **M365 Copilot:
+Check models** (also the first entry of *Update models*) sends a short message
+to each model, one conversation each, and lists which ones work for you.
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
@@ -399,6 +406,20 @@ each model, one conversation each, and lists which ones work for you.
 
 The model settings of sub-agents, inline completions and editor answers
 (`*.model`) offer the built-in models.
+
+## Limits and refusals from M365 Copilot
+
+M365 Copilot can also refuse a turn for reasons that have nothing to do with
+the model. The extension recognises them, says what happened in plain words
+(with the service's own message) and does not retry: the same request would get
+the same answer.
+
+| M365 Copilot says | What the extension does |
+|-------------------|-------------------------|
+| **Throttled** (`Throttled` / `PerUserThrottled`): too many requests in a short time | It lifts by itself after about an hour without requests, and retrying sooner only extends it. So what runs on its own — inline completions, the auto-commit (except *Check now*), *Check models* — waits until 75 minutes after the last throttled turn: ⌚ on the status item (until when, in its tooltip) and one notification when it starts. What you ask yourself still goes out, and the first answer lifts the pause. |
+| **Priority access used up** (`OutOfCredits`): metered models allow so many turns a day, some also a week | Says when it refills — midnight UTC, the weekly allowance on Monday, shown in your time — and flags the model in the picker until then. Pick another model, or Auto, in the meantime. |
+| **No valid licence** (`InvalidCopilotLicense`) | Says so. It is about the account, not the model, so nothing is flagged: ask your Microsoft 365 admin. |
+| **Declined to answer** (`Disengaged`) | An error, never text: an inline edit or a commit message never ends up with the notice instead of an answer. |
 
 ## Languages (English / Spanish)
 
@@ -652,6 +673,15 @@ request — plugins, options and endpoint `variants` — with fresh ids and no
 earlier messages, and is only used where no tools are involved. The
 invocation's `locale` follows the extension's language.
 
+Every turn is a conversation of its own — each agent step, each inline
+suggestion — so it goes out as a **temporary chat** (`disableMemory=1`, the web
+app's temporary chat): it works the same, but adds no chat to your Copilot
+history. Turn on `m365copilot.history.save` to keep them there. **Stopping** a
+request sends the same *stop* as the web app's stop button, so M365 Copilot
+stops writing instead of finishing the answer for nobody; and a turn ends as
+soon as its tool call is complete, without waiting for whatever the model
+writes after it.
+
 ## Coming from `ms365-copilot-vscode` (1.3 – 2.0)
 
 Versions 1.3 to 2.0 were published as `ms365-copilot-vscode`, with `ms365copilot.*`
@@ -677,7 +707,8 @@ extension for VS Code:
   governed by VS Code with their own confirmations.
 - **One conversation per turn.** Each turn opens a new WebSocket and sends the
   flattened history, keeping the most recent turns and bounding tool results so
-  cost and size stay predictable.
+  cost and size stay predictable — as a temporary chat, unless
+  `m365copilot.history.save` is on (see [How it works](#how-it-works)).
 - The token is stored **only** in VS Code's `SecretStorage` (local, encrypted)
   and is only sent to Microsoft endpoints. The local server that receives it
   from the browser (`localhost:51827`) only accepts the M365/Office origins and

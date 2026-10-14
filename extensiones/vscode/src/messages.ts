@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { buildToolProtocolInstructions, buildToolProtocolReminder, type ToolCatalog } from './toolProtocol';
 import { renderTranscript, type TranscriptMessage, type TranscriptPart } from './transcript';
+import { MAX_TURN_IMAGES } from './client';
 import { t } from './i18n';
 
 /*
@@ -23,6 +24,28 @@ export interface FlattenOptions {
 	readonly environment?: string;
 	/** Contexto del proyecto recuperado del índice local (projectIndex.ts), si lo hay. */
 	readonly projectContext?: string;
+	/** Las imágenes que van adjuntas al turno ({@link imagesOf}): el transcript las anuncia como tales. */
+	readonly attachedImages?: ReadonlySet<unknown>;
+}
+
+/**
+ * Las imágenes que el usuario pegó o adjuntó en el chat (las más recientes, como
+ * mucho {@link MAX_TURN_IMAGES}): van con el turno, subidas como hace la web.
+ * Sólo las de sus propios mensajes: lo que devuelve una herramienta se queda en
+ * texto.
+ */
+export function imagesOf(
+	messages: readonly vscode.LanguageModelChatRequestMessage[],
+	max = MAX_TURN_IMAGES,
+): vscode.LanguageModelDataPart[] {
+	const images: vscode.LanguageModelDataPart[] = [];
+	for (const message of messages) {
+		if (message.role !== vscode.LanguageModelChatMessageRole.User) continue;
+		for (const part of message.content) {
+			if (part instanceof vscode.LanguageModelDataPart && /^image\//i.test(part.mimeType)) images.push(part);
+		}
+	}
+	return images.slice(-max);
 }
 
 /**
@@ -59,7 +82,7 @@ export function flattenMessages(
 	messages: readonly vscode.LanguageModelChatRequestMessage[],
 	options: FlattenOptions = {},
 ): string {
-	const transcript = renderTranscript(toTranscript(messages));
+	const transcript = renderTranscript(toTranscript(messages, options.attachedImages));
 	if (!transcript) return '';
 
 	// A short reminder placed AFTER the transcript — the last thing the model
@@ -95,7 +118,10 @@ export function flattenMessages(
  * herramientas (las nativas del modo agente entran aquí igual que las
  * nuestras) deja al modelo adivinando de cuál viene cada resultado.
  */
-function toTranscript(messages: readonly vscode.LanguageModelChatRequestMessage[]): TranscriptMessage[] {
+function toTranscript(
+	messages: readonly vscode.LanguageModelChatRequestMessage[],
+	attachedImages: ReadonlySet<unknown> = new Set(),
+): TranscriptMessage[] {
 	const callNames = new Map<string, string>();
 	for (const message of messages) {
 		for (const part of message.content) {
@@ -111,6 +137,9 @@ function toTranscript(messages: readonly vscode.LanguageModelChatRequestMessage[
 			}
 			if (part instanceof vscode.LanguageModelToolCallPart) {
 				return { kind: 'toolCall', name: part.name, input: safeJson(part.input) };
+			}
+			if (part instanceof vscode.LanguageModelDataPart && attachedImages.has(part)) {
+				return { kind: 'text', text: t('prompt.imageAttached', part.mimeType, Math.ceil(part.data.byteLength / 1024)) };
 			}
 			return { kind: 'text', text: typeof part === 'string' ? part : unknownPartToText(part) };
 		}),

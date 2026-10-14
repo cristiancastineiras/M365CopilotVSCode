@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
-import { onModelOutcome } from './client';
-import { getLocale, t } from './i18n';
+import { onModelOutcome, type AccountTier } from './client';
+import { formatMoment, getLocale, t } from './i18n';
 import {
 	BUILTIN_MODELS,
+	isPaidSelector,
 	mergeModels,
 	parseCustomModels,
 	parseModelCatalog,
@@ -45,6 +46,16 @@ const UNAVAILABLE_TTL_MS = 12 * 60 * 60_000;
 export interface Unavailability {
 	readonly at: number;
 	readonly reason: string;
+	/**
+	 * When it comes back, if the service said so (epoch ms): a used-up priority
+	 * access refills at midnight UTC. Otherwise the flag lasts UNAVAILABLE_TTL_MS.
+	 */
+	readonly until?: number;
+}
+
+/** Whether a flag still holds at `now`. */
+function stillUnavailable(entry: Unavailability, now: number): boolean {
+	return entry.until !== undefined ? now < entry.until : now - entry.at < UNAVAILABLE_TTL_MS;
 }
 
 const MAX_INPUT_TOKENS = 128_000;
@@ -164,7 +175,7 @@ export class ModelRegistry implements vscode.Disposable {
 	unavailability(tone: string | null): Unavailability | undefined {
 		if (!tone) return undefined;
 		const entry = this.memento.get<Record<string, Unavailability>>(UNAVAILABLE_KEY, {})[tone];
-		return entry && Date.now() - entry.at < UNAVAILABLE_TTL_MS ? entry : undefined;
+		return entry && stillUnavailable(entry, Date.now()) ? entry : undefined;
 	}
 
 	/**
@@ -172,15 +183,21 @@ export class ModelRegistry implements vscode.Disposable {
 	 * the service refused it (flags it). The picker is refreshed when the flag
 	 * flips, so the model shows its warning — or loses it — right away.
 	 */
-	async setAvailability(tone: string, available: boolean, reason = ''): Promise<void> {
+	async setAvailability(tone: string, available: boolean, reason = '', until?: number): Promise<void> {
 		const wasFlagged = Boolean(this.unavailability(tone));
 		const now = Date.now();
 		const next = Object.fromEntries(
 			Object.entries(this.memento.get<Record<string, Unavailability>>(UNAVAILABLE_KEY, {})).filter(
-				([key, entry]) => key !== tone && now - entry.at < UNAVAILABLE_TTL_MS,
+				([key, entry]) => key !== tone && stillUnavailable(entry, now),
 			),
 		);
-		if (!available) next[tone] = { at: now, reason: reason.replace(/\s+/g, ' ').trim().slice(0, 200) };
+		if (!available) {
+			next[tone] = {
+				at: now,
+				reason: reason.replace(/\s+/g, ' ').trim().slice(0, 200),
+				...(until !== undefined && until > now ? { until } : {}),
+			};
+		}
 		else if (!wasFlagged) return;
 		await this.memento.update(UNAVAILABLE_KEY, next);
 		this.log(t(available ? 'log.modelAvailable' : 'log.modelUnavailable', tone, reason));
@@ -249,7 +266,7 @@ export function installModelRegistry(
 	// Every turn with a forced model, from any feature (chat, inline edit,
 	// review, commit messages…), tells the registry whether that model ran.
 	const current = registry;
-	onModelOutcome((tone, available, reason) => void current.setAvailability(tone, available, reason));
+	onModelOutcome((tone, available, reason, until) => void current.setAvailability(tone, available, reason, until));
 	return registry;
 }
 
@@ -308,9 +325,13 @@ export function toChatInformation(
 	model: CopilotModel,
 	tokenState: TokenState,
 	unavailable?: Unavailability,
+	tier: AccountTier = 'unknown',
 ): vscode.LanguageModelChatInformation {
-	const detail = modelDetail(model);
+	// A model of the Microsoft 365 Copilot licence, on an account the web app
+	// showed with Copilot Chat only: it stays selectable, but says so.
+	const detail = tier === 'included' && isPaidSelector(model.tone) ? t('model.needsPremium') : modelDetail(model);
 	const tone = model.tone ? ` (tone: ${model.tone})` : '';
+	const unavailableText = unavailable ? unavailabilityText(unavailable) : '';
 	const info: PickerChatInformation = {
 		id: model.id,
 		name: model.name,
@@ -322,9 +343,9 @@ export function toChatInformation(
 			tokenState !== 'ok'
 				? t(tokenState === 'missing' ? 'model.needsToken' : 'model.tokenExpired')
 				: unavailable
-					? t('model.unavailable')
+					? unavailableText
 					: detail,
-		tooltip: unavailable ? `${t('model.unavailable')}${tone} — ${unavailable.reason}` : `${detail}${tone}`,
+		tooltip: unavailable ? `${unavailableText}${tone} — ${unavailable.reason}` : `${detail}${tone}`,
 		// This is what surfaces the model in the in-chat picker (not just in
 		// "Manage Models").
 		isUserSelectable: true,
@@ -338,8 +359,15 @@ export function toChatInformation(
 			// toolProtocol.ts), covering both our tools and the editor's own —
 			// so the agent loop does work, one tool call per turn.
 			toolCalling: true,
-			imageInput: false,
+			// Screenshots pasted in the chat are uploaded like the web app does
+			// (client.ts, `images`).
+			imageInput: true,
 		},
 	};
 	return info;
+}
+
+/** How the picker says a model is flagged: until when, when the service said so. */
+export function unavailabilityText(unavailable: Unavailability): string {
+	return unavailable.until !== undefined ? t('model.quotaUntil', formatMoment(unavailable.until)) : t('model.unavailable');
 }

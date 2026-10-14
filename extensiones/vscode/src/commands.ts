@@ -16,11 +16,18 @@ import {
 } from './profile';
 import type { ProfileStore } from './secrets';
 import type { WorkspaceEditManager } from '../tools/writeFile';
-import type { CopilotModel, ModelRegistry } from './models';
-import { CopilotClientError, CopilotModelUnavailableError, streamCopilotTurn } from './client';
+import { unavailabilityText, type CopilotModel, type ModelRegistry } from './models';
+import {
+	CopilotClientError,
+	CopilotModelUnavailableError,
+	CopilotQuotaExhaustedError,
+	isAccountLevelError,
+	streamCopilotTurn,
+} from './client';
+import { accountThrottledUntil } from './throttle';
 import { isDeepDebug, log } from './logger';
 import type { IndexStatus } from './projectIndex';
-import { getLocale, resolveLocale, t, type LanguageSetting, type Locale } from './i18n';
+import { formatMoment, getLocale, resolveLocale, t, type LanguageSetting, type Locale } from './i18n';
 
 /** The walkthrough contributed in package.json (`<publisher>.<name>#<id>`). */
 export const WALKTHROUGH_ID = 'm365-copilot-vscode.m365-copilot-vscode#m365copilot.gettingStarted';
@@ -249,7 +256,7 @@ export async function refreshModels(registry: ModelRegistry, store: ProfileStore
 				return {
 					label: `${unavailable ? '$(warning) ' : ''}${model.name}`,
 					description: model.tone ?? 'auto',
-					detail: unavailable ? `${sourceLabel[model.source]} · ${t('model.unavailable')}` : sourceLabel[model.source],
+					detail: unavailable ? `${sourceLabel[model.source]} · ${unavailabilityText(unavailable)}` : sourceLabel[model.source],
 					id: model.id,
 				};
 			}),
@@ -292,6 +299,12 @@ export async function checkModels(registry: ModelRegistry, store: ProfileStore):
 		void vscode.window.showWarningMessage(t('models.check.noToken'));
 		return;
 	}
+	// One turn per model would only feed the limit, and every model would read as broken.
+	const throttledUntil = accountThrottledUntil();
+	if (throttledUntil !== undefined) {
+		void vscode.window.showWarningMessage(t('models.check.throttled', formatMoment(throttledUntil)));
+		return;
+	}
 	const models = registry.models.filter((model) => model.tone !== null);
 	const results = await vscode.window.withProgress(
 		{ location: vscode.ProgressLocation.Notification, title: t('models.check.title'), cancellable: true },
@@ -325,6 +338,9 @@ export async function checkModels(registry: ModelRegistry, store: ProfileStore):
 								? error.message
 								: String(error);
 					done.push({ model, ok: false, reason });
+					// Throttled, no licence, filtered: about the account, not this model —
+					// the next ones would fail the same way. (A used-up quota is per model.)
+					if (isAccountLevelError(error) && !(error instanceof CopilotQuotaExhaustedError)) break;
 				} finally {
 					cancel.dispose();
 				}

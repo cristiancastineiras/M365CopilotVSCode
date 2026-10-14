@@ -16,11 +16,29 @@ import {
 	CopilotAuthError,
 	CopilotClientError,
 	CopilotModelUnavailableError,
+	CopilotDisengagedError,
+	CopilotLicenseError,
+	CopilotQuotaExhaustedError,
+	CopilotThrottledError,
+	CopilotPremiumRequiredError,
+	TurnSummary,
+	accountTier,
+	capturedScenario,
+	syntheticWebTemplate,
+	type TurnImage,
 	onModelOutcome,
 	buildWebInvocationArgs,
 	capturedVariants,
+	isAccountLevelError,
+	isRetryableClientError,
+	quotaResetAt,
+	quotaWindowOf,
+	serviceResultError,
+	setTemporaryChat,
 	sourcesOf,
+	type TurnMode,
 } from '../src/client.ts';
+import { accountThrottledUntil, noteServed, noteThrottled, onThrottleChange, THROTTLE_HOLD_MS, type ThrottleChange } from '../src/throttle.ts';
 import { buildWebSearchPrompt, formatWebResult, sourcesMarkdown } from '../src/webSearchPrompt.ts';
 import {
 	cognates,
@@ -56,6 +74,8 @@ import {
 import { buildInlineEditPrompt, extractEditedCode, reindent } from '../src/inlineEditPrompt.ts';
 import {
 	M365_TOOL_NAMES,
+	NEAR_OUTPUT_LIMIT_CHARS,
+	OUTPUT_LIMIT_CHARS,
 	ToolCallDecoder,
 	buildToolCatalog,
 	buildToolProtocolInstructions,
@@ -67,6 +87,7 @@ import { renderTranscript, retrievalText, TRANSCRIPT_LIMITS, type TranscriptMess
 import { describeShell, localDate, renderEnvironment } from '../src/environment.ts';
 import { ConcurrencyLimiter, clip, runSubagentTask, runToolLoop } from '../src/subagentCore.ts';
 import { replaceTextOnce } from '../tools/replaceText.ts';
+import { looksLikeGiveUp, looksLikeRemoteSandbox, ProseHold, PROSE_HOLD_CHARS, toolFreeProblem } from '../src/giveUp.ts';
 import {
 	buildCommitMessagePrompt,
 	cleanGeneratedCommitMessage,
@@ -75,7 +96,7 @@ import {
 	validateConventionalCommitMessage,
 } from '../tools/commitMessage.ts';
 import { budgetDiff, diffStats, historyContext, isNoisePath, splitDiff, ticketFromBranch } from '../tools/commitContext.ts';
-import { LOCALES, messageKeys, placeholdersOf, resolveLocale, setLocale, t, tIn } from '../src/i18n.ts';
+import { formatMoment, LOCALES, messageKeys, placeholdersOf, resolveLocale, setLocale, t, tIn } from '../src/i18n.ts';
 import {
 	buildAutoCommitPrompt,
 	describeEntry,
@@ -111,8 +132,12 @@ import {
 import { readFileSync } from 'node:fs';
 import {
 	BUILTIN_MODELS,
+	PAID_ONLY_TONES,
+	isPaidSelector,
 	mergeModels,
 	modelIdForTone,
+	normalizeSelector,
+	parseToneSelector,
 	parseCustomModels,
 	parseModelCatalog,
 	prettyTone,
@@ -1144,14 +1169,14 @@ async function testModelAvailability() {
 			assert.match(error.serverReply, /can’t help/);
 			return true;
 		});
-		// Throttling says nothing about the model: a plain error, nothing flagged.
-		await assert.rejects(turn('Gpt_Throttled'), (error: unknown) => {
-			assert.ok(error instanceof CopilotClientError && !(error instanceof CopilotModelUnavailableError));
-			return true;
-		});
+		// Throttling says nothing about the model: its own error (here a completion
+		// frame that says so in words), nothing flagged.
+		await assert.rejects(turn('Gpt_Throttled'), CopilotThrottledError);
+		assert.ok(accountThrottledUntil() !== undefined, 'las peticiones automáticas esperan');
 		// Auto is never "unavailable": it sends `magic`, and a canned reply there is just the answer.
 		assert.equal(await turn(null), 'Sorry, I can’t help with that.');
 		assert.equal(server.tones.at(-1), 'magic');
+		assert.equal(accountThrottledUntil(), undefined, 'una respuesta levanta el throttling');
 		// Not retried: the same model would be refused again.
 		const before = server.tones.length;
 		await assert.rejects(turn('Gpt_9_Chat', true), CopilotModelUnavailableError);
@@ -1512,6 +1537,1086 @@ async function testMultiMessageToolCall() {
 	console.log('  ✓ streamCopilotTurn reconciles a tool call split across two bot messages (no leaked marker)');
 }
 
+
+// ---- BizChat protocol: temporary chats, stop, account-level refusals --------
+
+/** What the web app's "Stop generating" button sends; client.ts sends the same. */
+const STOP_FRAME_JSON = '{"arguments":[{}],"invocationId":"1","target":"stop","type":1}';
+
+type Send = (frame: unknown) => void;
+
+interface ProtocolConnection {
+	readonly index: number;
+	/** Path and query the client connected to. */
+	readonly url: string;
+	/** What the client sent after the handshake, one raw frame each. */
+	readonly sent: string[];
+	/** When the stop frame arrived (epoch ms). */
+	stopAt?: number;
+	/** When the client closed the socket (epoch ms). */
+	closedAt?: number;
+	readonly closed: Promise<void>;
+}
+
+/**
+ * Mock BizChat for the protocol details. Records each connection's URL and
+ * every frame the client sends after the handshake; answers the chat
+ * invocation with `answer`, which may return a function that ends the answer
+ * (a model that keeps writing until it is told to stop); acks a `stop` with a
+ * completion for the stop's own invocation, as the service does, unless
+ * `ackStop` is false; and notes when the client closed.
+ */
+function startProtocolServer(
+	answer: (send: Send, connection: ProtocolConnection) => (() => void) | void,
+	{
+		ackStop = true,
+		onHttp,
+	}: {
+		ackStop?: boolean;
+		/** Plain HTTP requests (UploadFile), with the whole body. */
+		onHttp?: (request: http.IncomingMessage, response: http.ServerResponse, body: string) => void;
+	} = {},
+): Promise<{ port: number; connections: ProtocolConnection[]; close: () => void }> {
+	const connections: ProtocolConnection[] = [];
+	return new Promise((resolve) => {
+		const wss = new WebSocketServer({ noServer: true });
+		const server = http.createServer((request, response) => {
+			const chunks: Buffer[] = [];
+			request.on('data', (chunk: Buffer) => chunks.push(chunk));
+			request.on('end', () => {
+				if (onHttp) onHttp(request, response, Buffer.concat(chunks).toString('utf8'));
+				else response.writeHead(404).end();
+			});
+		});
+		server.on('upgrade', (request, socket, head) => {
+			wss.handleUpgrade(request, socket, head, (ws) => wss.emit('connection', ws, request));
+		});
+		server.listen(0, '127.0.0.1', () => {
+			const addr = server.address();
+			const port = typeof addr === 'object' && addr ? addr.port : 0;
+			resolve({
+				port,
+				connections,
+				close: () => {
+					wss.close();
+					server.close();
+					// fetch keeps the UploadFile connection alive; it would hold the run open for seconds.
+					server.closeAllConnections();
+				},
+			});
+		});
+		wss.on('connection', (socket, request) => {
+			let markClosed = () => {};
+			const connection: ProtocolConnection = {
+				index: connections.length,
+				url: request.url ?? '',
+				sent: [],
+				closed: new Promise<void>((done) => (markClosed = done)),
+			};
+			connections.push(connection);
+			const send: Send = (frame) => {
+				if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(frame) + RS);
+			};
+			let endAnswer: (() => void) | undefined;
+			let handshaken = false;
+			socket.on('close', () => {
+				connection.closedAt = Date.now();
+				endAnswer?.();
+				markClosed();
+			});
+			socket.on('message', (data) => {
+				for (const chunk of data.toString().split(RS)) {
+					if (!chunk) continue;
+					if (!handshaken) {
+						handshaken = true;
+						socket.send('{}' + RS);
+						continue;
+					}
+					connection.sent.push(chunk);
+					const frame = JSON.parse(chunk);
+					if (frame.target === 'chat') {
+						const end = answer(send, connection);
+						if (typeof end === 'function') endAnswer = end;
+					}
+					if (frame.target === 'stop') {
+						connection.stopAt = Date.now();
+						endAnswer?.();
+						if (ackStop) send({ type: 3, invocationId: frame.invocationId });
+					}
+				}
+			});
+		});
+	});
+}
+
+/** An `update` that streams `writeAtCursor` text. */
+function deltaFrame(writeAtCursor: string) {
+	return { type: 1, target: 'update', arguments: [{ writeAtCursor }] };
+}
+
+/** An `update` with one bot message snapshot. */
+function botFrame(message: Record<string, unknown>) {
+	return { type: 1, target: 'update', arguments: [{ messages: [{ author: 'bot', ...message }] }] };
+}
+
+/**
+ * A model that goes on writing: `opening` as deltas, then made-up results
+ * every few ms — for seconds, then it ends — until the returned function
+ * stops it.
+ */
+function keepWriting(send: Send, opening: readonly string[], everyMs = 5): () => void {
+	let count = 0;
+	const timer = setInterval(() => {
+		const chunk = opening[count];
+		if (chunk !== undefined) send(deltaFrame(chunk));
+		else if (count < opening.length + 600) send(deltaFrame(` made-up result #${count}.`));
+		else {
+			clearInterval(timer);
+			send(botFrame({ messageType: 'EndOfRequest' }));
+		}
+		count += 1;
+	}, everyMs);
+	return () => clearInterval(timer);
+}
+
+/** The stop frames a connection received. */
+function stopFrames(connection: ProtocolConnection): string[] {
+	return connection.sent.filter((frame) => JSON.parse(frame).target === 'stop');
+}
+
+/** `promise`, or a failure after `ms`: a regression fails the run instead of hanging it. */
+function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+	let timer: NodeJS.Timeout | undefined;
+	return Promise.race([
+		promise,
+		new Promise<never>((_, reject) => {
+			timer = setTimeout(() => reject(new Error(`${what} (${ms} ms)`)), ms);
+		}),
+	]).finally(() => clearTimeout(timer));
+}
+
+/** Temporary chats (`disableMemory=1`) unless the history is kept; the chat frame declares `Disengaged`. */
+async function testTemporaryChat() {
+	const server = await startProtocolServer((send) => {
+		send(botFrame({ text: 'OK' }));
+		send(botFrame({ messageType: 'EndOfRequest' }));
+	});
+	const turn = (mode: TurnMode) =>
+		streamCopilotTurn({
+			profile: makeProfile(server.port),
+			endpointBase: mockBase(server.port),
+			prompt: 'PROMPT',
+			tone: null,
+			mode,
+			signal: new AbortController().signal,
+			callbacks: { onText: () => {} },
+		});
+	const query = (index: number) => new URL(`http://x${server.connections[index]?.url ?? ''}`).searchParams;
+	try {
+		await turn('tools');
+		await turn('web');
+		setTemporaryChat(false);
+		await turn('tools');
+	} finally {
+		setTemporaryChat(true);
+		server.close();
+	}
+	assert.equal(query(0).get('disableMemory'), '1', 'chat temporal por defecto');
+	assert.equal(query(1).get('disableMemory'), '1', 'también en los turnos con web');
+	assert.equal(query(2).has('disableMemory'), false, 'm365copilot.history.save los guarda en el historial');
+	assert.equal(query(2).get('source'), 'officeweb', 'el resto de la URL no cambia');
+	// The service only sends the message types a client declares.
+	const chat = server.connections[0]?.sent.map((frame) => JSON.parse(frame)).find((frame) => frame.target === 'chat');
+	assert.deepEqual(chat?.arguments[0].allowedMessageTypes, ['Chat', 'Suggestion', 'Progress', 'Disengaged', 'EndOfRequest']);
+	console.log('  ✓ chats temporales (disableMemory=1) salvo con el historial activado; la invocación declara Disengaged');
+}
+
+/** Cancelling sends the stop frame, so that the service stops writing; the socket closes even without its ack. */
+async function testCancelSendsStop() {
+	const server = await startProtocolServer((send) => keepWriting(send, ['Hola', ', mundo']), { ackStop: false });
+	const controller = new AbortController();
+	try {
+		await assert.rejects(
+			streamCopilotTurn({
+				profile: makeProfile(server.port),
+				endpointBase: mockBase(server.port),
+				prompt: 'PROMPT',
+				tone: null,
+				signal: controller.signal,
+				callbacks: { onText: () => controller.abort() },
+			}),
+			/__CANCELLED__/,
+		);
+		const connection = server.connections[0];
+		assert.ok(connection, 'el turno llegó a conectar');
+		await within(connection.closed, 6000, 'el socket no se cerró');
+		assert.deepEqual(stopFrames(connection), [STOP_FRAME_JSON], 'una sola trama stop, la de la web');
+		const waited = (connection.closedAt ?? 0) - (connection.stopAt ?? 0);
+		assert.ok(waited >= 1500 && waited < 5000, `cerró ${waited} ms después del stop, sin confirmación`);
+	} finally {
+		server.close();
+	}
+	console.log('  ✓ cancelar envía la trama stop de la web (y cierra aunque el servicio no la confirme)');
+}
+
+/** A complete tool call ends the turn: stop frame, success, nothing the model wrote after it. */
+async function testEarlyStopAfterToolCall() {
+	const call = `<m365_tool_call>{"name":"${M365_TOOL_NAMES.readFile}","input":{"path":"a.ts"}}</m365_tool_call>`;
+	const server = await startProtocolServer((send) => keepWriting(send, ['Voy a leerlo.\n', call.slice(0, 30), call.slice(30)]));
+	const finishTurn = new AbortController();
+	const calls: unknown[] = [];
+	const prose: string[] = [];
+	let received = '';
+	let done = 0;
+	const decoder = new ToolCallDecoder(
+		new Set([M365_TOOL_NAMES.readFile]),
+		(chunk) => prose.push(chunk),
+		(decoded) => {
+			calls.push(decoded);
+			finishTurn.abort();
+		},
+	);
+	const startedAt = Date.now();
+	try {
+		await streamCopilotTurn({
+			profile: makeProfile(server.port),
+			endpointBase: mockBase(server.port),
+			prompt: 'PROMPT',
+			tone: null,
+			signal: new AbortController().signal,
+			stopSignal: finishTurn.signal,
+			callbacks: {
+				onText: (delta) => {
+					received += delta;
+					decoder.push(delta);
+				},
+				onDone: () => (done += 1),
+			},
+		});
+		const elapsed = Date.now() - startedAt;
+		decoder.finish();
+		assert.ok(elapsed < 1500, `el turno siguió ${elapsed} ms después de su llamada a herramienta`);
+		assert.deepEqual(calls, [{ name: M365_TOOL_NAMES.readFile, input: { path: 'a.ts' } }]);
+		assert.equal(prose.join(''), 'Voy a leerlo.\n');
+		assert.equal(received, `Voy a leerlo.\n${call}`, 'lo que el modelo escribe después no llega');
+		assert.equal(done, 1, 'el turno termina bien, una vez');
+		const connection = server.connections[0];
+		assert.ok(connection);
+		await within(connection.closed, 3000, 'el socket no se cerró');
+		assert.deepEqual(stopFrames(connection), [STOP_FRAME_JSON]);
+		// With the service's ack it closes at once, without waiting out the grace.
+		assert.ok((connection.closedAt ?? 0) - (connection.stopAt ?? 0) < 1000);
+	} finally {
+		server.close();
+	}
+	console.log('  ✓ con la llamada a herramienta completa el turno termina (stop + éxito), sin esperar a que el modelo acabe');
+}
+
+/** throttle.ts: the hold, its extension, its end (by time or by an answer), one "it began" per episode. */
+function testThrottleState() {
+	noteServed();
+	const changes: ThrottleChange[] = [];
+	// A listener with a bug, first: the others still hear, and nothing throws.
+	const unsubscribeBroken = onThrottleChange(() => {
+		throw new Error('a listener with a bug');
+	});
+	const unsubscribe = onThrottleChange((change) => changes.push(change));
+	const t0 = Date.UTC(2026, 9, 14, 12, 0);
+	try {
+		assert.equal(accountThrottledUntil(t0), undefined);
+		noteThrottled(t0);
+		assert.equal(accountThrottledUntil(t0 + 1000), t0 + THROTTLE_HOLD_MS);
+		// Throttled again while it lasts: the hold runs from the last time.
+		noteThrottled(t0 + 10 * 60_000);
+		assert.equal(accountThrottledUntil(t0 + 10 * 60_000), t0 + 10 * 60_000 + THROTTLE_HOLD_MS);
+		// It lapses by itself…
+		assert.equal(accountThrottledUntil(t0 + 10 * 60_000 + THROTTLE_HOLD_MS), undefined);
+		// …or an answer lifts it at once; with nothing to lift, nothing is announced.
+		noteThrottled(t0);
+		noteServed();
+		noteServed();
+		assert.equal(accountThrottledUntil(t0), undefined);
+	} finally {
+		unsubscribe();
+		unsubscribeBroken();
+		noteServed();
+	}
+	assert.deepEqual(changes, [
+		{ until: t0 + THROTTLE_HOLD_MS, began: true },
+		{ until: t0 + 10 * 60_000 + THROTTLE_HOLD_MS, began: false },
+		{ until: undefined, began: false },
+		{ until: t0 + THROTTLE_HOLD_MS, began: true },
+		{ until: undefined, began: false },
+	]);
+	assert.equal(THROTTLE_HOLD_MS, 75 * 60_000, 'lo más largo que se midió');
+	console.log('  ✓ throttle: pausa de 75 min desde el último aviso, se levanta sola o con una respuesta, un aviso por episodio');
+}
+
+/** Refusals about the account, not the model: which result means what, when quotas refill, how moments read. */
+function testAccountLevelErrors() {
+	const now = Date.UTC(2026, 9, 14, 15, 30); // a Wednesday
+	// When an allowance refills: the next midnight UTC; the weekly one, the next Monday.
+	assert.equal(quotaResetAt('day', now), Date.UTC(2026, 9, 15));
+	assert.equal(quotaResetAt('week', now), Date.UTC(2026, 9, 19));
+	assert.equal(quotaResetAt('week', Date.UTC(2026, 9, 19, 0, 0, 1)), Date.UTC(2026, 9, 26), 'un lunes, el siguiente');
+	assert.equal(quotaResetAt('week', Date.UTC(2026, 9, 18, 23, 59)), Date.UTC(2026, 9, 19), 'un domingo, mañana');
+	assert.equal(quotaResetAt('day', Date.UTC(2026, 11, 31, 23, 0)), Date.UTC(2027, 0, 1), 'cambio de año');
+	assert.equal(quotaWindowOf('You have used up your priority access for today.'), 'day');
+	assert.equal(quotaWindowOf('Your weekly limit resets on Monday.'), 'week');
+	assert.equal(quotaWindowOf('Has agotado el acceso prioritario de esta semana.'), 'week');
+	assert.equal(quotaWindowOf('Vuelve a intentarlo el lunes.'), 'week');
+	assert.equal(quotaWindowOf(''), 'day');
+
+	// What the refusal's result says decides the error.
+	const throttled = serviceResultError({ value: 'Throttled', errorCode: 'PerUserThrottled', message: 'Slow down.' }, 'Chat', now);
+	assert.ok(throttled instanceof CopilotThrottledError);
+	assert.equal(throttled.errorCode, 'PerUserThrottled');
+	assert.equal(throttled.until, now + THROTTLE_HOLD_MS);
+	assert.ok(serviceResultError({ value: 'Failure', errorCode: 'PerUserThrottled' }, null, now) instanceof CopilotThrottledError);
+	const quota = serviceResultError({ value: 'OutOfCredits', message: 'Your weekly limit is used up.' }, 'Claude_Opus_5_5', now);
+	assert.ok(quota instanceof CopilotQuotaExhaustedError);
+	assert.equal(quota.window, 'week');
+	assert.equal(quota.resetsAt, Date.UTC(2026, 9, 19));
+	assert.ok(serviceResultError({ value: 'Forbidden', errorCode: 'InvalidCopilotLicense' }, null, now) instanceof CopilotLicenseError);
+	assert.ok(serviceResultError({ value: 'InvalidCopilotLicense' }, null, now) instanceof CopilotLicenseError);
+	assert.equal(serviceResultError({ value: 'UnsupportedTone', message: 'no such model' }, 'Gpt_9', now), null);
+	// Without the service's own words, no "M365 Copilot dijo".
+	assert.doesNotMatch(new CopilotLicenseError('InvalidCopilotLicense', '  ').message, /dijo/);
+
+	// Never retried, never blamed on the model.
+	for (const error of [throttled, quota, new CopilotLicenseError('InvalidCopilotLicense', ''), new CopilotDisengagedError()]) {
+		assert.equal(isAccountLevelError(error), true, error.constructor.name);
+		assert.equal(isRetryableClientError(error), false, error.constructor.name);
+	}
+	for (const error of [new CopilotClientError('blip'), new CopilotModelUnavailableError('Gpt_9', 'no'), new CopilotAuthError('401', 401)]) {
+		assert.equal(isAccountLevelError(error), false, error.constructor.name);
+	}
+	assert.equal(isRetryableClientError(new CopilotClientError('blip')), true);
+
+	// "Until…" in the user's time: just the time today, with the day otherwise.
+	const local = new Date(2026, 9, 14, 9, 5).getTime();
+	assert.match(formatMoment(local + 60 * 60_000, local), /^\d{2}:\d{2}$/);
+	const later = formatMoment(local + 3 * 86_400_000, local);
+	assert.match(later, /17/, 'el día');
+	assert.match(later, /\d{2}:\d{2}$/, 'y la hora');
+	console.log('  ✓ errores de cuenta: throttling, cuota (día/semana y su renovación), licencia y Disengaged, sin reintento');
+}
+
+/** A throttled turn: a clear error, not retried, automatic requests paused until a turn is answered. */
+async function testThrottledTurn() {
+	let throttle = true;
+	const server = await startProtocolServer((send) => {
+		if (throttle) {
+			send({
+				type: 2,
+				invocationId: '0',
+				item: { result: { value: 'Throttled', errorCode: 'PerUserThrottled', message: 'You have sent too many messages.' } },
+			});
+			send({ type: 3, invocationId: '0' });
+		} else {
+			send(botFrame({ text: 'OK' }));
+			send(botFrame({ messageType: 'EndOfRequest' }));
+		}
+	});
+	const outcomes: string[] = [];
+	onModelOutcome((tone, available) => outcomes.push(`${tone}:${available ? 'ok' : 'unavailable'}`));
+	const changes: ThrottleChange[] = [];
+	const unsubscribe = onThrottleChange((change) => changes.push(change));
+	const turn = () => {
+		let text = '';
+		return streamCopilotTurnWithRetry({
+			profile: makeProfile(server.port),
+			endpointBase: mockBase(server.port),
+			prompt: 'PROMPT',
+			tone: 'Gpt_5_5_Chat',
+			signal: new AbortController().signal,
+			callbacks: { onText: (delta) => (text += delta) },
+			retryDelayMs: 1,
+		}).then(() => text);
+	};
+	noteServed();
+	try {
+		const before = Date.now();
+		await assert.rejects(turn(), (error: unknown) => {
+			assert.ok(error instanceof CopilotThrottledError, 'esperaba CopilotThrottledError');
+			assert.equal(error.errorCode, 'PerUserThrottled');
+			assert.ok(error.until >= before + THROTTLE_HOLD_MS && error.until <= Date.now() + THROTTLE_HOLD_MS);
+			assert.match(error.message, /PerUserThrottled/);
+			assert.match(error.message, /reintentar antes solo lo alarga/);
+			assert.match(error.message, /«You have sent too many messages\.»/);
+			return true;
+		});
+		assert.equal(server.connections.length, 1, 'no se reintenta: solo lo alargaría');
+		const until = accountThrottledUntil();
+		assert.ok(until !== undefined && until >= before + THROTTLE_HOLD_MS, 'las peticiones automáticas esperan');
+		assert.deepEqual(changes.map((change) => change.began), [true]);
+		// Again while it lasts: the hold is extended, without a second "it began".
+		await assert.rejects(turn(), CopilotThrottledError);
+		assert.deepEqual(changes.map((change) => change.began), [true, false]);
+		assert.deepEqual(outcomes, [], 'el throttling no dice nada del modelo');
+		// Any answered turn proves it lifted.
+		throttle = false;
+		assert.equal(await turn(), 'OK');
+		assert.equal(accountThrottledUntil(), undefined);
+		assert.equal(changes.at(-1)?.until, undefined);
+	} finally {
+		unsubscribe();
+		onModelOutcome(undefined);
+		noteServed();
+		server.close();
+	}
+	console.log('  ✓ throttling: error claro, sin reintento, pausa las peticiones automáticas hasta que una respuesta llega');
+}
+
+/** Priority access used up: said with when it refills, the model flagged until then; no licence: nothing flagged. */
+async function testQuotaAndLicense() {
+	let reply: (send: Send) => void = () => {};
+	const server = await startProtocolServer((send) => reply(send));
+	const result = (value: Record<string, unknown>) => (send: Send) => {
+		send({ type: 2, invocationId: '0', item: { result: value } });
+		send({ type: 3, invocationId: '0' });
+	};
+	const flagged: { tone: string; available: boolean; reason?: string; until?: number }[] = [];
+	onModelOutcome((tone, available, reason, until) => flagged.push({ tone, available, reason, until }));
+	const turn = (tone: string | null) =>
+		streamCopilotTurnWithRetry({
+			profile: makeProfile(server.port),
+			endpointBase: mockBase(server.port),
+			prompt: 'PROMPT',
+			tone,
+			signal: new AbortController().signal,
+			callbacks: { onText: () => {} },
+			retryDelayMs: 1,
+		});
+	try {
+		const daily = 'You have used up your priority access to Claude Opus for today.';
+		reply = result({ value: 'OutOfCredits', message: daily });
+		let resetsAt = 0;
+		await assert.rejects(turn('Claude_Opus_5_5'), (error: unknown) => {
+			assert.ok(error instanceof CopilotQuotaExhaustedError, 'esperaba CopilotQuotaExhaustedError');
+			assert.equal(error.tone, 'Claude_Opus_5_5');
+			assert.equal(error.window, 'day');
+			assert.ok([quotaResetAt('day'), quotaResetAt('day', Date.now() - 5000)].includes(error.resetsAt), 'la próxima medianoche UTC');
+			assert.match(error.message, /Claude Opus 5\.5/);
+			assert.match(error.message, /medianoche UTC/);
+			assert.match(error.message, /«You have used up your priority access to Claude Opus for today\.»/);
+			resetsAt = error.resetsAt;
+			return true;
+		});
+		assert.equal(server.connections.length, 1, 'no se reintenta');
+		// Flagged until it refills, not for the usual hours.
+		assert.deepEqual(flagged, [{ tone: 'Claude_Opus_5_5', available: false, reason: daily, until: resetsAt }]);
+
+		// The weekly allowance: until Monday.
+		reply = result({ value: 'OutOfCredits', message: 'You have reached your weekly limit for Claude Opus.' });
+		await assert.rejects(turn('Claude_Opus_5_5'), (error: unknown) => {
+			assert.ok(error instanceof CopilotQuotaExhaustedError);
+			assert.equal(error.window, 'week');
+			assert.equal(new Date(error.resetsAt).getUTCDay(), 1, 'un lunes');
+			assert.match(error.message, /el lunes a medianoche UTC/);
+			return true;
+		});
+
+		// The service's canned refusal, when the result does not say OutOfCredits.
+		reply = (send) => {
+			send(botFrame({ contentOrigin: 'BotConnection', text: 'You have reached your priority access limit for this model. Try again tomorrow.' }));
+			send(botFrame({ messageType: 'EndOfRequest' }));
+		};
+		await assert.rejects(turn('Claude_Opus_5_5'), (error: unknown) => {
+			assert.ok(error instanceof CopilotQuotaExhaustedError, 'el texto enlatado también cuenta');
+			assert.equal(error.window, 'day');
+			return true;
+		});
+
+		// With Auto there is no model to flag.
+		const flaggedBefore = flagged.length;
+		reply = result({ value: 'OutOfCredits', message: daily });
+		await assert.rejects(turn(null), (error: unknown) => {
+			assert.ok(error instanceof CopilotQuotaExhaustedError);
+			assert.equal(error.tone, null);
+			assert.match(error.message, /M365 Copilot/);
+			return true;
+		});
+		assert.equal(flagged.length, flaggedBefore);
+
+		// No valid licence: about the account — nothing flagged, nothing retried.
+		const connectionsBefore = server.connections.length;
+		reply = result({ value: 'Forbidden', errorCode: 'InvalidCopilotLicense', message: "It looks like you don't have a valid license." });
+		await assert.rejects(turn('Gpt_5_5_Chat'), (error: unknown) => {
+			assert.ok(error instanceof CopilotLicenseError, 'esperaba CopilotLicenseError');
+			assert.equal(error.errorCode, 'InvalidCopilotLicense');
+			assert.match(error.message, /licencia válida/);
+			assert.match(error.message, /«It looks like you don't have a valid license\.»/);
+			return true;
+		});
+		assert.equal(server.connections.length - connectionsBefore, 1, 'no se reintenta');
+		assert.equal(flagged.length, flaggedBefore, 'la licencia no es cosa del modelo');
+	} finally {
+		onModelOutcome(undefined);
+		server.close();
+	}
+	console.log('  ✓ cuota agotada (OutOfCredits o texto enlatado): hora de renovación y modelo marcado hasta entonces; licencia: aviso claro');
+}
+
+/** The service declines to answer: an error (never text an editor feature could insert), not retried. */
+async function testDisengaged() {
+	const server = await startProtocolServer((send) => {
+		send(botFrame({ messageType: 'Disengaged', text: '' }));
+		send({ type: 3, invocationId: '0' });
+	});
+	const outcomes: string[] = [];
+	onModelOutcome((tone, available) => outcomes.push(`${tone}:${available ? 'ok' : 'unavailable'}`));
+	let text = '';
+	try {
+		await assert.rejects(
+			streamCopilotTurnWithRetry({
+				profile: makeProfile(server.port),
+				endpointBase: mockBase(server.port),
+				prompt: 'PROMPT',
+				tone: 'Gpt_5_5_Chat',
+				signal: new AbortController().signal,
+				callbacks: { onText: (delta) => (text += delta) },
+				retryDelayMs: 1,
+			}),
+			(error: unknown) => {
+				assert.ok(error instanceof CopilotDisengagedError, 'esperaba CopilotDisengagedError');
+				assert.match(error.message, /rehusado responder/);
+				return true;
+			},
+		);
+		assert.equal(text, '', 'nada llega como texto');
+		assert.equal(server.connections.length, 1, 'no se reintenta: volvería a pasar');
+		assert.deepEqual(outcomes, [], 'no es cosa del modelo');
+		const connection = server.connections[0];
+		assert.ok(connection);
+		await within(connection.closed, 3000, 'el socket no se cerró');
+		assert.deepEqual(stopFrames(connection), [], 'el servicio ya terminó: nada que parar');
+	} finally {
+		onModelOutcome(undefined);
+		server.close();
+	}
+	console.log('  ✓ Disengaged: error claro (nunca texto), sin reintento ni modelo marcado');
+}
+
+/** The @m365 / sub-agent loop ends each step's turn as soon as its tool call is complete. */
+async function testToolLoopStopsAfterCall() {
+	const server = await startProtocolServer((send, connection) => {
+		if (connection.index === 0) {
+			return keepWriting(send, [`<m365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</m365_tool_call>`]);
+		}
+		send(botFrame({ text: 'Está en a.ts.' }));
+		send(botFrame({ messageType: 'EndOfRequest' }));
+	});
+	const startedAt = Date.now();
+	try {
+		const result = await runToolLoop({
+			framing: 'Busca foo.',
+			profile: makeProfile(server.port),
+			tone: null,
+			maxSteps: 3,
+			signal: new AbortController().signal,
+			offeredTools: [{ name: M365_TOOL_NAMES.searchText }],
+			endpointBase: mockBase(server.port),
+			executeTool: async () => 'a.ts:1: foo',
+		});
+		const elapsed = Date.now() - startedAt;
+		assert.equal(result.outcome, 'done');
+		assert.equal(result.summary, 'Está en a.ts.');
+		assert.equal(result.steps, 2);
+		assert.ok(elapsed < 1500, `el bucle esperó ${elapsed} ms a que el modelo terminara tras su llamada`);
+		const [first, second] = server.connections;
+		assert.ok(first && second);
+		await within(first.closed, 3000, 'el socket del primer paso no se cerró');
+		assert.deepEqual(stopFrames(first), [STOP_FRAME_JSON], 'el paso con llamada se para');
+		assert.deepEqual(stopFrames(second), [], 'la respuesta final terminó sola');
+	} finally {
+		server.close();
+	}
+	console.log('  ✓ runToolLoop termina el turno de cada paso en cuanto su llamada a herramienta está completa');
+}
+
+// ---- paid scenario, images, web search, give-ups, output limit, turn summary --
+
+/** The prompt a connection's chat invocation carried. */
+function promptOf(connection: ProtocolConnection | undefined): string {
+	const chat = connection?.sent.map((frame) => JSON.parse(frame)).find((frame) => frame.target === 'chat');
+	return String(chat?.arguments[0].message.text ?? '');
+}
+
+/** The chat invocation's arguments a connection carried. */
+function chatArgsOf(connection: ProtocolConnection | undefined): Record<string, any> {
+	const chat = connection?.sent.map((frame) => JSON.parse(frame)).find((frame) => frame.target === 'chat');
+	return chat?.arguments[0] ?? {};
+}
+
+/** Models of the Microsoft 365 Copilot licence: selectors, the scenario read from the web app and sent per model. */
+async function testPaidScenario() {
+	assert.deepEqual(parseToneSelector('Claude_Sonnet'), { tone: 'Claude_Sonnet', paid: false });
+	assert.deepEqual(parseToneSelector('Claude_Sonnet@paid'), { tone: 'Claude_Sonnet', paid: true });
+	assert.deepEqual(parseToneSelector('Claude_Opus'), { tone: 'Claude_Opus', paid: true }, 'solo de pago: sin sufijo también');
+	assert.equal(normalizeSelector(' Claude_Opus@paid '), 'Claude_Opus', 'el sufijo sobra en un tone solo de pago');
+	assert.equal(normalizeSelector('Claude_Sonnet@paid'), 'Claude_Sonnet@paid');
+	assert.equal(normalizeSelector('bad tone@paid'), null);
+	assert.equal(normalizeSelector('Gpt_5_5_Chat@premium'), null);
+	assert.equal(isPaidSelector(null), false);
+	assert.equal(isPaidSelector('Gpt_6_Reasoning'), true);
+	assert.equal(isPaidSelector('Gpt_61_Sol_Reasoning'), false, 'GPT-6.1 Sol sirve gratis en el escenario incluido');
+	assert.equal(prettyTone('Claude_Sonnet@paid'), 'Claude Sonnet (paid)');
+	assert.deepEqual([...PAID_ONLY_TONES].sort(), ['Claude_Opus', 'Claude_Sonnet_5', 'Gpt_6_Reasoning']);
+	// Versions without paid models skip these catalog entries: `@` is not a tone for them.
+	assert.equal(/^[A-Za-z][A-Za-z0-9_.-]{1,63}$/.test('Claude_Sonnet@paid'), false);
+
+	// The licence, as the web app showed it.
+	const paidEndpoint = 'wss://substrate.office.com/m365Copilot/Chathub/o@t?source=officeweb&scenario=OfficeWebPaidCopilot&licenseType=Premium';
+	assert.deepEqual(capturedScenario(paidEndpoint), { scenario: 'OfficeWebPaidCopilot', licenseType: 'Premium' });
+	assert.equal(accountTier({ endpoint: paidEndpoint }), 'paid');
+	assert.equal(accountTier({ endpoint: 'wss://x/y?scenario=OfficeWebIncludedCopilot&licenseType=Starter' }), 'included');
+	assert.equal(accountTier({ endpoint: null }), 'unknown');
+	assert.equal(accountTier({ endpoint: 'wss://x/y?source=officeweb' }), 'unknown');
+	assert.equal(capturedScenario('not a url'), undefined);
+
+	// On the wire: only the models that need it go on the paid scenario, with the bare tone.
+	const server = await startProtocolServer((send) => {
+		send(botFrame({ text: 'OK' }));
+		send(botFrame({ messageType: 'EndOfRequest' }));
+	});
+	const turn = (tone: string | null, endpoint?: string) =>
+		streamCopilotTurn({
+			profile: { ...makeProfile(server.port), ...(endpoint ? { endpoint } : {}) },
+			endpointBase: mockBase(server.port),
+			prompt: 'PROMPT',
+			tone,
+			signal: new AbortController().signal,
+			callbacks: { onText: () => {} },
+		});
+	const sent = (index: number) => {
+		const connection = server.connections[index];
+		const query = new URL(`http://x${connection?.url ?? ''}`).searchParams;
+		return { scenario: query.get('scenario'), licenseType: query.get('licenseType'), tone: chatArgsOf(connection).tone };
+	};
+	try {
+		await turn('Claude_Sonnet');
+		await turn('Claude_Sonnet@paid');
+		await turn('Claude_Opus');
+		await turn(null);
+		// A paid turn reuses the web app's own names for it.
+		await turn('Gpt_6_Reasoning', 'wss://substrate.office.com/m365Copilot/Chathub/o@t?scenario=OfficeWebPaidCopilotV2&licenseType=PremiumPlus');
+	} finally {
+		server.close();
+	}
+	assert.deepEqual(sent(0), { scenario: 'OfficeWebIncludedCopilot', licenseType: null, tone: 'Claude_Sonnet' });
+	assert.deepEqual(sent(1), { scenario: 'OfficeWebPaidCopilot', licenseType: 'Premium', tone: 'Claude_Sonnet' });
+	assert.deepEqual(sent(2), { scenario: 'OfficeWebPaidCopilot', licenseType: 'Premium', tone: 'Claude_Opus' });
+	assert.deepEqual(sent(3), { scenario: 'OfficeWebIncludedCopilot', licenseType: null, tone: 'magic' });
+	assert.deepEqual(sent(4), { scenario: 'OfficeWebPaidCopilotV2', licenseType: 'PremiumPlus', tone: 'Gpt_6_Reasoning' });
+
+	// Without the licence: that model is flagged, with a clear reason; the account's other models are fine.
+	let refusal: (send: Send) => void = () => {};
+	const refusing = await startProtocolServer((send) => refusal(send));
+	const outcomes: string[] = [];
+	onModelOutcome((tone, available) => outcomes.push(`${tone}:${available ? 'ok' : 'unavailable'}`));
+	const refusedTurn = (tone: string) =>
+		streamCopilotTurnWithRetry({
+			profile: makeProfile(refusing.port),
+			endpointBase: mockBase(refusing.port),
+			prompt: 'PROMPT',
+			tone,
+			signal: new AbortController().signal,
+			callbacks: { onText: () => {} },
+			retryDelayMs: 1,
+		});
+	try {
+		const licence = "It looks like you don't have a valid licence. To get access, please check with your administrator.";
+		refusal = (send) => {
+			send({ type: 2, invocationId: '0', item: { result: { value: 'ForbiddenRequest', errorCode: 'InvalidCopilotLicense', message: licence } } });
+			send({ type: 3, invocationId: '0' });
+		};
+		await assert.rejects(refusedTurn('Claude_Sonnet@paid'), (error: unknown) => {
+			assert.ok(error instanceof CopilotPremiumRequiredError, 'esperaba CopilotPremiumRequiredError');
+			assert.ok(error instanceof CopilotModelUnavailableError, 'cuenta como modelo no disponible');
+			assert.match(error.message, /Claude Sonnet \(paid\)/);
+			assert.match(error.message, /licencia de Microsoft 365 Copilot/);
+			assert.match(error.message, /«It looks like you don't have a valid licence/);
+			return true;
+		});
+		assert.equal(refusing.connections.length, 1, 'no se reintenta');
+		assert.deepEqual(outcomes, ['Claude_Sonnet@paid:unavailable'], 'se marca ese modelo, por su selector');
+		// The service's canned licence text says the same.
+		refusal = (send) => {
+			send(botFrame({ contentOrigin: 'BotConnection', text: licence }));
+			send(botFrame({ messageType: 'EndOfRequest' }));
+		};
+		await assert.rejects(refusedTurn('Claude_Opus'), CopilotPremiumRequiredError);
+		// On Copilot Chat's own scenario the same refusal is about the account: nothing flagged.
+		await assert.rejects(refusedTurn('Gpt_5_5_Chat'), (error: unknown) => error instanceof CopilotLicenseError && !(error instanceof CopilotModelUnavailableError));
+		assert.deepEqual(outcomes, ['Claude_Sonnet@paid:unavailable', 'Claude_Opus:unavailable']);
+	} finally {
+		onModelOutcome(undefined);
+		refusing.close();
+	}
+	console.log('  ✓ modelos de pago: Tone@paid, escenario leído de la web y enviado solo donde hace falta; sin licencia, modelo marcado');
+}
+
+/** Pasted images: uploaded first like the web app does, then referenced from the chat message. */
+async function testImageUpload() {
+	const uploads: { headers: http.IncomingHttpHeaders; form: URLSearchParams }[] = [];
+	let failNext = false;
+	const server = await startProtocolServer(
+		(send) => {
+			send(botFrame({ text: 'Veo un botón.' }));
+			send(botFrame({ messageType: 'EndOfRequest' }));
+		},
+		{
+			onHttp: (request, response, body) => {
+				if (request.method !== 'POST' || request.url !== '/m365Copilot/UploadFile') {
+					response.writeHead(404).end();
+					return;
+				}
+				uploads.push({ headers: request.headers, form: new URLSearchParams(body) });
+				if (failNext) {
+					failNext = false;
+					response.writeHead(500).end('boom');
+					return;
+				}
+				response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ docId: `doc-${uploads.length}` }));
+			},
+		},
+	);
+	const png = new Uint8Array([1, 2, 3]);
+	const profile = makeProfile(server.port);
+	const skipped: string[] = [];
+	const turn = (images: TurnImage[]) =>
+		streamCopilotTurn({
+			profile,
+			endpointBase: mockBase(server.port),
+			prompt: 'PROMPT',
+			tone: null,
+			signal: new AbortController().signal,
+			images,
+			callbacks: { onText: () => {}, onImageSkipped: (reason) => skipped.push(reason) },
+		});
+	try {
+		await turn([
+			{ mimeType: 'image/png', data: png },
+			{ mimeType: 'image/tiff', data: png },
+			{ mimeType: 'image/jpg', data: png },
+		]);
+		failNext = true;
+		await turn([{ mimeType: 'image/png', data: png }]);
+		await turn(Array.from({ length: 6 }, () => ({ mimeType: 'image/png', data: png })));
+	} finally {
+		server.close();
+	}
+	const [first, second] = uploads;
+	assert.ok(first && second);
+	const conversationId = new URL(`http://x${server.connections[0]?.url ?? ''}`).searchParams.get('ConversationId');
+	assert.equal(first.form.get('scenario'), 'UploadImage');
+	assert.equal(first.form.get('conversationId'), conversationId, 'la subida va ligada a la conversación del turno');
+	assert.equal(first.form.get('FileBase64'), 'data:image/png;base64,AQID');
+	assert.deepEqual(first.form.getAll('optionsSets'), ['cwcgptvsan', 'flux_v3_gptv_enable_upload_multi_image_in_turn_wo_ch']);
+	assert.equal(first.headers.authorization, `Bearer ${profile.accessToken}`);
+	assert.equal(first.headers['x-scenario'], 'OfficeWebIncludedCopilot');
+	assert.equal(first.headers['x-variants'], 'feature.EnableImageSupportInUploadFile');
+	assert.equal(first.headers.origin, 'https://m365.cloud.microsoft');
+	assert.equal(second.form.get('FileBase64'), 'data:image/jpeg;base64,AQID', 'image/jpg se envía como image/jpeg');
+	const annotation = (id: string, fileType: string, fileName: string) => ({
+		id,
+		messageAnnotationType: 'ImageFile',
+		messageAnnotationMetadata: { '@type': 'File', annotationType: 'File', fileType, fileName },
+	});
+	assert.deepEqual(chatArgsOf(server.connections[0]).message.messageAnnotations, [
+		annotation('doc-1', 'png', 'image-1.png'),
+		annotation('doc-2', 'jpg', 'image-2.jpg'),
+	]);
+	assert.match(skipped[0] ?? '', /image\/tiff/);
+	// A refused upload leaves that image out, not the turn.
+	assert.match(skipped[1] ?? '', /UploadFile 500/);
+	assert.equal('messageAnnotations' in chatArgsOf(server.connections[1]).message, false);
+	// At most four per turn, the latest.
+	assert.match(skipped[2] ?? '', /\b2\b/);
+	assert.equal(chatArgsOf(server.connections[2]).message.messageAnnotations.length, 4);
+	assert.equal(uploads.length, 3 + 4);
+	console.log('  ✓ imágenes: se suben a UploadFile con el token y la conversación, y el mensaje las referencia (las que fallan se omiten)');
+}
+
+/** Web search with a token pasted by hand: the lean invocation with the web app's search plugin. */
+async function testWebSearchWithoutTemplate() {
+	const server = await startProtocolServer((send) => {
+		send(botFrame({ messageType: 'InternalSearchQuery', text: 'node lts' }));
+		send(botFrame({ text: 'Node 24 is the LTS [^1^].', messageId: 'a', sourceAttributions: [{ providerDisplayName: 'Node.js', seeMoreUrl: 'https://nodejs.org' }] }));
+		send(botFrame({ messageType: 'EndOfRequest' }));
+	});
+	let text = '';
+	const sources: unknown[] = [];
+	try {
+		await streamCopilotTurnWithRetry({
+			profile: { ...makeProfile(server.port), invocationTemplate: null },
+			endpointBase: mockBase(server.port),
+			prompt: 'PROMPT',
+			tone: null,
+			mode: 'web',
+			signal: new AbortController().signal,
+			callbacks: { onText: (delta) => (text += delta), onSources: (found) => sources.push(...found) },
+		});
+	} finally {
+		server.close();
+	}
+	const args = chatArgsOf(server.connections[0]);
+	assert.deepEqual(args.plugins, [{ Id: 'BingWebSearch', Source: 'BuiltIn' }]);
+	for (const type of ['InternalSearchQuery', 'RenderCardRequest', 'Disengaged', 'EndOfRequest']) {
+		assert.ok(args.allowedMessageTypes.includes(type), type);
+	}
+	assert.equal(args.allowedMessageTypes.at(-1), 'EndOfRequest');
+	assert.equal(args.tone, 'magic');
+	assert.equal(args.message.text, 'PROMPT');
+	assert.equal(text, 'Node 24 is the LTS [^1^].');
+	assert.deepEqual(sources, [{ title: 'Node.js', url: 'https://nodejs.org' }]);
+	// A fresh template every time: nothing leaks from one turn to the next.
+	(syntheticWebTemplate().plugins as unknown[]).push('x');
+	assert.equal((syntheticWebTemplate().plugins as unknown[]).length, 1);
+	console.log('  ✓ búsqueda web sin la plantilla capturada: invocación ligera con BingWebSearch, respuesta y fuentes');
+}
+
+/** giveUp.ts: what counts as giving up or as M365's own sandbox, and the prose hold. */
+function testGiveUpDetection() {
+	const giveUps = [
+		"I can't access your files from here. Please paste the contents of src/a.ts here and I'll fix it.",
+		"I don't have access to the workspace, so I can't run the tests.",
+		'Could you share the file so I can take a look?',
+		'Unable to read the repository from this session.',
+		'No puedo acceder a tus archivos desde aquí. Pégame el contenido de src/a.ts y lo arreglo.',
+		'No tengo acceso al repositorio, así que no puedo ejecutar los tests.',
+		'¿Puedes compartirme el archivo para revisarlo?',
+		'Las herramientas no están disponibles en esta sesión.',
+	];
+	for (const text of giveUps) assert.equal(looksLikeGiveUp(text), true, text);
+	const answers = [
+		'Copy the code below into src/a.ts:\n\n```ts\nexport const a = 1;\n```',
+		"I can't see any error in this code: the loop ends at length - 1 on purpose.",
+		'No veo ningún error en el código: el bucle termina en length - 1 a propósito.',
+		'Paste the snippet into your browser console to try it.',
+		'Pega el fragmento en la consola del navegador para probarlo.',
+		'Done: activate() now registers the provider before the commands.',
+		'Ok.',
+	];
+	for (const text of answers) assert.equal(looksLikeGiveUp(text), false, text);
+
+	for (const text of [
+		'I ran `ls /mnt/data` and the folder is empty.',
+		'Saved to sandbox:/mnt/data/fix.patch',
+		'Here it is: https://eu-prod.asyncgw.teams.microsoft.com/v1/objects/abc/views/original/a.ts',
+		'The working directory is /home/claude.',
+	]) {
+		assert.equal(looksLikeRemoteSandbox(text), true, text);
+	}
+	for (const text of ['Run it from /mnt/c/Users/me/project (WSL).', 'Your home is /home/carana.', 'Mount the volume at /mnt/database.']) {
+		assert.equal(looksLikeRemoteSandbox(text), false, text);
+	}
+	assert.equal(toolFreeProblem('Hecho.', true), 'sandbox', 'el servicio dijo que ejecutó en su sandbox');
+	assert.equal(toolFreeProblem(giveUps[0] ?? ''), 'giveUp');
+	assert.equal(toolFreeProblem('Saved to sandbox:/mnt/data/x. Paste the contents here.'), 'sandbox', 'el sandbox pesa más');
+	assert.equal(toolFreeProblem('Done.'), null);
+
+	const out: string[] = [];
+	const hold = new ProseHold((text) => out.push(text), 10);
+	hold.push('abc');
+	assert.deepEqual(out, []);
+	assert.equal(hold.holding, true);
+	assert.equal(hold.discard(), 'abc');
+	hold.push('0123456789X');
+	assert.deepEqual(out, ['0123456789X'], 'pasado el límite sale todo lo retenido');
+	assert.equal(hold.holding, false);
+	hold.push('y');
+	assert.deepEqual(out, ['0123456789X', 'y']);
+	const flushed: string[] = [];
+	const other = new ProseHold((text) => flushed.push(text));
+	other.push('a');
+	other.flush();
+	other.flush();
+	assert.deepEqual(flushed, ['a']);
+	assert.equal(PROSE_HOLD_CHARS, 2_000);
+	console.log('  ✓ detecta rendiciones (inglés y español) y el sandbox remoto sin confundirlos con respuestas normales');
+}
+
+/** The @m365 / sub-agent loop: a step that gives up or works in M365's sandbox is retried once, unseen. */
+async function testToolLoopForcedRetry() {
+	const loop = (port: number, onProse: (delta: string) => void, offeredTools: OfferedTool[] = [{ name: M365_TOOL_NAMES.searchText }]) =>
+		runToolLoop({
+			framing: 'Busca foo.',
+			profile: makeProfile(port),
+			tone: null,
+			maxSteps: 3,
+			signal: new AbortController().signal,
+			offeredTools,
+			endpointBase: mockBase(port),
+			executeTool: async () => 'a.ts:1: foo',
+			onProse,
+		});
+	const reply = (text: string) => (send: Send) => {
+		send(botFrame({ text }));
+		send(botFrame({ messageType: 'EndOfRequest' }));
+	};
+	const call = `<m365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</m365_tool_call>`;
+
+	// Gives up, then calls the tool: the give-up never reaches the user, and the retry is not a step.
+	const giveUp = 'No puedo acceder a tus archivos desde aquí. Pégame el contenido de a.ts y lo miro.';
+	const scripted = [reply(giveUp), reply(call), reply('Está en a.ts.')];
+	const server = await startProtocolServer((send, connection) => scripted[connection.index]?.(send));
+	const prose: string[] = [];
+	try {
+		const result = await loop(server.port, (delta) => prose.push(delta));
+		assert.equal(result.outcome, 'done');
+		assert.equal(result.summary, 'Está en a.ts.');
+		assert.equal(result.steps, 2, 'el reintento no cuenta como paso');
+	} finally {
+		server.close();
+	}
+	assert.equal(server.connections.length, 3);
+	assert.equal(prose.join(''), 'Está en a.ts.', 'la rendición nunca llega al usuario');
+	assert.ok(promptOf(server.connections[1]).endsWith(t('protocol.force.giveUp')), 'el reintento lleva la nota al final');
+	assert.ok(!promptOf(server.connections[0]).includes(t('protocol.force.giveUp')));
+	assert.ok(!promptOf(server.connections[2]).includes(t('protocol.force.giveUp')), 'la nota se quita en cuanto llama a una herramienta');
+
+	// Works in its own sandbox, twice: one retry only, then the answer with a clear warning.
+	const sandbox = await startProtocolServer((send) => {
+		send(botFrame({ messageType: 'Progress', contentType: 'Code', text: 'Coding and executing', hiddenText: 'bash -lc ls /mnt/data' }));
+		send(botFrame({ text: 'He revisado la carpeta: no hay archivos.' }));
+		send(botFrame({ messageType: 'EndOfRequest' }));
+	});
+	const sandboxProse: string[] = [];
+	try {
+		const result = await loop(sandbox.port, (delta) => sandboxProse.push(delta));
+		assert.equal(result.outcome, 'done');
+		assert.ok(result.summary.endsWith(t('turn.remoteSandbox')));
+	} finally {
+		sandbox.close();
+	}
+	assert.equal(sandbox.connections.length, 2, 'un solo reintento por bucle');
+	assert.ok(promptOf(sandbox.connections[1]).endsWith(t('protocol.force.sandbox')));
+	assert.equal(sandboxProse.join(''), `He revisado la carpeta: no hay archivos.${t('turn.remoteSandbox')}`);
+
+	// Already on screen (long), or no tools to call: no retry.
+	const long = `${'Explicación larga. '.repeat(Math.ceil(PROSE_HOLD_CHARS / 19) + 1)}No puedo acceder a tus archivos.`;
+	const shown = await startProtocolServer((send) => reply(long)(send));
+	try {
+		assert.equal((await loop(shown.port, () => {})).summary, long.trim());
+		assert.equal((await loop(shown.port, () => {}, [])).summary, long.trim());
+	} finally {
+		shown.close();
+	}
+	assert.equal(shown.connections.length, 2, 'ni la respuesta larga ni la que no tenía herramientas se repiten');
+	console.log('  ✓ runToolLoop: una rendición o el sandbox remoto se reintentan una vez con una nota, sin que el usuario vea la primera');
+}
+
+/** The output limit: a call cut off by it says so (and how to split), and the protocol tells the model beforehand. */
+function testOutputLimitNotice() {
+	const decode = (chunks: readonly string[]) => {
+		const text: string[] = [];
+		const calls: unknown[] = [];
+		const decoder = new ToolCallDecoder(new Set([M365_TOOL_NAMES.applyWorkspaceEdits]), (chunk) => text.push(chunk), (decoded) => calls.push(decoded));
+		for (const chunk of chunks) decoder.push(chunk);
+		decoder.finish();
+		return { text: text.join(''), calls };
+	};
+	const big = 'a'.repeat(NEAR_OUTPUT_LIMIT_CHARS);
+	const edit = `<m365_tool_call>{"name":"${M365_TOOL_NAMES.applyWorkspaceEdits}","input":{"edits":[{"op":"create","path":"big.ts","content":"@@block:1@@"}]}}</m365_tool_call>\n<m365_block id="1">\n`;
+	const cut = decode([edit, big]);
+	assert.deepEqual(cut.calls, []);
+	assert.match(cut.text, /límite de salida/);
+	assert.match(cut.text, /12\.000/, 'el número en el formato del idioma');
+	// The JSON itself cut off: no longer a blank turn.
+	const json = decode([`<m365_tool_call>{"name":"${M365_TOOL_NAMES.applyWorkspaceEdits}","input":{"edits":[{"op":"create","path":"big.ts","content":"${big}`]);
+	assert.match(json.text, new RegExp(`La llamada a \`${M365_TOOL_NAMES.applyWorkspaceEdits}\` se cortó`));
+	// A short cut-off keeps the usual notice; a short malformed call stays silent.
+	const short = decode([`${edit}console`]);
+	assert.match(short.text, /incompleta/);
+	assert.doesNotMatch(short.text, /límite/);
+	assert.equal(decode([`<m365_tool_call>{"name":"x","input":{`]).text, '');
+	assert.equal(OUTPUT_LIMIT_CHARS, 12_000);
+	// The rule, with any edit tool on offer.
+	const catalog = buildToolCatalog([{ name: M365_TOOL_NAMES.applyWorkspaceEdits }, { name: M365_TOOL_NAMES.readFile }], {
+		includeEditorTools: false,
+		duplicates: 'both',
+		maxTools: 10,
+	});
+	assert.match(buildToolProtocolInstructions(catalog), /unos 12\.000 caracteres/);
+	const readOnly = buildToolCatalog([{ name: M365_TOOL_NAMES.readFile }], { includeEditorTools: false, duplicates: 'both', maxTools: 10 });
+	assert.doesNotMatch(buildToolProtocolInstructions(readOnly), /12\.000/);
+	console.log('  ✓ límite de salida: aviso propio si una llamada se corta por él, y la regla de escribir por partes en el protocolo');
+}
+
+/** Deep debug: one summary line per turn (origin, scores, metering, result) and the model's sandbox work. */
+async function testTurnSummary() {
+	const summary = new TurnSummary();
+	summary.observe({
+		throttling: {
+			numUserMessagesInConversation: 1,
+			maxNumUserMessagesInConversation: 600,
+			metering: { ClaudeOpusQueryDaily: { remainingAllowance: 39 }, ClaudeOpusQuery75: { remainingAllowance: 74 }, Junk: 'x' },
+		},
+	});
+	summary.observe({
+		messages: [
+			{ author: 'user', contentOrigin: 'officeweb' },
+			{ author: 'bot', contentOrigin: 'DeepLeo', offense: 'None', scores: [{ component: 'dea_violation', score: 2.5e-7 }, { component: 'BotOffense', score: 1e-9 }] },
+		],
+	});
+	summary.observe({
+		messages: [
+			{ author: 'bot', contentOrigin: 'DeepLeo', scores: [{ component: 'dea_violation', score: 2.5e-3 }] },
+			{ author: 'bot', messageType: 'Progress', contentOrigin: 'ChainOfThoughtSummary' },
+		],
+	});
+	summary.observe({ result: { value: 'Success', serviceVersion: '1.0.03561.1' }, turnState: 'Completed' });
+	summary.chars = 11_000;
+	const line = summary.line();
+	assert.match(line, /^origin=DeepLeo · /, 'solo el origen del contenido, no el del mensaje de control');
+	assert.match(line, /dea_violation=2\.5e-3/, 'el máximo del turno');
+	assert.match(line, /BotOffense=1\.0e-9/);
+	assert.match(line, /offense=None/);
+	assert.match(line, /result=Success/);
+	assert.match(line, /metering: ClaudeOpusQueryDaily=39, ClaudeOpusQuery75=74 ·/);
+	assert.match(line, /messages=1\/600/);
+	assert.match(line, /scenario=OfficeWebIncludedCopilot/);
+	assert.match(line, /near the ~12k-char output limit/);
+	assert.deepEqual(summary.toJSON().result, { value: 'Success', serviceVersion: '1.0.03561.1' });
+	assert.equal(summary.toJSON().turnState, 'Completed');
+
+	// In a real turn with the deep mode on: the line closes the turn's trace.
+	initLogger({ appendLine: () => {} });
+	clearLog();
+	setDeepDebug(true);
+	const server = await startProtocolServer((send) => {
+		send(botFrame({ messageType: 'Progress', contentType: 'Code', text: 'Coding and executing', hiddenText: 'bash -lc ls /mnt/data' }));
+		send({ type: 1, target: 'update', arguments: [{ throttling: { numUserMessagesInConversation: 1, maxNumUserMessagesInConversation: 600, metering: { ClaudeOpusQueryDaily: { remainingAllowance: 12 } } } }] });
+		send(botFrame({ text: 'OK', contentOrigin: 'DeepLeo', scores: [{ component: 'dea_violation', score: 3e-6 }] }));
+		send({ type: 2, invocationId: '0', item: { result: { value: 'Success' }, messages: [] } });
+		send({ type: 3, invocationId: '0' });
+	});
+	const remote: string[] = [];
+	try {
+		await streamCopilotTurn({
+			profile: makeProfile(server.port),
+			endpointBase: mockBase(server.port),
+			prompt: 'PROMPT',
+			tone: 'Claude_Opus',
+			signal: new AbortController().signal,
+			callbacks: { onText: () => {}, onRemoteWork: (detail) => remote.push(detail) },
+		});
+	} finally {
+		setDeepDebug(false);
+		server.close();
+	}
+	assert.deepEqual(remote, ['bash -lc ls /mnt/data']);
+	const trace = renderLogText('test');
+	assert.match(
+		trace,
+		/turn summary: origin=DeepLeo · dea_violation=3\.0e-6 · result=Success · metering: ClaudeOpusQueryDaily=12 · messages=1\/600 · scenario=OfficeWebPaidCopilot · chars=2 · remote sandbox: 1 step\(s\)/,
+	);
+	assert.match(trace, /the model is working in M365's own cloud sandbox: bash -lc ls \/mnt\/data/);
+	clearLog();
+	console.log('  ✓ modo debug: resumen por turno (origen, dea_violation, metering, result, escenario) y trabajo en el sandbox remoto');
+}
 
 // ---- i18n -------------------------------------------------------------------
 
@@ -2909,6 +4014,14 @@ function testWebHelpers() {
 	assert.equal(template.message.text, 'what the user typed on the web', 'la plantilla no se toca');
 	// Auto también es Auto en la web: no el último modelo elegido allí.
 	assert.equal(buildWebInvocationArgs(template, 'P', null, 'c').tone, 'magic', 'sin tone, Auto');
+	// Declara Disengaged para que un turno filtrado lo diga (el servicio solo manda los tipos declarados).
+	assert.deepEqual(args.allowedMessageTypes, ['Chat', 'InternalSearchQuery', 'RenderCardRequest', 'Disengaged']);
+	assert.deepEqual(template.allowedMessageTypes, ['Chat', 'InternalSearchQuery', 'RenderCardRequest'], 'la plantilla no se toca');
+	assert.deepEqual(
+		buildWebInvocationArgs({ ...template, allowedMessageTypes: ['Chat', 'Disengaged'] }, 'P', null, 'c').allowedMessageTypes,
+		['Chat', 'Disengaged'],
+		'sin duplicarlo',
+	);
 
 	assert.equal(capturedVariants('wss://substrate.office.com/m365Copilot/Chathub/o@t?access_token=x&variants=feature.a,feature.b&source=officeweb'), 'feature.a,feature.b');
 	assert.equal(capturedVariants('wss://x/y?access_token=x'), undefined);
@@ -2995,19 +4108,6 @@ async function testWebTurn() {
 	assert.equal('previousMessages' in (sawArgs ?? {}), false);
 	assert.equal(new URL(`http://x${sawUrl}`).searchParams.get('ConversationId'), sawArgs?.conversationId, 'el id de la URL y el del mensaje coinciden');
 
-	// Without a captured invocation a web turn is refused up front.
-	await assert.rejects(
-		streamCopilotTurn({
-			profile: { ...makeProfile(port), invocationTemplate: null },
-			endpointBase: mockBase(port),
-			prompt: 'P',
-			tone: null,
-			mode: 'web',
-			signal: new AbortController().signal,
-			callbacks: { onText: () => {} },
-		}),
-		/browser extension or the userscript/,
-	);
 	console.log('  ✓ turno con web: plugins y variants capturados, tarjetas a mitad, fuentes, id de conversación');
 }
 
@@ -3105,11 +4205,38 @@ function testModelCatalog() {
 	assert.ok(published && published.length > 0, 'models.json must parse');
 	for (const entry of published!) if (!entry.hidden) assert.ok(entry.name, `${entry.tone} needs a name`);
 	// Installed versions take names and retirements from it: it lists every
-	// built-in model (so they read the same everywhere) and retires the tone
-	// 2.0 shipped that the web app does not offer.
-	const visible = new Set(published!.filter((entry) => !entry.hidden).map((entry) => entry.tone));
+	// built-in model (so they read the same everywhere), and the models that
+	// came after the built-ins — GPT 6.0 and 6.1 Sol, and GPT 5.6 Quick
+	// response, which the catalog had retired and serves again.
+	const visible = new Map(published!.filter((entry) => !entry.hidden).map((entry) => [entry.tone, entry.name]));
 	for (const model of BUILTIN_MODELS) if (model.tone) assert.ok(visible.has(model.tone), `models.json lists ${model.tone}`);
-	assert.ok(published!.some((entry) => entry.tone === 'Gpt_5_6_Chat' && entry.hidden));
+	assert.equal(visible.get('Gpt_5_6_Chat'), 'GPT 5.6 Quick response');
+	assert.equal(visible.get('Gpt_6_Sol_Reasoning'), 'GPT 6.0 Sol');
+	assert.equal(visible.get('Gpt_61_Sol_Reasoning'), 'GPT-6.1 Sol');
+	assert.deepEqual(
+		mergeModels({ catalog: published!, observed: [], custom: [] })
+			.filter((model) => model.source === 'catalog')
+			.map((model) => model.name),
+		[
+			'M365 Copilot · GPT-6.1 Sol',
+			'M365 Copilot · GPT 6.0 Sol',
+			'M365 Copilot · GPT 5.6 Quick response',
+			'M365 Copilot · Claude Opus 5.5',
+			'M365 Copilot · Claude Sonnet 5.5',
+			'M365 Copilot · Claude Sonnet 5',
+			'M365 Copilot · GPT-6 Think deeper',
+		],
+	);
+	// The licence's models: their own ids, next to the built-in Claude Sonnet (4.6, on Copilot Chat).
+	const fromRepo = new Map(mergeModels({ catalog: published!, observed: ['Claude_Opus'], custom: [] }).map((model) => [model.tone, model]));
+	assert.equal(fromRepo.get('Claude_Sonnet')?.id, 'm365-copilot-claude');
+	assert.equal(fromRepo.get('Claude_Sonnet@paid')?.id, 'm365-copilot-tone-claude-sonnet-paid');
+	assert.equal(fromRepo.get('Claude_Opus')?.source, 'catalog', 'el tone que usó la web y la entrada del catálogo son el mismo modelo');
+	assert.equal(fromRepo.get('Gpt_6_Reasoning')?.name, 'M365 Copilot · GPT-6 Think deeper');
+	assert.deepEqual(
+		parseCustomModels(['Claude_Sonnet@paid', 'x@paid', { tone: 'Claude_Opus@paid', name: 'Opus' }]).map((entry) => entry.tone),
+		['Claude_Sonnet@paid', 'Claude_Opus'],
+	);
 	// The built-ins follow the web app's menu: its three modes, then the models.
 	assert.deepEqual(
 		BUILTIN_MODELS.slice(0, 3).map((model) => model.tone),
@@ -3268,7 +4395,7 @@ async function testDeepDebugTraceOfATurn() {
 	assert.equal(text, 'Hola, mundo');
 
 	const trace = renderLogText('test');
-	assert.match(trace, /\[ws#[0-9a-f]{8}\] turn start \(mode=tools, tone=magic\)/);
+	assert.match(trace, /\[ws#[0-9a-f]{8}\] turn start \(mode=tools, tone=magic, scenario=OfficeWebIncludedCopilot\)/);
 	assert.match(trace, /→ SignalR handshake \(\d+ chars\) \+\d+ms/);
 	assert.match(trace, /← socket open/);
 	assert.match(trace, /← upgrade 101/);
@@ -3336,6 +4463,19 @@ async function main() {
 	await test429Retry();
 	await testAuthErrorNotRetried();
 	await testModelAvailability();
+	testAccountLevelErrors();
+	testThrottleState();
+	await testTemporaryChat();
+	await testCancelSendsStop();
+	await testEarlyStopAfterToolCall();
+	await testThrottledTurn();
+	await testQuotaAndLicense();
+	await testDisengaged();
+	await testPaidScenario();
+	await testImageUpload();
+	await testWebSearchWithoutTemplate();
+	testGiveUpDetection();
+	testOutputLimitNotice();
 	console.log('subagents.ts');
 	await testConcurrencyLimiter();
 	await testSubagentLoop();
@@ -3343,6 +4483,8 @@ async function main() {
 	await testSubagentLoopWallClock();
 	testClipClosesDanglingFence();
 	await testToolLoopStreamsProse();
+	await testToolLoopStopsAfterCall();
+	await testToolLoopForcedRetry();
 	console.log('lineDiff.ts');
 	testLineDiff();
 	console.log('participant / editor');
@@ -3375,6 +4517,7 @@ async function main() {
 	testDebugDataFormatting();
 	testLogBufferAndExport();
 	await testDeepDebugTraceOfATurn();
+	await testTurnSummary();
 	setLocale('es');
 	console.log('\nAll tests passed.');
 }

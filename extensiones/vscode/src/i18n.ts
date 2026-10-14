@@ -71,6 +71,21 @@ export function bizChatLocale(): string {
 	return current === 'es' ? 'es-ES' : 'en-US';
 }
 
+/**
+ * A moment as the user reads it, in their time zone and language: just the
+ * time when it falls today ("15:40"), with the day otherwise ("Monday 20 Oct,
+ * 02:00") — for "paused until…" and "resets at…".
+ */
+export function formatMoment(epochMs: number, now = Date.now()): string {
+	const when = new Date(epochMs);
+	const sameDay = when.toDateString() === new Date(now).toDateString();
+	return when.toLocaleString(bizChatLocale(), {
+		...(sameDay ? {} : { weekday: 'long', day: 'numeric', month: 'short' }),
+		hour: '2-digit',
+		minute: '2-digit',
+	});
+}
+
 /** Every key of the reference (English) catalog — used by the parity test. */
 export function messageKeys(): MessageKey[] {
 	return Object.keys(en) as MessageKey[];

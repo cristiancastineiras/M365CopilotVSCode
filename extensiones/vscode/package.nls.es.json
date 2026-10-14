@@ -115,7 +115,7 @@
   "command.checkModels": "Comprobar modelos",
   "config.models.updateFromCatalog": "Descargar la lista de modelos de M365 Copilot del catálogo en línea del proyecto (`models.json` en GitHub) al arrancar y cada 12 horas, para que aparezcan los modelos nuevos — y desaparezcan los retirados — sin actualizar la extensión. Sólo se descarga ese archivo; no se envía nada.",
   "config.models.detectFromBrowser": "Añadir los modelos que usa la propia web de M365 Copilot: la extensión de navegador y el userscript ven qué modelo (`tone`) usa cada chat y lo envían junto con el token. Es la prueba de que el modelo existe para tu cuenta.",
-  "config.models.custom": "Modelos adicionales por su `tone` de BizChat, p. ej. `[\"Gpt_5_7_Chat\", { \"tone\": \"Claude_Opus\", \"name\": \"Claude Opus\" }]`. Sirve para probar un modelo antes de que llegue al catálogo.",
+  "config.models.custom": "Modelos adicionales por su `tone` de BizChat, p. ej. `[\"Gpt_5_7_Chat\", { \"tone\": \"Claude_Sonnet@paid\", \"name\": \"Claude Sonnet 5.5\" }]`. `@paid` envía ese tone con el escenario de pago (una licencia de Microsoft 365 Copilot), donde puede ser otro modelo. Sirve para probar un modelo antes de que llegue al catálogo.",
   "command.reviewCode": "Revisar código",
   "command.fixAllProblems": "Corregir todos los problemas del archivo",
   "command.reviewChanges": "Revisar cambios con M365 Copilot",
@@ -141,5 +141,6 @@
   "command.searchProject": "Buscar en el proyecto…",
   "command.showProjectMap": "Ver el mapa del proyecto",
   "command.rebuildIndex": "Reconstruir el índice del proyecto",
+  "config.history.save": "Guardar en tu historial de Copilot (la lista de chats de la web) las conversaciones que la extensión tiene con M365 Copilot. Desactivado (por defecto), son chats temporales: cada una funciona igual mientras dura, pero no deja nada en ese historial — si no, cada paso del agente y cada sugerencia de autocompletado añadiría un chat propio.",
   "config.debug.deep": "Modo debug profundo. Abre la consola de **M365 Copilot** y traza con todo detalle lo que la extensión recibe (lo que el navegador envía al servidor local, cada trama que M365 Copilot devuelve), envía (el prompt exacto, cabeceras y tramas, las llamadas web y de procesos) y hace (comandos, herramientas, ediciones, ajustes). Los tokens siempre se ocultan; los prompts, las respuestas y las rutas de archivos, no. [Mostrar consola](command:m365copilot.showLog) · [Exportar registro (.txt)](command:m365copilot.exportLog) · [Limpiar registro](command:m365copilot.clearLog)"
 }

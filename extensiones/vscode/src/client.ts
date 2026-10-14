@@ -1,16 +1,74 @@
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import { describeProfile, foreignAudience, type CopilotProfile } from './profile';
-import { prettyTone } from './modelCatalog';
+import { parseToneSelector, prettyTone } from './modelCatalog';
 import { RunawayRepetitionGuard } from './repetitionGuard';
-import { bizChatLocale, t } from './i18n';
+import { bizChatLocale, formatMoment, t } from './i18n';
 import { debug, redactUrl, truncate } from './logger';
+import { noteServed, noteThrottled, THROTTLE_HOLD_MS } from './throttle';
+import { NEAR_OUTPUT_LIMIT_CHARS } from './toolProtocol';
 
 /** SignalR frame terminator (record separator, U+001E). */
 const RS = String.fromCharCode(0x1e);
 
 const DEFAULT_ENDPOINT_HOST = 'wss://substrate.office.com';
 const DEFAULT_ENDPOINT_PATH = '/m365Copilot/Chathub';
+
+/**
+ * The `scenario` of the Chathub URL says which licence the turn uses, and that
+ * decides which models serve: `OfficeWebIncludedCopilot` is Copilot Chat (what
+ * every Microsoft 365 account has), `OfficeWebPaidCopilot` with
+ * `licenseType=Premium` a Microsoft 365 Copilot licence — the only one where
+ * Claude Opus 5.5, Claude Sonnet 5 / 5.5 and GPT-6 answer (see
+ * `PAID_ONLY_TONES` in modelCatalog.ts). An entitlement, not a bypass: without
+ * the licence the paid scenario is refused (`InvalidCopilotLicense`).
+ * (github.com/cramt/m365-copilot-proxy, docs/m365-copilot-api.md §5.)
+ */
+const INCLUDED_SCENARIO = 'OfficeWebIncludedCopilot';
+const PAID_SCENARIO = 'OfficeWebPaidCopilot';
+const PAID_LICENSE_TYPE = 'Premium';
+
+/** The `scenario` and `licenseType` the web app used, from the endpoint the browser side captured. */
+export function capturedScenario(endpoint: string | null | undefined): { scenario: string; licenseType?: string } | undefined {
+	if (!endpoint) return undefined;
+	try {
+		const params = new URL(endpoint.replace(/^wss?:/, 'https:')).searchParams;
+		const scenario = params.get('scenario');
+		if (!scenario) return undefined;
+		const licenseType = params.get('licenseType');
+		return licenseType ? { scenario, licenseType } : { scenario };
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Which licence the account has, as far as the web app showed it: `paid` when
+ * it ran on the paid scenario, `included` on Copilot Chat's, `unknown` when no
+ * endpoint was captured (a token pasted by hand).
+ */
+export type AccountTier = 'paid' | 'included' | 'unknown';
+
+export function accountTier(profile: Pick<CopilotProfile, 'endpoint'>): AccountTier {
+	const captured = capturedScenario(profile.endpoint);
+	if (!captured) return 'unknown';
+	if (/paid/i.test(captured.scenario) || /premium/i.test(captured.licenseType ?? '')) return 'paid';
+	return /included/i.test(captured.scenario) ? 'included' : 'unknown';
+}
+
+/**
+ * The scenario for a turn. Only models that need it go on the paid one: the
+ * same tone can be a metered model there (Claude Sonnet is Sonnet 5.5, 80 turns
+ * a day; GPT-6.1 Sol spends its own allowance), so the rest stay where they are
+ * free. A paid turn reuses the names the web app sent, if it was the paid one.
+ */
+function scenarioFor(profile: CopilotProfile, paid: boolean): { scenario: string; licenseType?: string } {
+	if (!paid) return { scenario: INCLUDED_SCENARIO };
+	const captured = capturedScenario(profile.endpoint);
+	return captured && accountTier(profile) === 'paid'
+		? { scenario: captured.scenario, licenseType: captured.licenseType ?? PAID_LICENSE_TYPE }
+		: { scenario: PAID_SCENARIO, licenseType: PAID_LICENSE_TYPE };
+}
 
 /**
  * Where every turn connects instead of BizChat while the extension's own
@@ -22,6 +80,30 @@ let testEndpointBase: string | undefined;
 export function setTestEndpointBase(base: string | undefined): void {
 	testEndpointBase = base;
 }
+
+/**
+ * Temporary chats: `disableMemory=1` on the Chathub URL. The turn keeps its
+ * context while it runs, but leaves no thread in the user's Copilot history.
+ * Every turn here is a conversation of its own — each agent step, each
+ * ghost-text suggestion — so without it that history fills up with them.
+ * `m365copilot.history.save` turns it off. (github.com/cramt/m365-copilot-proxy,
+ * docs/hypotheses.md §16 F28/F29: context kept, thread absent from the sidebar.)
+ */
+let temporaryChat = true;
+
+export function setTemporaryChat(on: boolean): void {
+	temporaryChat = on;
+}
+
+/**
+ * What the web app's "Stop generating" button sends, on the same socket: a
+ * `stop` invocation with its own id. The server acks with a completion frame
+ * and drops the half-written answer; closing the socket alone leaves it
+ * generating (captured from m365.cloud.microsoft by cramt/m365-copilot-proxy).
+ */
+const STOP_FRAME = JSON.stringify({ arguments: [{}], invocationId: '1', target: 'stop', type: 1 }) + RS;
+/** How long to wait for that ack before closing anyway. */
+const STOP_GRACE_MS = 2_000;
 
 const HANDSHAKE_TIMEOUT_MS = 15_000;
 const IDLE_TIMEOUT_MS = 90_000;
@@ -38,6 +120,39 @@ export interface StreamCallbacks {
 	onDone?: () => void;
 	/** Web pages the answer cites (web turns, see {@link TurnMode}). */
 	onSources?: (sources: readonly WebSource[]) => void;
+	/**
+	 * The model ran something in M365's own cloud sandbox (`/mnt/data`,
+	 * `/home/claude`…) — not on this machine, whatever it says next. `detail` is
+	 * the command or the step, as the service named it.
+	 */
+	onRemoteWork?: (detail: string) => void;
+	/** An image could not be attached (unsupported, too big, upload refused); the turn goes on without it. */
+	onImageSkipped?: (reason: string) => void;
+}
+
+/** An image for the turn: a screenshot pasted in the chat, sent the way the web app sends one. */
+export interface TurnImage {
+	readonly mimeType: string;
+	readonly data: Uint8Array;
+}
+
+/** Images per turn, and bytes per image (the web app's own limits are not public). */
+export const MAX_TURN_IMAGES = 4;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const IMAGE_FILE_TYPES: Readonly<Record<string, string>> = {
+	'image/png': 'png',
+	'image/jpeg': 'jpg',
+	'image/jpg': 'jpg',
+	'image/gif': 'gif',
+	'image/webp': 'webp',
+	'image/bmp': 'bmp',
+};
+
+/** What BizChat's final item says about a turn it did not run: `result: { value, errorCode?, message? }`. */
+export interface ServiceResult {
+	readonly value: string;
+	readonly errorCode?: string;
+	readonly message?: string;
 }
 
 export interface WebSource {
@@ -85,15 +200,284 @@ export const AUTO_TONE = 'magic';
 export class CopilotModelUnavailableError extends CopilotClientError {
 	readonly tone: string;
 	readonly serverReply: string;
-	constructor(tone: string, serverReply: string) {
-		super(t('client.error.modelUnavailable', prettyTone(tone), truncate(serverReply, 200)));
+	constructor(tone: string, serverReply: string, message?: string) {
+		super(message ?? t('client.error.modelUnavailable', prettyTone(tone), truncate(serverReply, 200)));
 		this.tone = tone;
 		this.serverReply = serverReply;
 	}
 }
 
-/** Told whether each forced `tone` worked: the model registry flags the ones that do not. */
-export type ModelOutcomeListener = (tone: string, available: boolean, reason?: string) => void;
+/**
+ * A model that needs a Microsoft 365 Copilot licence (the paid scenario), on an
+ * account the service says does not have one: the model is flagged like any
+ * unavailable one, with that reason; the account's other models still work.
+ */
+export class CopilotPremiumRequiredError extends CopilotModelUnavailableError {
+	constructor(tone: string, serverReply: string) {
+		super(tone, serverReply, t('client.error.premiumRequired', prettyTone(tone)) + serverSaid(serverReply));
+	}
+}
+
+/** " M365 Copilot said: “…”" after a message, when the service said something. */
+function serverSaid(message: string): string {
+	const text = message.replace(/\s+/g, ' ').trim();
+	return text ? t('client.error.serverSaid', truncate(text, 300)) : '';
+}
+
+/**
+ * M365 is throttling the account: the turn came back with `result.value:
+ * "Throttled"` (`errorCode: "PerUserThrottled"`), or a completion error that
+ * says so. Not retried — retrying only extends it — and recorded in
+ * throttle.ts, so that automatic requests wait it out.
+ */
+export class CopilotThrottledError extends CopilotClientError {
+	readonly errorCode: string;
+	readonly serverMessage: string;
+	/** When automatic requests may resume (epoch ms). */
+	readonly until: number;
+	constructor(errorCode: string, serverMessage: string, until: number) {
+		super(t('client.error.throttled', errorCode, formatMoment(until)) + serverSaid(serverMessage));
+		this.errorCode = errorCode;
+		this.serverMessage = serverMessage;
+		this.until = until;
+	}
+}
+
+/** Which allowance a priority-access refusal is about. */
+export type QuotaWindow = 'day' | 'week';
+
+/**
+ * A metered model's priority access is used up (`result.value: "OutOfCredits"`):
+ * Claude Opus 5.5 has 40 turns a day and 75 a week, Claude Sonnet 5.5 80 a day,
+ * one per turn whatever its size (cramt/m365-copilot-proxy, docs §24 F55, §26).
+ * Every later turn on that model is refused until the reset, so it is not
+ * retried and the model is flagged until then.
+ */
+export class CopilotQuotaExhaustedError extends CopilotClientError {
+	readonly tone: string | null;
+	readonly serverMessage: string;
+	readonly window: QuotaWindow;
+	/** When the allowance refills (epoch ms): midnight UTC, the weekly one on Monday. */
+	readonly resetsAt: number;
+	constructor(tone: string | null, serverMessage: string, window: QuotaWindow, resetsAt: number) {
+		super(
+			t(
+				window === 'week' ? 'client.error.quotaWeek' : 'client.error.quotaDay',
+				tone ? prettyTone(tone) : 'M365 Copilot',
+				formatMoment(resetsAt),
+			) + serverSaid(serverMessage),
+		);
+		this.tone = tone;
+		this.serverMessage = serverMessage;
+		this.window = window;
+		this.resetsAt = resetsAt;
+	}
+}
+
+/**
+ * The service says the account has no valid licence for the request
+ * (`errorCode: "InvalidCopilotLicense"`, "It looks like you don't have a valid
+ * licence…"). About the account, not the model: nothing is flagged, nothing
+ * retried.
+ */
+export class CopilotLicenseError extends CopilotClientError {
+	readonly errorCode: string;
+	readonly serverMessage: string;
+	constructor(errorCode: string, serverMessage: string) {
+		super(t('client.error.license', errorCode) + serverSaid(serverMessage));
+		this.errorCode = errorCode;
+		this.serverMessage = serverMessage;
+	}
+}
+
+/**
+ * The service's safety filter declined to answer (a bot message with
+ * `messageType: "Disengaged"` and no text). Raised as an error, not as text,
+ * so that no feature takes the notice for the model's answer (an inline edit
+ * would write it into the code). Not retried: the same request disengages again.
+ */
+export class CopilotDisengagedError extends CopilotClientError {
+	constructor() {
+		super(t('client.error.disengaged'));
+	}
+}
+
+/** Errors about the account or the request as a whole: no retry, no fallback, no model to blame. */
+export function isAccountLevelError(error: unknown): boolean {
+	return (
+		error instanceof CopilotThrottledError ||
+		error instanceof CopilotQuotaExhaustedError ||
+		error instanceof CopilotLicenseError ||
+		error instanceof CopilotDisengagedError
+	);
+}
+
+/** The weekly allowance names the week or Monday (in English or Spanish); otherwise it is today's. */
+export function quotaWindowOf(text: string): QuotaWindow {
+	return /\bweek|monday|semana|lunes/i.test(text) ? 'week' : 'day';
+}
+
+/** When an allowance refills: the next midnight UTC, or the next Monday at midnight UTC for the weekly one. */
+export function quotaResetAt(window: QuotaWindow, now = Date.now()): number {
+	const today = new Date(now);
+	const days = window === 'week' ? (8 - today.getUTCDay()) % 7 || 7 : 1;
+	return Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + days);
+}
+
+/** A canned refusal that is about priority access (when the result does not say `OutOfCredits`). */
+const PRIORITY_ACCESS_TEXT = /priority access|acceso prioritario/i;
+/** A canned refusal about the licence ("It looks like you don't have a valid licence…"). */
+const LICENCE_TEXT = /valid licen[cs]e|licencia válida/i;
+
+/**
+ * The specific error for a turn the service did not run, when its result says
+ * why: throttled, priority access used up, no valid licence. Null for any other
+ * result (the generic "rejected the request" handling applies).
+ */
+export function serviceResultError(
+	result: ServiceResult,
+	tone: string | null,
+	now = Date.now(),
+	paid = false,
+): CopilotClientError | null {
+	const message = result.message ?? '';
+	if (result.value === 'Throttled' || result.errorCode === 'PerUserThrottled') {
+		return new CopilotThrottledError(result.errorCode || result.value, message, now + THROTTLE_HOLD_MS);
+	}
+	if (result.value === 'OutOfCredits') {
+		const window = quotaWindowOf(message);
+		return new CopilotQuotaExhaustedError(tone, message, window, quotaResetAt(window, now));
+	}
+	if (result.errorCode === 'InvalidCopilotLicense' || result.value === 'InvalidCopilotLicense') {
+		// On the paid scenario it is about the model the turn needed it for.
+		if (paid && tone) return new CopilotPremiumRequiredError(tone, message || result.errorCode || result.value);
+		return new CopilotLicenseError(result.errorCode || result.value, message);
+	}
+	return null;
+}
+
+/**
+ * What the service said about a turn besides its text, for the deep-debug
+ * trace: which back-end answered (`contentOrigin`), the classifier scores on the
+ * bot's messages (`dea_violation` climbs before a Disengaged), the priority
+ * access left (`throttling.metering`, only on the paid scenario), the
+ * conversation's message counter, the final `result`, and any work the model did
+ * in its own sandbox. Collecting it is a few property reads per frame.
+ */
+export class TurnSummary {
+	readonly origins = new Set<string>();
+	/** Highest score per classifier component. */
+	readonly scores = new Map<string, number>();
+	/** Priority access left per allowance (`remainingAllowance`). */
+	readonly metering = new Map<string, number>();
+	readonly remoteWork: string[] = [];
+	offense: string | undefined;
+	result: { value: string; errorCode?: string; serviceVersion?: string } | undefined;
+	conversation: string | undefined;
+	turnState: string | undefined;
+	scenario = INCLUDED_SCENARIO;
+	chars = 0;
+
+	/** One `arguments[]` entry of an update, or a stream item. */
+	observe(payload: Record<string, unknown>): void {
+		const throttling = payload.throttling;
+		if (throttling && typeof throttling === 'object') {
+			const record = throttling as Record<string, unknown>;
+			const used = record.numUserMessagesInConversation;
+			const max = record.maxNumUserMessagesInConversation;
+			if (typeof used === 'number' && typeof max === 'number') this.conversation = `${used}/${max}`;
+			const metering = record.metering;
+			if (metering && typeof metering === 'object') {
+				for (const [key, value] of Object.entries(metering as Record<string, unknown>)) {
+					const left = value && typeof value === 'object' ? (value as { remainingAllowance?: unknown }).remainingAllowance : undefined;
+					if (typeof left === 'number') this.metering.set(key, left);
+				}
+			}
+		}
+		const result = payload.result;
+		if (result && typeof result === 'object') {
+			const record = result as Record<string, unknown>;
+			if (typeof record.value === 'string') {
+				this.result = {
+					value: record.value,
+					...(typeof record.errorCode === 'string' ? { errorCode: record.errorCode } : {}),
+					...(typeof record.serviceVersion === 'string' ? { serviceVersion: record.serviceVersion } : {}),
+				};
+			}
+		}
+		if (typeof payload.turnState === 'string') this.turnState = payload.turnState;
+		if (Array.isArray(payload.messages)) {
+			for (const message of payload.messages) {
+				if (message && typeof message === 'object') this.observeMessage(message as Record<string, unknown>);
+			}
+		}
+	}
+
+	private observeMessage(message: Record<string, unknown>): void {
+		if (message.author !== 'bot') return;
+		if (typeof message.contentOrigin === 'string' && message.messageType === undefined) this.origins.add(message.contentOrigin);
+		if (typeof message.offense === 'string') this.offense = message.offense;
+		if (typeof message.turnState === 'string') this.turnState = message.turnState;
+		if (!Array.isArray(message.scores)) return;
+		for (const entry of message.scores) {
+			if (!entry || typeof entry !== 'object') continue;
+			const { component, score } = entry as { component?: unknown; score?: unknown };
+			if (typeof component !== 'string' || typeof score !== 'number') continue;
+			this.scores.set(component, Math.max(score, this.scores.get(component) ?? Number.NEGATIVE_INFINITY));
+		}
+	}
+
+	/** The one line the trace shows at the end of the turn. */
+	line(): string {
+		const parts = [`origin=${[...this.origins].join('+') || '-'}`];
+		for (const [component, score] of this.scores) parts.push(`${component}=${score.toExponential(1)}`);
+		if (this.offense) parts.push(`offense=${this.offense}`);
+		parts.push(`result=${this.result ? [this.result.value, this.result.errorCode].filter(Boolean).join('/') : '-'}`);
+		if (this.metering.size > 0) {
+			parts.push(`metering: ${[...this.metering].map(([key, left]) => `${key}=${left}`).join(', ')}`);
+		}
+		if (this.conversation) parts.push(`messages=${this.conversation}`);
+		parts.push(`scenario=${this.scenario}`, `chars=${this.chars}`);
+		if (this.chars >= NEAR_OUTPUT_LIMIT_CHARS) parts.push('near the ~12k-char output limit');
+		if (this.remoteWork.length > 0) parts.push(`remote sandbox: ${this.remoteWork.length} step(s)`);
+		return parts.join(' · ');
+	}
+
+	toJSON(): Record<string, unknown> {
+		return {
+			contentOrigins: [...this.origins],
+			scores: Object.fromEntries(this.scores),
+			offense: this.offense ?? null,
+			result: this.result ?? null,
+			metering: Object.fromEntries(this.metering),
+			messagesInConversation: this.conversation ?? null,
+			turnState: this.turnState ?? null,
+			scenario: this.scenario,
+			charsEmitted: this.chars,
+			nearOutputLimit: this.chars >= NEAR_OUTPUT_LIMIT_CHARS,
+			remoteSandbox: this.remoteWork,
+		};
+	}
+}
+
+/**
+ * A `Progress` message about work the model did in M365's own cloud sandbox:
+ * "Coding and executing" (`contentType: "Code"`, the command in `hiddenText`) or
+ * a file it made there (`contentOrigin: "CreateFileExecutor"`). GPT-6 Sol and
+ * Claude Sonnet 5 do it on their own (cramt/m365-copilot-proxy, §5).
+ */
+function remoteWorkOf(message: Record<string, unknown>): string | null {
+	const origin = message.contentOrigin;
+	if (message.contentType !== 'Code' && origin !== 'CreateFileExecutor') return null;
+	const detail = [message.hiddenText, message.text].find((value) => typeof value === 'string' && value.trim());
+	return typeof detail === 'string' ? truncate(detail.trim(), 300) : String(origin ?? 'Code');
+}
+
+/**
+ * Told whether each forced `tone` worked: the model registry flags the ones that
+ * do not — until `until` (epoch ms) when the service said when they come back.
+ */
+export type ModelOutcomeListener = (tone: string, available: boolean, reason?: string, until?: number) => void;
 let modelOutcomeListener: ModelOutcomeListener | undefined;
 
 /** Set (or clear, with undefined) the one listener for model outcomes. */
@@ -136,25 +520,38 @@ export async function streamCopilotTurn(options: {
 	 * never sets it.
 	 */
 	endpointBase?: string;
-	/** See {@link TurnMode}; `web` needs a profile with the captured invocation. */
+		/** See {@link TurnMode}. */
 	mode?: TurnMode;
+	/** Images to attach (uploaded first, like the web app does with a pasted one). */
+	images?: readonly TurnImage[];
+	/**
+	 * Ends the turn early, successfully, when aborted: the server is told to stop
+	 * (the stop frame) and the turn resolves with what arrived. For a tool call
+	 * that is already complete — whatever the model writes after it is ignored,
+	 * and can run for minutes. `signal`, by contrast, cancels.
+	 */
+	stopSignal?: AbortSignal;
 }): Promise<void> {
 	const { profile, prompt, tone, callbacks, signal } = options;
 	const log = options.log ?? (() => {});
 	const mode = options.mode ?? 'tools';
-	if (mode === 'web' && !profile.invocationTemplate) throw new CopilotClientError(t('client.error.noWebTemplate'));
+	// `tone` may name the paid scenario (`Claude_Sonnet@paid`); BizChat gets the bare tone.
+	const selector = tone ? parseToneSelector(tone) : null;
+	const wireTone = selector?.tone ?? null;
+	const scenario = scenarioFor(profile, selector?.paid ?? false);
 
 	// One conversation id per turn, shared between the URL and the invocation
 	// arguments — BizChat rejects the request as `InvalidRequest` when the URL's
 	// `ConversationId` and the message's `conversationId` disagree.
 	const conversationId = randomUUID();
-	const url = buildEndpoint(profile, conversationId, options.endpointBase ?? testEndpointBase, mode);
+	const base = options.endpointBase ?? testEndpointBase ?? `${DEFAULT_ENDPOINT_HOST}${DEFAULT_ENDPOINT_PATH}`;
+	const url = buildEndpoint(profile, conversationId, base, mode, scenario);
 	const invocationId = '0';
 	const invocationType = profile.invocationType || 4;
 
 	log(t('log.newTurn'));
 	log(`endpoint: ${redactUrl(url)}`);
-	log(`invocationType=${invocationType}, tone=${tone ?? AUTO_TONE}, mode=${mode}`);
+	log(`invocationType=${invocationType}, tone=${wireTone ?? AUTO_TONE}, scenario=${scenario.scenario}, mode=${mode}`);
 	log(`origin=${profile.origin}`);
 
 	// Deep-debug trace of this turn: one scope per turn, so interleaved turns
@@ -165,9 +562,11 @@ export async function streamCopilotTurn(options: {
 	let framesIn = 0;
 	let charsIn = 0;
 	let firstTextAt: number | undefined;
-	debug(scope, `turn start (mode=${mode}, tone=${tone ?? AUTO_TONE})`, () => ({
+	debug(scope, `turn start (mode=${mode}, tone=${wireTone ?? AUTO_TONE}, scenario=${scenario.scenario})`, () => ({
 		mode,
-		tone: tone ?? `${AUTO_TONE} (auto)`,
+		tone: wireTone ?? `${AUTO_TONE} (auto)`,
+		scenario,
+		images: options.images?.length ?? 0,
 		invocationType,
 		conversationId,
 		promptChars: prompt.length,
@@ -175,6 +574,26 @@ export async function streamCopilotTurn(options: {
 		timeoutsMs: { handshake: HANDSHAKE_TIMEOUT_MS, idle: IDLE_TIMEOUT_MS, turn: MAX_TURN_MS },
 		profile: describeProfile(profile),
 	}));
+
+	// Pasted images go up first, tied to this conversation; the chat message
+	// then points at them. One that fails is left out, not the whole turn.
+	const annotations = await uploadImages({
+		images: options.images ?? [],
+		uploadUrl: uploadUrlFor(base),
+		profile,
+		conversationId,
+		scenario: scenario.scenario,
+		signal,
+		scope,
+		onSkipped: (reason) => {
+			log(t('log.imageSkipped', reason));
+			callbacks.onImageSkipped?.(reason);
+		},
+	});
+	if (signal.aborted) throw new CopilotClientError('__CANCELLED__');
+
+	const summary = new TurnSummary();
+	summary.scenario = scenario.scenario;
 
 	const ws = new WebSocket(url, {
 		headers: {
@@ -199,6 +618,12 @@ export async function streamCopilotTurn(options: {
 
 	let settled = false;
 	let idleTimer: NodeJS.Timeout | undefined;
+	let handshakeDone = false;
+	/** The server sent its final frame (stream item, completion or close): nothing left to stop. */
+	let serverEnded = false;
+	/** We sent the stop frame and are waiting for the server's ack to close. */
+	let stopSent = false;
+	let stopTimer: NodeJS.Timeout | undefined;
 
 	// Streaming reassembly. BizChat can split ONE answer across several bot
 	// "messages" — observed: the prose before a tool-call marker and the
@@ -225,11 +650,25 @@ export async function streamCopilotTurn(options: {
 	const repetitionGuard = new RunawayRepetitionGuard();
 
 	return new Promise<void>((resolve, reject) => {
-		const cleanup = () => {
+		/**
+		 * `stopServer`: the turn ends on our side while the server may still be
+		 * generating (cancel, timeout, runaway, a tool call that is complete) — tell
+		 * it to stop, the way the web app's Stop button does, and close on its ack.
+		 * A turn the server finished itself just closes.
+		 */
+		const cleanup = (stopServer: boolean) => {
 			if (idleTimer) clearTimeout(idleTimer);
 			clearTimeout(turnTimer);
 			signal.removeEventListener('abort', onAbort);
+			options.stopSignal?.removeEventListener('abort', onStop);
 			try {
+				if (stopServer && handshakeDone && !serverEnded && ws.readyState === WebSocket.OPEN) {
+					stopSent = true;
+					send(STOP_FRAME, 'stop');
+					log(t('log.stopSent'));
+					stopTimer = setTimeout(() => ws.close(), STOP_GRACE_MS);
+					return;
+				}
 				if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
 					ws.close();
 				}
@@ -252,7 +691,16 @@ export async function streamCopilotTurn(options: {
 				wsReadyState: ws.readyState,
 			}));
 			if (error instanceof CopilotModelUnavailableError) modelOutcomeListener?.(error.tone, false, error.serverReply);
-			cleanup();
+			if (error instanceof CopilotQuotaExhaustedError && error.tone) {
+				modelOutcomeListener?.(error.tone, false, error.serverMessage || error.message, error.resetsAt);
+			}
+			if (error instanceof CopilotThrottledError) {
+				log(t('log.throttled', error.errorCode, formatMoment(error.until)));
+				noteThrottled();
+			}
+			summary.chars = totalEmittedChars;
+			debug(scope, `turn summary: ${summary.line()}`, () => summary.toJSON());
+			cleanup(!serverEnded);
 			reject(error);
 		};
 
@@ -262,6 +710,11 @@ export async function streamCopilotTurn(options: {
 		 * the reason is plainly transient (throttling, capacity).
 		 */
 		const rejected = (error: CopilotClientError, reason: string) => {
+			// A completion or close frame whose error says the account is throttled.
+			if (/^throttled\b/i.test(reason)) {
+				fail(new CopilotThrottledError('Throttled', reason, Date.now() + THROTTLE_HOLD_MS));
+				return;
+			}
 			debug(scope, 'the service turned the turn down', () => ({
 				reason,
 				forcedTone: tone,
@@ -288,6 +741,9 @@ export async function streamCopilotTurn(options: {
 		 * making real progress, regardless of whether that garbage would later
 		 * be recognized as prose or as part of a tool call. */
 		const emit = (text: string) => {
+			// The turn already ended (stopped early, or failed) while this frame
+			// was being read: nothing more reaches the caller.
+			if (settled) return;
 			if (repetitionGuard.push(text)) {
 				fail(new CopilotClientError(t('client.error.repetition')));
 				return;
@@ -296,7 +752,8 @@ export async function streamCopilotTurn(options: {
 			callbacks.onText(text);
 		};
 
-		const succeed = () => {
+		/** `early`: the caller ended the turn (stopSignal) — the server is told to stop. */
+		const succeed = (early = false) => {
 			if (settled) return;
 			settled = true;
 			log(t('log.turnCompleted', totalEmittedChars));
@@ -308,8 +765,14 @@ export async function streamCopilotTurn(options: {
 				messages: knownMessageText.size,
 			}));
 			if (totalEmittedChars === 0) log(t('log.turnEmpty'));
-			else if (tone) modelOutcomeListener?.(tone, true);
-			cleanup();
+			else {
+				if (tone) modelOutcomeListener?.(tone, true);
+				// An answer: whatever throttle there was has lifted.
+				noteServed();
+			}
+			summary.chars = totalEmittedChars;
+			debug(scope, `turn summary: ${summary.line()}`, () => summary.toJSON());
+			cleanup(early);
 			callbacks.onDone?.();
 			resolve();
 		};
@@ -326,18 +789,27 @@ export async function streamCopilotTurn(options: {
 			debug(scope, `abort signal received ${since()}`);
 			fail(new CopilotClientError('__CANCELLED__'));
 		};
+		const onStop = () => {
+			if (settled) return;
+			debug(scope, `the caller ended the turn early (its tool call is complete) ${since()}`);
+			log(t('log.turnStoppedEarly', totalEmittedChars));
+			succeed(true);
+		};
 		if (signal.aborted) {
 			onAbort();
 			return;
 		}
 		signal.addEventListener('abort', onAbort, { once: true });
+		if (options.stopSignal?.aborted) {
+			onStop();
+			return;
+		}
+		options.stopSignal?.addEventListener('abort', onStop, { once: true });
 
 		const handshakeTimer = setTimeout(() => {
 			debug(scope, `handshake timer fired (no ack within ${HANDSHAKE_TIMEOUT_MS} ms)`);
 			fail(new CopilotClientError(t('client.error.handshake')));
 		}, HANDSHAKE_TIMEOUT_MS);
-
-		let handshakeDone = false;
 
 		ws.on('open', () => {
 			log(t('log.wsOpen'));
@@ -394,6 +866,7 @@ export async function streamCopilotTurn(options: {
 
 		ws.on('close', (code: number, reason: Buffer) => {
 			clearTimeout(handshakeTimer);
+			if (stopTimer) clearTimeout(stopTimer);
 			log(t('log.wsClosed', code, reason?.length ? `, ${reason.toString()}` : ''));
 			debug(scope, `← socket closed: code ${code}${reason?.length ? `, reason "${reason.toString()}"` : ''} ${since()}`, () => ({
 				settledBeforeClose: settled,
@@ -423,6 +896,14 @@ export async function streamCopilotTurn(options: {
 					continue;
 				}
 				debug(scope, `← frame #${framesIn} ${describeFrame(frame)} (${chunk.length} chars) ${since()}`, chunk);
+				if (frame.type === 2 || frame.type === 3 || frame.type === 7) serverEnded = true;
+
+				// Our side already ended the turn. After a stop, the server's
+				// completion is its ack: close the socket then.
+				if (settled) {
+					if (stopSent && (frame.type === 3 || frame.type === 7)) ws.close();
+					continue;
+				}
 
 				// First non-empty frame after our handshake send is the server's
 				// handshake ack: `{}` (or `{ error }`).
@@ -435,7 +916,7 @@ export async function streamCopilotTurn(options: {
 						return;
 					}
 					log(t('log.sendingInvocation'));
-					sendInvocation(send, profile, prompt, tone, invocationType, invocationId, conversationId, log, mode, scope);
+					sendInvocation(send, profile, prompt, wireTone, invocationType, invocationId, conversationId, log, mode, scope, annotations);
 					bumpIdle();
 					// The `{}` ack frame carries no chat data; done with it.
 					continue;
@@ -481,9 +962,25 @@ export async function streamCopilotTurn(options: {
 							emit(text);
 						}
 					},
-					onComplete: succeed,
+					onComplete: () => succeed(),
 					onError: fail,
 					onRejected: rejected,
+					onServiceResult: (result) => {
+						const known = serviceResultError(result, tone, Date.now(), selector?.paid ?? false);
+						if (known) {
+							debug(scope, `the service did not run the turn: ${known.constructor.name}`, result);
+							fail(known);
+							return;
+						}
+						const detail = result.message ? `: ${result.message}` : '';
+						rejected(new CopilotClientError(t('client.error.rejected', result.value, detail)), `${result.value}${detail}`);
+					},
+					onDisengaged: () => {
+						// The service ended the conversation itself: nothing to stop.
+						serverEnded = true;
+						log(t('log.disengaged'));
+						fail(new CopilotDisengagedError());
+					},
 					onCannedReply: (text, messageId, emitText) => {
 						// The service's own canned reply instead of the forced
 						// model: that model did not run. With Auto, or after real
@@ -493,11 +990,27 @@ export async function streamCopilotTurn(options: {
 							forcedTone: tone,
 							treatedAsModelUnavailable: Boolean(tone) && totalEmittedChars === 0,
 						}));
-						if (tone && totalEmittedChars === 0) fail(new CopilotModelUnavailableError(tone, text));
+						if (tone && totalEmittedChars === 0 && PRIORITY_ACCESS_TEXT.test(text)) {
+							// The priority-access refusal, when the result did not say OutOfCredits.
+							const window = quotaWindowOf(text);
+							fail(new CopilotQuotaExhaustedError(tone, text, window, quotaResetAt(window)));
+						} else if (tone && totalEmittedChars === 0 && LICENCE_TEXT.test(text)) {
+							// No licence for what the turn asked: the paid model, or the account.
+							fail(selector?.paid ? new CopilotPremiumRequiredError(tone, text) : new CopilotLicenseError('InvalidCopilotLicense', text));
+						} else if (tone && totalEmittedChars === 0) fail(new CopilotModelUnavailableError(tone, text));
 						else emitText(text, false, messageId);
 					},
 					respondPing: () => send(JSON.stringify({ type: 6 }) + RS, 'SignalR ping reply'),
 					onSources: (sources) => callbacks.onSources?.(sources),
+					observe: (payload) => summary.observe(payload),
+					onProgress: (message) => {
+						const detail = remoteWorkOf(message);
+						if (detail === null) return;
+						summary.remoteWork.push(detail);
+						log(t('log.remoteWork', detail));
+						debug(scope, `the model is working in M365's own cloud sandbox: ${detail}`, message);
+						callbacks.onRemoteWork?.(detail);
+					},
 				});
 			}
 		});
@@ -511,10 +1024,18 @@ interface FrameHandlers {
 	onError: (error: Error) => void;
 	/** The service turned the turn down; `reason` is its own words. */
 	onRejected: (error: CopilotClientError, reason: string) => void;
+	/** The final item's `result` was not a success. */
+	onServiceResult: (result: ServiceResult) => void;
+	/** The safety filter declined to answer (`messageType: "Disengaged"`). */
+	onDisengaged: () => void;
 	/** A reply written by the service itself (`contentOrigin: "BotConnection"`), not by the model. */
 	onCannedReply: (text: string, messageId: string | undefined, emitText: FrameHandlers['emitText']) => void;
 	respondPing: () => void;
 	onSources: (sources: readonly WebSource[]) => void;
+	/** Every payload, for the turn's summary (scores, metering, result). */
+	observe: (payload: Record<string, unknown>) => void;
+	/** A bot `Progress` message (its own sandbox work shows up here). */
+	onProgress: (message: Record<string, unknown>) => void;
 }
 
 const FRAME_TYPES: Record<number, string> = {
@@ -589,14 +1110,18 @@ function handleFrame(
 	for (const arg of args) {
 		if (!arg || typeof arg !== 'object') continue;
 		const payload = arg as Record<string, unknown>;
+		h.observe(payload);
 
 		// StreamInvocation result channel (type 2 item): `{ result: { value } }`.
 		// Any non-success value means the service rejected/failed the request —
 		// surface it instead of silently completing with no text.
-		const result = payload.result as { value?: string; message?: string } | undefined;
+		const result = payload.result as { value?: unknown; errorCode?: unknown; message?: unknown } | undefined;
 		if (result && typeof result.value === 'string' && result.value !== 'Success') {
-			const detail = result.message ? `: ${result.message}` : '';
-			h.onRejected(new CopilotClientError(t('client.error.rejected', result.value, detail)), `${result.value}${detail}`);
+			h.onServiceResult({
+				value: result.value,
+				...(typeof result.errorCode === 'string' && result.errorCode ? { errorCode: result.errorCode } : {}),
+				...(typeof result.message === 'string' && result.message ? { message: result.message } : {}),
+			});
 			return;
 		}
 
@@ -615,8 +1140,7 @@ function handleFrame(
 					return;
 				}
 				if (outcome === 'filtered') {
-					h.emitText(t('client.filtered'), false);
-					h.onComplete();
+					h.onDisengaged();
 					return;
 				}
 			}
@@ -634,6 +1158,10 @@ function consumeBotMessage(m: unknown, mode: TurnMode, h: FrameHandlers): 'text'
 
 	// Content-filter / declined engagement.
 	if (messageType === 'Disengaged') return 'filtered';
+	if (messageType === 'Progress') {
+		h.onProgress(msg);
+		return 'skip';
+	}
 
 	const sources = sourcesOf(msg);
 	if (sources.length > 0) h.onSources(sources);
@@ -689,11 +1217,14 @@ function sendInvocation(
 	log: (message: string) => void,
 	mode: TurnMode,
 	scope: string,
+	annotations: readonly Record<string, unknown>[],
 ): void {
+	// A web turn replays the web app's own invocation when the browser side
+	// captured one; with a token pasted by hand, the lean one plus web search.
 	const args =
-		mode === 'web' && profile.invocationTemplate
-			? buildWebInvocationArgs(profile.invocationTemplate, prompt, tone, conversationId)
-			: buildInvocationArgs(prompt, tone, conversationId);
+		mode === 'web'
+			? buildWebInvocationArgs(profile.invocationTemplate ?? syntheticWebTemplate(), prompt, tone, conversationId, annotations)
+			: buildInvocationArgs(prompt, tone, conversationId, annotations);
 
 	const chatFrame = {
 		arguments: [args],
@@ -744,6 +1275,7 @@ function buildInvocationArgs(
 	prompt: string,
 	tone: string | null,
 	conversationId: string,
+	annotations: readonly Record<string, unknown>[] = [],
 ): Record<string, unknown> {
 	const base = defaultInvocationArgs();
 
@@ -751,6 +1283,7 @@ function buildInvocationArgs(
 	const message = base.message as Record<string, unknown>;
 	message.text = prompt;
 	message.author = 'user';
+	if (annotations.length > 0) message.messageAnnotations = [...annotations];
 
 	// Tone / model selection; defaultInvocationArgs() already set Auto.
 	if (tone) base.tone = tone;
@@ -774,6 +1307,7 @@ export function buildWebInvocationArgs(
 	prompt: string,
 	tone: string | null,
 	conversationId: string,
+	annotations: readonly Record<string, unknown>[] = [],
 ): Record<string, unknown> {
 	const args = JSON.parse(JSON.stringify(template)) as Record<string, unknown>;
 	const captured = args.message && typeof args.message === 'object' ? (args.message as Record<string, unknown>) : {};
@@ -787,7 +1321,10 @@ export function buildWebInvocationArgs(
 	for (const key of ['requestId', 'messageId']) if (key in message) message[key] = randomUUID();
 	if ('timestamp' in message) message.timestamp = new Date().toISOString();
 	// What the web page attached to ITS message (files, cards…) is not ours.
-	for (const key of ['attachments', 'contextualInfo', 'adaptiveCards', 'imageUrl', 'originalImageUrl']) delete message[key];
+	for (const key of ['attachments', 'contextualInfo', 'adaptiveCards', 'imageUrl', 'originalImageUrl', 'messageAnnotations']) {
+		delete message[key];
+	}
+	if (annotations.length > 0) message.messageAnnotations = [...annotations];
 	args.message = message;
 	for (const key of ['previousMessages', 'conversationSignature', 'gptId']) delete args[key];
 	if ('requestId' in args) args.requestId = randomUUID();
@@ -797,6 +1334,24 @@ export function buildWebInvocationArgs(
 	args.tone = tone ?? AUTO_TONE;
 	args.conversationId = conversationId;
 	args.isStartOfSession = true;
+	// So that a filtered web turn says so instead of arriving empty (see defaultInvocationArgs).
+	if (Array.isArray(args.allowedMessageTypes) && !args.allowedMessageTypes.includes('Disengaged')) {
+		args.allowedMessageTypes = [...(args.allowedMessageTypes as unknown[]), 'Disengaged'];
+	}
+	return args;
+}
+
+/**
+ * A web turn when the browser side captured no invocation (a token pasted by
+ * hand): the lean one with the web app's search plugin, which is all web search
+ * needs (cramt/m365-copilot-proxy, docs §4), and the message types its answer
+ * comes with.
+ */
+export function syntheticWebTemplate(): Record<string, unknown> {
+	const args = defaultInvocationArgs();
+	args.plugins = [{ Id: 'BingWebSearch', Source: 'BuiltIn' }];
+	const types = (args.allowedMessageTypes as string[]).filter((type) => type !== 'EndOfRequest');
+	args.allowedMessageTypes = [...types, 'InternalSearchQuery', 'SearchQuery', 'RenderCardRequest', 'ReferencesListComplete', 'EndOfRequest'];
 	return args;
 }
 
@@ -806,7 +1361,9 @@ function defaultInvocationArgs(): Record<string, unknown> {
 		tone: AUTO_TONE,
 		streamingMode: 'ConciseWithPadding',
 		isStartOfSession: true,
-		allowedMessageTypes: ['Chat', 'Suggestion', 'Progress', 'EndOfRequest'],
+		// The server only sends the message types a client declares: without
+		// `Disengaged` a filtered turn arrives as an empty one (cramt/m365-copilot-proxy).
+		allowedMessageTypes: ['Chat', 'Suggestion', 'Progress', 'Disengaged', 'EndOfRequest'],
 		clientInfo: { clientPlatform: 'mcmcopilot-web', clientAppName: 'Office' },
 		message: { author: 'user', messageType: 'Chat', locale: bizChatLocale() },
 	};
@@ -824,6 +1381,7 @@ function defaultInvocationArgs(): Record<string, unknown> {
 export function isRetryableClientError(error: unknown): boolean {
 	if (error instanceof CopilotAuthError) return false; // same bad token would fail again
 	if (error instanceof CopilotModelUnavailableError) return false; // same tone would fail again
+	if (isAccountLevelError(error)) return false; // throttled, out of quota, no licence, filtered: the same again
 	if (!(error instanceof CopilotClientError)) return false;
 	if (error.message === '__CANCELLED__') return false;
 	return true;
@@ -860,12 +1418,11 @@ export async function streamCopilotTurnWithRetry(
 	let emittedAny = false;
 	const log = options.log ?? (() => {});
 	const callbacks: StreamCallbacks = {
+		...options.callbacks,
 		onText: (delta) => {
 			if (delta) emittedAny = true;
 			options.callbacks.onText(delta);
 		},
-		onDone: options.callbacks.onDone,
-		onSources: options.callbacks.onSources,
 	};
 
 	try {
@@ -890,7 +1447,13 @@ export async function streamCopilotTurnWithRetry(
  * `officeweb` surface actually expects; if Microsoft ever rotates it (e.g.
  * `Chathub` → `ChatHubV2`) it needs to change here for everyone.
  */
-function buildEndpoint(profile: CopilotProfile, conversationId: string, base?: string, mode: TurnMode = 'tools'): string {
+function buildEndpoint(
+	profile: CopilotProfile,
+	conversationId: string,
+	base: string,
+	mode: TurnMode,
+	scenario: { scenario: string; licenseType?: string },
+): string {
 	const sessionId = randomUUID();
 
 	const oid = profile.claims?.oid ?? '';
@@ -904,13 +1467,103 @@ function buildEndpoint(profile: CopilotProfile, conversationId: string, base?: s
 		source: 'officeweb',
 		product: 'Office',
 		agentHost: 'Bizchat.FullScreen',
-		scenario: 'OfficeWebIncludedCopilot',
+		scenario: scenario.scenario,
 	});
+	if (scenario.licenseType) params.set('licenseType', scenario.licenseType);
 	// A web turn carries the web app's feature flags too (see above): they are
 	// what turns its plugins on.
 	const variants = mode === 'web' ? capturedVariants(profile.endpoint) : undefined;
 	if (variants) params.set('variants', variants);
-	return `${base ?? `${DEFAULT_ENDPOINT_HOST}${DEFAULT_ENDPOINT_PATH}`}/${oid}@${tid}?${params.toString()}`;
+	if (temporaryChat) params.set('disableMemory', '1');
+	return `${base}/${oid}@${tid}?${params.toString()}`;
+}
+
+/** `…/m365Copilot/Chathub` → `…/m365Copilot/UploadFile`, over https (http for a local mock). */
+function uploadUrlFor(base: string): string {
+	return `${base.replace(/^ws/i, 'http').replace(/\/Chathub\/?$/i, '')}/UploadFile`;
+}
+
+/**
+ * Upload the turn's images the way the web app uploads a pasted one: a form
+ * POST to `UploadFile` with the chat token, tied to the conversation, which
+ * answers with a `docId`; the chat message then carries an `ImageFile`
+ * annotation per image (cramt/m365-copilot-proxy, docs §4, core/image-input.ts).
+ * Returns the annotations of those that made it.
+ */
+async function uploadImages(options: {
+	images: readonly TurnImage[];
+	uploadUrl: string;
+	profile: CopilotProfile;
+	conversationId: string;
+	scenario: string;
+	signal: AbortSignal;
+	scope: string;
+	onSkipped: (reason: string) => void;
+}): Promise<Record<string, unknown>[]> {
+	const { images, profile, signal, scope } = options;
+	const annotations: Record<string, unknown>[] = [];
+	if (images.length > MAX_TURN_IMAGES) options.onSkipped(t('client.image.tooMany', images.length - MAX_TURN_IMAGES, MAX_TURN_IMAGES));
+	for (const [index, image] of images.slice(-MAX_TURN_IMAGES).entries()) {
+		if (signal.aborted) break;
+		const mime = image.mimeType.toLowerCase() === 'image/jpg' ? 'image/jpeg' : image.mimeType.toLowerCase();
+		const fileType = IMAGE_FILE_TYPES[mime];
+		if (!fileType) {
+			options.onSkipped(t('client.image.type', image.mimeType));
+			continue;
+		}
+		if (image.data.byteLength > MAX_IMAGE_BYTES) {
+			options.onSkipped(t('client.image.tooBig', Math.ceil(image.data.byteLength / (1024 * 1024)), MAX_IMAGE_BYTES / (1024 * 1024)));
+			continue;
+		}
+		const form = new URLSearchParams({
+			scenario: 'UploadImage',
+			conversationId: options.conversationId,
+			FileBase64: `data:${mime};base64,${Buffer.from(image.data).toString('base64')}`,
+		});
+		for (const set of ['cwcgptvsan', 'flux_v3_gptv_enable_upload_multi_image_in_turn_wo_ch']) form.append('optionsSets', set);
+		const startedAt = Date.now();
+		debug(scope, `→ UploadFile: image ${index + 1} (${mime}, ${image.data.byteLength} bytes)`, () => ({ url: options.uploadUrl }));
+		try {
+			const response = await fetch(options.uploadUrl, {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${profile.accessToken}`,
+					'Content-Type': 'application/x-www-form-urlencoded',
+					'X-Scenario': options.scenario,
+					'X-Variants': 'feature.EnableImageSupportInUploadFile',
+					Origin: profile.origin,
+					Referer: `${profile.origin.replace(/\/$/, '')}/`,
+					'User-Agent': profile.userAgent,
+				},
+				body: form,
+				signal,
+			});
+			const body = await response.text();
+			debug(scope, `← UploadFile ${response.status} (${Date.now() - startedAt} ms)`, body);
+			if (!response.ok) throw new Error(`UploadFile ${response.status}: ${truncate(body, 200)}`);
+			let docId: unknown;
+			try {
+				docId = (JSON.parse(body) as { docId?: unknown }).docId;
+			} catch {
+				/* not JSON: reported below */
+			}
+			if (typeof docId !== 'string' || !docId) throw new Error(`UploadFile: no docId (${truncate(body, 200)})`);
+			annotations.push({
+				id: docId,
+				messageAnnotationType: 'ImageFile',
+				messageAnnotationMetadata: {
+					'@type': 'File',
+					annotationType: 'File',
+					fileType,
+					fileName: `image-${annotations.length + 1}.${fileType}`,
+				},
+			});
+		} catch (error) {
+			if (signal.aborted) break;
+			options.onSkipped(t('client.image.upload', error instanceof Error ? error.message : String(error)));
+		}
+	}
+	return annotations;
 }
 
 /** The `variants` query parameter of the captured endpoint, if any. */

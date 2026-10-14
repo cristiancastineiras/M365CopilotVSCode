@@ -84,3 +84,6 @@ Desktop.ini
 # Despliegues locales
 .vercel/
 .netlify/
+
+
+/m365-copilot-proxy/

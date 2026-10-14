@@ -17,7 +17,7 @@ import {
 	type ToolCatalog,
 	type ToolParameter,
 } from './toolCatalog';
-import { t } from './i18n';
+import { bizChatLocale, t } from './i18n';
 
 export {
 	M365_TOOL_NAMES,
@@ -68,9 +68,23 @@ const BLOCK_CLOSE_LITERAL = '</m365_block>';
 /** Generous cap on a single block's raw text while still streaming in. */
 const MAX_BLOCK_CHARS = 600_000;
 
+/**
+ * M365 Copilot's replies end around 12,000–13,000 characters, with no error:
+ * the model wraps up early, so a file written in one go comes out cut short
+ * while looking finished (github.com/cramt/m365-copilot-proxy, quirk #20). From
+ * {@link NEAR_OUTPUT_LIMIT_CHARS} on, a reply is treated as having run into it.
+ */
+export const OUTPUT_LIMIT_CHARS = 12_000;
+export const NEAR_OUTPUT_LIMIT_CHARS = 10_500;
+
 /** Profundidad y nodos máximos al recorrer el `input` buscando bloques. */
 const MAX_INPUT_DEPTH = 8;
 const MAX_INPUT_NODES = 5_000;
+
+/** The tool name of a call whose JSON never closed (`"name":"…"` near the marker), or `?`. */
+function nameInPartialCall(text: string): string {
+	return /"name"\s*:\s*"([^"]{1,128})"/.exec(text)?.[1] ?? '?';
+}
 
 export interface DecodedToolCall {
 	/** Nombre exacto tal y como lo ofreció el host (nuestro o nativo). */
@@ -104,6 +118,7 @@ export function buildToolProtocolInstructions(catalog: ToolCatalog): string {
 		...(hasM365Edits
 			? [t('protocol.rule.editFields', M365_TOOL_NAMES.applyWorkspaceEdits), t('protocol.rule.batches')]
 			: []),
+		...(catalog.hasEditTools ? [t('protocol.rule.outputLimit', OUTPUT_LIMIT_CHARS.toLocaleString(bizChatLocale()))] : []),
 		...(catalog.hasEditTools && hasDiagnostics ? [t('protocol.rule.diagnostics')] : []),
 		...(hasEditorTools ? [t('protocol.rule.native')] : []),
 		t('protocol.rule.errors'),
@@ -339,6 +354,8 @@ export function buildToolProtocolReminder(catalog: ToolCatalog, toolsRequired = 
 export class ToolCallDecoder {
 	private mode: 'scan' | 'collecting-blocks' | 'passthrough' | 'done';
 	private buffer = '';
+	/** Everything the reply has written so far, to tell a cut-off call from a malformed one. */
+	private received = 0;
 	private readonly allowedNames: ReadonlySet<string>;
 	private readonly onText: (text: string) => void;
 	private readonly onToolCall: (call: DecodedToolCall) => void;
@@ -364,6 +381,7 @@ export class ToolCallDecoder {
 
 	push(delta: string): void {
 		if (!delta) return;
+		this.received += delta.length;
 		if (this.mode === 'passthrough') {
 			this.onText(delta);
 			return;
@@ -382,6 +400,8 @@ export class ToolCallDecoder {
 			if (open) {
 				const preamble = stripTrailingOpenFence(this.buffer.slice(0, open.index));
 				if (preamble) this.onText(preamble);
+				// Cut off by the output limit, not malformed: say so, or the turn ends blank.
+				if (this.received >= NEAR_OUTPUT_LIMIT_CHARS) this.onText(this.incompleteCallNotice(nameInPartialCall(this.buffer)));
 			} else {
 				this.onText(stripTrailingPartialOpen(this.buffer));
 			}
@@ -566,7 +586,9 @@ export class ToolCallDecoder {
 	}
 
 	private incompleteCallNotice(name: string): string {
-		return t('protocol.incompleteCall', name);
+		return this.received >= NEAR_OUTPUT_LIMIT_CHARS
+			? t('protocol.incompleteCallLimit', name, OUTPUT_LIMIT_CHARS.toLocaleString(bizChatLocale()))
+			: t('protocol.incompleteCall', name);
 	}
 
 	/** Give up buffering if a marker never closes, so a huge stream can't get stuck. */

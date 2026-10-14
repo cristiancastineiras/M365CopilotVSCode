@@ -36,6 +36,7 @@ import {
 } from './participantPrompts';
 import { isTokenUsable } from './profile';
 import type { ProfileStore } from './secrets';
+import { MAX_TURN_IMAGES, type TurnImage } from './client';
 import { MAX_TASK_WALL_CLOCK_MS, runToolLoop } from './subagentCore';
 import { retrievalText } from './transcript';
 import { toolResultToText } from './subagents';
@@ -151,16 +152,19 @@ async function handleRequest(
 		deps.log(t('log.indexContextFailed', errorMessage(error)));
 	}
 
-	const framing = buildParticipantFraming({
-		command,
-		request: request.prompt,
-		code,
-		terminal,
-		history,
-		attachedPaths,
-		projectContext,
-		environment: currentEnvironment(),
-	});
+	// Screenshots pasted or attached in the chat go with every step, uploaded like the web app does.
+	const images = await imagesOf(request.references);
+	const framing =
+		buildParticipantFraming({
+			command,
+			request: request.prompt,
+			code,
+			terminal,
+			history,
+			attachedPaths,
+			projectContext,
+			environment: currentEnvironment(),
+		}) + (images.length > 0 ? `\n\n${t('prompt.imagesAttached', images.length)}` : '');
 	const wanted = new Set(toolsForCommand(command));
 	const offeredTools = vscode.lm.tools.filter((tool) => wanted.has(tool.name));
 	debug('participant', `tools offered to the loop (${offeredTools.length})`, () => offeredTools.map((tool) => tool.name));
@@ -186,6 +190,8 @@ async function handleRequest(
 			offeredTools,
 			singleRoot: (vscode.workspace.workspaceFolders?.length ?? 0) <= 1,
 			log: deps.log,
+			images,
+			onImageSkipped: (reason) => stream.markdown(t('provider.imageSkipped', reason)),
 			onProse: (delta) => {
 				const formatted = markdown.push(delta);
 				if (formatted) stream.markdown(formatted);
@@ -319,6 +325,42 @@ const FOLLOWUP_LABELS: Readonly<Record<ParticipantCommand, MessageKey>> = {
 };
 
 /** A chat reference's value in a form worth reading in a log: Uris and locations as text, the rest by type. */
+const IMAGE_FILE = /\.(?:png|jpe?g|gif|webp|bmp)$/i;
+const MAX_IMAGE_FILE_BYTES = 10 * 1024 * 1024;
+
+/**
+ * The images among the request's references: a pasted screenshot arrives as
+ * binary data (`mimeType` + `data()`, VS Code's `ChatReferenceBinaryData`), an
+ * attached image file as its Uri. The most recent {@link MAX_TURN_IMAGES}.
+ */
+async function imagesOf(references: readonly vscode.ChatPromptReference[]): Promise<TurnImage[]> {
+	const images: TurnImage[] = [];
+	for (const reference of references) {
+		const value = reference.value as { mimeType?: unknown; data?: unknown } | undefined;
+		try {
+			if (value instanceof vscode.Uri) {
+				if (!IMAGE_FILE.test(value.path)) continue;
+				const stat = await vscode.workspace.fs.stat(value);
+				if (stat.size > MAX_IMAGE_FILE_BYTES) continue;
+				const extension = value.path.slice(value.path.lastIndexOf('.') + 1).toLowerCase();
+				images.push({ mimeType: `image/${extension === 'jpg' ? 'jpeg' : extension}`, data: await vscode.workspace.fs.readFile(value) });
+			} else if (
+				value &&
+				typeof value === 'object' &&
+				typeof value.mimeType === 'string' &&
+				/^image\//i.test(value.mimeType) &&
+				typeof value.data === 'function'
+			) {
+				const data: unknown = await (value.data as () => Thenable<Uint8Array>)();
+				if (data instanceof Uint8Array) images.push({ mimeType: value.mimeType, data });
+			}
+		} catch (error) {
+			debug('participant', 'an attached image could not be read', error);
+		}
+	}
+	return images.slice(-MAX_TURN_IMAGES);
+}
+
 function describeReferenceValue(value: unknown): string {
 	if (value instanceof vscode.Uri) return value.toString();
 	if (value instanceof vscode.Location) return `${value.uri.toString()}#L${value.range.start.line + 1}-L${value.range.end.line + 1}`;

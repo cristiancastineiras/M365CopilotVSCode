@@ -199,9 +199,10 @@ que te vuelva a pedir las credenciales.
 
 El elemento **M365** de la barra de estado muestra el estado del token (🔑 aún
 no hay, ⚠ caducado, 🕑 cuenta atrás en sus últimos 10 minutos), si el
-autocompletado está activo y un indicador mientras llega una sugerencia. Su
-tooltip muestra la cuenta, los minutos restantes y los cambios del agente
-pendientes de revisar. Al pulsarlo se abre el **menú de M365 Copilot**: pegar
+autocompletado está activo, un ⌚ mientras M365 Copilot
+[limita la cuenta](#límites-y-rechazos-de-m365-copilot) y un indicador mientras
+llega una sugerencia. Su tooltip muestra la cuenta, los minutos restantes, hasta
+cuándo dura la limitación y los cambios del agente pendientes de revisar. Al pulsarlo se abre el **menú de M365 Copilot**: pegar
 token, estado del token, abrir M365 Copilot, abrir el chat, activar/desactivar
 el autocompletado, revisar cambios pendientes, generar mensaje de commit,
 autocommit, idioma, ajustes, primeros pasos, modo debug profundo, registro,
@@ -381,10 +382,13 @@ La lista de serie sigue el menú de la propia web, con sus nombres: **Auto**
 response** y **Think deeper** (M365 Copilot elige el modelo, rápido o a fondo),
 y después los modelos con nombre: GPT 5.6 Think deeper, GPT 5.5 Quick response /
 Think deeper, Claude Sonnet y Claude Sonnet Think deeper. Claude necesita que tu
-administrador tenga activados los modelos de Anthropic. Los más nuevos (GPT-6.1
-Sol, Claude Sonnet 5.5, Claude Opus 5.5…) llegan a las organizaciones por fases
-y sus `tone` no son públicos: úsalo una vez en M365 Copilot con la extensión de
-navegador o el userscript instalados y aparecerá en VS Code.
+administrador tenga activados los modelos de Anthropic. El catálogo en línea
+añade otros más nuevos: **GPT-6.1 Sol** y **GPT 6.0 Sol** (modelos de
+razonamiento: piensan antes de responder, así que son más lentos) y **GPT 5.6
+Quick response**, disponible otra vez (para tareas de agente va mejor GPT 5.5 o
+un modelo Think deeper). Los modelos cuyo `tone` aún no es público (llegan a las
+organizaciones por fases) aparecen en VS Code en cuanto los usas en M365 Copilot
+con la extensión de navegador o el userscript instalados.
 
 | Fuente | Cómo funciona |
 |--------|---------------|
@@ -403,9 +407,11 @@ ayudarte con eso» en lugar del modelo. En los dos casos la extensión lo dice �
 con el motivo que da el servicio y sugiriendo Auto — en vez de mostrar esa
 respuesta como si fuera la contestación, y marca el modelo en el selector (⚠
 «no disponible en tu cuenta ahora mismo») durante 12 horas o hasta que vuelva a
-funcionar. **M365 Copilot: Comprobar modelos** (también la primera entrada de
-*Actualizar modelos*) manda un mensaje corto a cada modelo, una conversación por
-modelo, y te dice cuáles funcionan.
+funcionar — o, si se ha agotado su acceso prioritario, hasta que se renueve (ver
+[Límites y rechazos](#límites-y-rechazos-de-m365-copilot)). **M365 Copilot:
+Comprobar modelos** (también la primera entrada de *Actualizar modelos*) manda
+un mensaje corto a cada modelo, una conversación por modelo, y te dice cuáles
+funcionan.
 
 | Ajuste | Por defecto | Para qué |
 |--------|-------------|----------|
@@ -415,6 +421,20 @@ modelo, y te dice cuáles funcionan.
 
 Los ajustes de modelo de los sub-agentes, del autocompletado y de las respuestas
 en el editor (`*.model`) ofrecen los modelos de serie.
+
+## Límites y rechazos de M365 Copilot
+
+M365 Copilot también puede rechazar un turno por motivos que no tienen nada que
+ver con el modelo. La extensión los reconoce, dice qué ha pasado con palabras
+claras (con el mensaje del propio servicio) y no reintenta: la misma petición
+recibiría la misma respuesta.
+
+| M365 Copilot dice | Qué hace la extensión |
+|-------------------|-----------------------|
+| **Limitado** (`Throttled` / `PerUserThrottled`): demasiadas peticiones en poco tiempo | La limitación se levanta sola tras alrededor de una hora sin peticiones, y reintentar antes solo la alarga. Así que lo que va por su cuenta — el autocompletado, el autocommit (salvo *Comprobar ahora*), *Comprobar modelos* — espera hasta 75 minutos después del último turno limitado: ⌚ en el elemento de la barra de estado (hasta cuándo, en su tooltip) y un aviso al empezar. Lo que pides tú sigue saliendo, y la primera respuesta levanta la pausa. |
+| **Acceso prioritario agotado** (`OutOfCredits`): los modelos con cupo permiten tantos turnos al día, algunos también a la semana | Dice cuándo se renueva — a medianoche UTC, el semanal el lunes, en tu hora — y marca el modelo en el selector hasta entonces. Mientras, elige otro modelo, o Auto. |
+| **Sin licencia válida** (`InvalidCopilotLicense`) | Lo dice. Es cosa de la cuenta, no del modelo, así que no se marca nada: consúltalo con el administrador de Microsoft 365. |
+| **Ha rehusado responder** (`Disengaged`) | Un error, nunca texto: una edición en línea o un mensaje de commit nunca acaban con el aviso en lugar de una respuesta. |
 
 ## Idiomas (inglés / español)
 
@@ -686,6 +706,15 @@ propósito la petición capturada — plugins, opciones y `variants` del endpoin
 con ids nuevos y sin mensajes anteriores, y sólo se usa donde no intervienen
 herramientas. El `locale` de la invocación sigue el idioma de la extensión.
 
+Cada turno es una conversación propia — cada paso del agente, cada sugerencia de
+autocompletado —, así que sale como **chat temporal** (`disableMemory=1`, el chat
+temporal de la web): funciona igual, pero no añade ningún chat a tu historial de
+Copilot. Activa `m365copilot.history.save` para guardarlos ahí. **Parar** una
+petición envía el mismo *stop* que el botón de parar de la web, así que M365
+Copilot deja de escribir en vez de terminar la respuesta para nadie; y un turno
+termina en cuanto su llamada a herramienta está completa, sin esperar a lo que
+el modelo escriba después.
+
 ## Si vienes de `ms365-copilot-vscode` (1.3 – 2.0)
 
 Las versiones 1.3 a 2.0 se publicaron como `ms365-copilot-vscode`, con ajustes
@@ -712,7 +741,9 @@ VS Code es otra extensión:
   propias confirmaciones.
 - **Una conversación por turno.** Cada turno abre un WebSocket nuevo y envía el
   historial aplanado, conservando los turnos más recientes y acotando los
-  resultados de herramientas para que coste y tamaño sean previsibles.
+  resultados de herramientas para que coste y tamaño sean previsibles — como
+  chat temporal, salvo con `m365copilot.history.save` activado (ver
+  [Cómo funciona](#cómo-funciona)).
 - El token se guarda **sólo** en el `SecretStorage` de VS Code (local, cifrado)
   y únicamente se envía a los endpoints de Microsoft. El servidor local que lo
   recibe del navegador (`localhost:51827`) sólo acepta los orígenes de

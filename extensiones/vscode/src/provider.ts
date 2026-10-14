@@ -5,6 +5,8 @@ import {
 	CopilotClientError,
 	CopilotAuthError,
 	CopilotModelUnavailableError,
+	accountTier,
+	isAccountLevelError,
 	type TurnMode,
 	type WebSource,
 } from './client';
@@ -12,7 +14,8 @@ import { debug, log } from './logger';
 
 import { currentEnvironment } from './editorContext';
 import { MarkdownStreamFormatter } from './markdown';
-import { flattenMessages, recentUserTexts } from './messages';
+import { flattenMessages, imagesOf, recentUserTexts } from './messages';
+import { looksLikeRemoteSandbox, ProseHold, toolFreeProblem } from './giveUp';
 import { retrievalText } from './transcript';
 import { webSearchEnabled } from './webSearch';
 import { sourcesMarkdown } from './webSearchPrompt';
@@ -71,7 +74,8 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 		const profile = await this.store.get();
 		const state: TokenState = !profile ? 'missing' : isTokenUsable(profile) ? 'ok' : 'expired';
 		const registry = modelRegistry();
-		const infos = allModels().map((m) => toChatInformation(m, state, registry?.unavailability(m.tone)));
+		const tier = profile ? accountTier(profile) : 'unknown';
+		const infos = allModels().map((m) => toChatInformation(m, state, registry?.unavailability(m.tone), tier));
 		// One line: VS Code asks again every time the picker refreshes.
 		debug('chat', `VS Code asked for the model list (${infos.length} models, token ${state})`);
 		return infos;
@@ -114,8 +118,9 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 		const catalog = buildToolCatalog(options.tools, readToolSettings());
 		const toolsRequired = options.toolMode === vscode.LanguageModelChatToolMode.Required;
 		// Without tools to call there is no text protocol to protect, so the
-		// turn can go out the way the web app sends it: with web search.
-		const webTurn = catalog.callable.size === 0 && webSearchEnabled() && Boolean(profile.invocationTemplate);
+		// turn can go out the way the web app sends it: with web search (its
+		// captured invocation, or the lean one with the search plugin).
+		const webTurn = catalog.callable.size === 0 && webSearchEnabled();
 		debug(scope, `turn mode decided: ${webTurn ? 'web (with BizChat plugins)' : 'tools (lean invocation)'}`, () => ({
 			callableTools: [...catalog.callable.keys()],
 			omittedTools: catalog.omitted,
@@ -131,11 +136,14 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 			log(t('log.indexContextFailed', error instanceof Error ? error.message : String(error)));
 		}
 		debug(scope, `project context (${projectContext?.length ?? 0} chars)`, projectContext);
+		// Screenshots pasted in the chat go with the turn, uploaded like the web app does.
+		const images = imagesOf(messages);
 		const prompt = flattenMessages(messages, {
 			catalog,
 			toolsRequired,
 			environment: currentEnvironment(),
 			projectContext,
+			attachedImages: new Set(images),
 		});
 		debug(scope, `prompt flattened (${prompt.length} chars) — exactly what goes to BizChat as the user message`, prompt);
 		log(
@@ -164,64 +172,127 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 				progress.report(new vscode.LanguageModelTextPart(formatted));
 			}
 		};
-		const toolDecoder = new ToolCallDecoder(
-			catalog.callable,
-			emitMarkdown,
-			(toolCall) => {
-				log(t('log.toolCallRequested', toolCall.name));
-				debug(scope, `→ tool call to VS Code: ${toolCall.name}`, toolCall.input);
-				progress.report(
-					new vscode.LanguageModelToolCallPart(randomUUID(), toolCall.name, toolCall.input),
-				);
-			},
-		);
 		const cancelListener = token.onCancellationRequested(() => controller.abort());
 		const sources: WebSource[] = [];
-		let emitted = false;
-		const run = (mode: TurnMode) => {
-			debug(scope, `starting the BizChat turn in "${mode}" mode`);
-			return streamCopilotTurnWithRetry({
-				profile,
-				prompt,
-				tone: selected?.tone ?? null,
-				mode,
-				signal: controller.signal,
-				log,
-				callbacks: {
-					onText: (delta) => {
-						if (delta) emitted = true;
-						toolDecoder.push(delta);
-					},
-					onSources: (found) => sources.push(...found),
+		const toolsOffered = catalog.callable.size > 0;
+		// What could not be attached is said once, before the answer.
+		const skippedImages = new Set<string>();
+		const onImageSkipped = (reason: string) => {
+			if (skippedImages.has(reason)) return;
+			skippedImages.add(reason);
+			progress.report(new vscode.LanguageModelTextPart(t('provider.imageSkipped', reason)));
+		};
+
+		/**
+		 * One BizChat turn. With tools offered, the start of the reply is held back
+		 * (giveUp.ts) until it is long or reaches its tool call, so that a reply
+		 * that gives up — or works in M365's own sandbox — can be retried before the
+		 * user sees it.
+		 */
+		const attempt = async (turnPrompt: string, hold: boolean) => {
+			// Ends the BizChat turn as soon as the tool call is complete: the decoder
+			// ignores whatever the model writes after it (often invented results, for
+			// minutes), and VS Code only runs the tool once the turn is over.
+			const finishTurn = new AbortController();
+			const held = new ProseHold(emitMarkdown);
+			if (!hold) held.flush();
+			let prose = '';
+			let called = false;
+			let remoteWork = false;
+			let emitted = false;
+			const toolDecoder = new ToolCallDecoder(
+				catalog.callable,
+				(text) => {
+					prose += text;
+					held.push(text);
 				},
-			});
+				(toolCall) => {
+					called = true;
+					held.flush();
+					log(t('log.toolCallRequested', toolCall.name));
+					debug(scope, `→ tool call to VS Code: ${toolCall.name}`, toolCall.input);
+					progress.report(
+						new vscode.LanguageModelToolCallPart(randomUUID(), toolCall.name, toolCall.input),
+					);
+					finishTurn.abort();
+				},
+			);
+			const run = (mode: TurnMode) => {
+				debug(scope, `starting the BizChat turn in "${mode}" mode`);
+				return streamCopilotTurnWithRetry({
+					profile,
+					prompt: turnPrompt,
+					tone: selected?.tone ?? null,
+					mode,
+					signal: controller.signal,
+					stopSignal: finishTurn.signal,
+					images,
+					log,
+					callbacks: {
+						onText: (delta) => {
+							if (delta) emitted = true;
+							toolDecoder.push(delta);
+						},
+						onSources: (found) => sources.push(...found),
+						onRemoteWork: () => (remoteWork = true),
+						onImageSkipped,
+					},
+				});
+			};
+			try {
+				try {
+					await run(webTurn ? 'web' : 'tools');
+				} catch (error) {
+					// The web app's invocation is captured, not designed for us: if
+					// BizChat turns it down, answer the plain way instead of failing.
+					const retryable =
+						webTurn &&
+						!emitted &&
+						!token.isCancellationRequested &&
+						error instanceof CopilotClientError &&
+						!(error instanceof CopilotAuthError) &&
+						// Throttled, out of quota, no licence, filtered: the plain turn would fare the same.
+						!isAccountLevelError(error) &&
+						error.message !== '__CANCELLED__';
+					if (!retryable) throw error;
+					log(t('log.webFallback', error.message));
+					debug(scope, 'the web invocation was turned down; falling back to the lean "tools" invocation', error);
+					await run('tools');
+				}
+			} catch (error) {
+				// A reply that fails half-way still shows what had arrived.
+				held.flush();
+				throw error;
+			}
+			toolDecoder.finish();
+			return { held, prose, called, remoteWork };
 		};
 
 		try {
-			try {
-				await run(webTurn ? 'web' : 'tools');
-			} catch (error) {
-				// The web app's invocation is captured, not designed for us: if
-				// BizChat turns it down, answer the plain way instead of failing.
-				const retryable =
-					webTurn &&
-					!emitted &&
-					!token.isCancellationRequested &&
-					error instanceof CopilotClientError &&
-					!(error instanceof CopilotAuthError) &&
-					error.message !== '__CANCELLED__';
-				if (!retryable) throw error;
-				log(t('log.webFallback', error.message));
-				debug(scope, 'the web invocation was turned down; falling back to the lean "tools" invocation', error);
-				await run('tools');
+			let turn = await attempt(prompt, toolsOffered);
+			// No tool call although tools were offered, and the reply gave up or
+			// worked in M365's own sandbox: once more, with a note that says what is
+			// true. What it wrote is dropped unseen (it was still held back).
+			const problem = toolsOffered && !turn.called && turn.held.holding ? toolFreeProblem(turn.prose, turn.remoteWork) : null;
+			if (problem) {
+				const dropped = turn.held.discard();
+				log(t('log.forcedRetry', problem));
+				debug(scope, `no tool call and the reply ${problem === 'sandbox' ? 'worked in its own sandbox' : 'gave up'}: retrying once`, dropped);
+				turn = await attempt(`${prompt}\n\n${t(problem === 'sandbox' ? 'protocol.force.sandbox' : 'protocol.force.giveUp')}`, false);
 			}
-			toolDecoder.finish();
+			turn.held.flush();
+			// Still in its sandbox: say plainly that nothing happened here.
+			if (toolsOffered && !turn.called && (turn.remoteWork || looksLikeRemoteSandbox(turn.prose))) {
+				emitMarkdown(t('turn.remoteSandbox'));
+			}
 			const formatted = markdown.finish();
 			if (formatted) progress.report(new vscode.LanguageModelTextPart(formatted));
 			const cited = sourcesMarkdown(sources);
 			if (cited) progress.report(new vscode.LanguageModelTextPart(cited));
 			debug(scope, `request finished in ${Date.now() - started} ms`, () => ({
-				streamedAnyText: emitted,
+				calledTool: turn.called,
+				forcedRetry: problem,
+				images: images.length,
 				sources: sources.map((source) => source.url),
 			}));
 		} catch (error) {
@@ -242,6 +313,7 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 				error instanceof CopilotClientError &&
 				!(error instanceof CopilotAuthError) &&
 				!(error instanceof CopilotModelUnavailableError) &&
+				!isAccountLevelError(error) &&
 				selected &&
 				selected.source !== 'builtin'
 			) {

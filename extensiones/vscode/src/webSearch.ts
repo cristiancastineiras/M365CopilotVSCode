@@ -6,8 +6,9 @@
  * client.ts), and also why M365 Copilot "has no internet" from VS Code. This
  * tool gives it back where it is needed: it runs a separate turn in `web`
  * mode — the invocation the M365 Copilot web app itself sends, as captured by
- * the browser extension or the userscript, web search included — and returns
- * its answer with the sources to the turn that asked.
+ * the browser extension or the userscript, web search included; with a token
+ * pasted by hand, the lean one with the search plugin — and returns its answer
+ * with the sources to the turn that asked.
  */
 import * as vscode from 'vscode';
 import { registerTracedTool } from './debugMode';
@@ -54,10 +55,7 @@ async function searchWeb(
 	}
 	const profile = await store.get();
 	if (!profile || !isTokenUsable(profile)) throw new Error(t(profile ? 'participant.tokenExpired' : 'participant.noToken'));
-	if (!profile.invocationTemplate) {
-		debug('web', 'refused: no web invocation captured yet (needs the browser extension or userscript)');
-		return t('web.noTemplate');
-	}
+	debug('web', profile.invocationTemplate ? 'using the captured web invocation' : 'no captured web invocation: the lean one with BingWebSearch');
 
 	const controller = new AbortController();
 	const cancel = token.onCancellationRequested(() => controller.abort());

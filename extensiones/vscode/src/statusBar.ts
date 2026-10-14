@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import { isTokenUsable, minutesUntilExpiry, type CopilotProfile } from './profile';
 import type { CompletionBusySink } from './completions';
 import type { ProfileStore } from './secrets';
-import { t } from './i18n';
+import { formatMoment, t } from './i18n';
+import { accountThrottledUntil } from './throttle';
 
 const COMPLETIONS_SECTION = 'm365copilot.inlineCompletions';
 /** Below this many minutes left, the item shows a countdown instead of the plain icon. */
@@ -88,11 +89,14 @@ export class M365StatusBar implements CompletionBusySink, vscode.Disposable {
 			icon = '$(clock)';
 			suffix = ` ${minutes}m`;
 		}
+		// M365 is limiting the account: automatic requests are paused (throttle.ts).
+		const throttledUntil = accountThrottledUntil();
+		if (usable && throttledUntil !== undefined) icon = '$(watch)';
 		if (this.busy) icon = '$(loading~spin)';
 
 		this.item.text = `${icon} M365${suffix}${this.debugOn ? ' $(bug)' : ''}`;
 		this.item.backgroundColor = background;
-		this.item.tooltip = this.tooltip(profile, usable, minutes, completionsOn);
+		this.item.tooltip = this.tooltip(profile, usable, minutes, completionsOn, throttledUntil);
 	}
 
 	private tooltip(
@@ -100,6 +104,7 @@ export class M365StatusBar implements CompletionBusySink, vscode.Disposable {
 		usable: boolean,
 		minutes: number | null,
 		completionsOn: boolean,
+		throttledUntil: number | undefined,
 	): vscode.MarkdownString {
 		const lines = [`**${t('statusbar.tooltip.title')}**`, ''];
 		if (profile?.claims?.upn) lines.push(`$(account) ${t('statusbar.tooltip.account', profile.claims.upn)}`);
@@ -117,6 +122,7 @@ export class M365StatusBar implements CompletionBusySink, vscode.Disposable {
 				? `$(sparkle) ${t('statusbar.tooltip.completionsOn')}`
 				: `$(circle-slash) ${t('statusbar.tooltip.completionsOff')}`,
 		);
+		if (throttledUntil !== undefined) lines.push(`$(watch) ${t('statusbar.tooltip.throttled', formatMoment(throttledUntil))}`);
 		if (this.busy) lines.push(`$(loading~spin) ${t('statusbar.tooltip.busy')}`);
 		if (this.pendingEdits > 0) lines.push(`$(edit) ${t('statusbar.tooltip.pendingEdits', this.pendingEdits)}`);
 		if (this.debugOn) lines.push(`$(bug) ${t('statusbar.tooltip.debug')}`);

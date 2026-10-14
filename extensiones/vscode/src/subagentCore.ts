@@ -6,7 +6,8 @@
  * ejecución real de herramientas (`vscode.lm.invokeTool`) se inyecta desde
  * fuera como `executeTool`.
  */
-import { streamCopilotTurnWithRetry } from './client';
+import { streamCopilotTurnWithRetry, type TurnImage } from './client';
+import { looksLikeRemoteSandbox, ProseHold, toolFreeProblem, type ToolFreeProblem } from './giveUp';
 import type { CopilotProfile } from './profile';
 import {
 	buildToolCatalog,
@@ -102,6 +103,10 @@ export interface ToolLoopParams {
 	readonly maxWallClockMs?: number;
 	/** Workspace de una sola carpeta: el catálogo omite `workspaceFolder`. */
 	readonly singleRoot?: boolean;
+	/** Imágenes que el usuario adjuntó: van en cada paso (cada paso es una conversación nueva). */
+	readonly images?: readonly TurnImage[];
+	/** Una imagen que no se pudo adjuntar (el bucle sigue sin ella). */
+	readonly onImageSkipped?: (reason: string) => void;
 }
 
 export interface ToolLoopResult {
@@ -177,6 +182,11 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
 	const steps: LoopStep[] = [];
 	let lastResultText = '';
 	const startedAt = Date.now();
+	const toolsOffered = catalog.callable.size > 0;
+	// One forced retry per loop when a step gives up or works in M365's own
+	// sandbox instead of calling a tool (giveUp.ts); its note goes after the prompt.
+	let forced: ToolFreeProblem | null = null;
+	let forcedNote = '';
 	const wallClockBudgetMs = params.maxWallClockMs ?? MAX_TASK_WALL_CLOCK_MS;
 
 	for (let step = 1; step <= maxSteps; step += 1) {
@@ -190,14 +200,24 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
 
 		let call: DecodedToolCall | null = null;
 		let text = '';
+		let remoteWork = false;
+		// While a step's reply is short and has not called a tool, its prose is
+		// held back: a give-up is then retried before anyone sees it.
+		const held = new ProseHold((delta) => params.onProse?.(delta));
+		if (!toolsOffered || forced) held.flush();
+		// The step's turn ends as soon as its tool call is complete: what the
+		// model writes after it is ignored anyway, and can run for minutes.
+		const finishTurn = new AbortController();
 		const decoder = new ToolCallDecoder(
 			catalog.callable,
 			(delta) => {
 				text += delta;
-				params.onProse?.(delta);
+				held.push(delta);
 			},
 			(decoded) => {
 				call = decoded;
+				held.flush();
+				finishTurn.abort();
 			},
 		);
 
@@ -205,15 +225,22 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
 		try {
 			await streamCopilotTurnWithRetry({
 				profile,
-				prompt: buildLoopPrompt(framing, catalog, steps),
+				prompt: buildLoopPrompt(framing, catalog, steps) + forcedNote,
 				tone,
 				signal,
+				stopSignal: finishTurn.signal,
 				endpointBase,
 				log,
-				callbacks: { onText: (delta) => decoder.push(delta) },
+				images: params.images,
+				callbacks: {
+					onText: (delta) => decoder.push(delta),
+					onRemoteWork: () => (remoteWork = true),
+					onImageSkipped: params.onImageSkipped,
+				},
 			});
 			decoder.finish();
 		} catch (error) {
+			held.flush();
 			if (signal.aborted) return { ok: false, outcome: 'cancelled', summary: t('subagent.cancelled'), steps: step - 1 };
 			const message = error instanceof Error ? error.message : String(error);
 			onStep({ step, kind: 'error', detail: message });
@@ -221,10 +248,29 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
 		}
 
 		if (!call) {
-			const summary = text.trim() || t('subagent.noText');
+			// Gave up, or worked in its own sandbox: the same step once more, with
+			// a note that says what is true (the dropped reply was never shown).
+			const problem: ToolFreeProblem | null =
+				toolsOffered && !forced && held.holding ? toolFreeProblem(text, remoteWork) : null;
+			if (problem) {
+				forced = problem;
+				forcedNote = `\n\n${t(problem === 'sandbox' ? 'protocol.force.sandbox' : 'protocol.force.giveUp')}`;
+				log(t('log.forcedRetry', problem));
+				held.discard();
+				step -= 1;
+				continue;
+			}
+			held.flush();
+			let summary = text.trim() || t('subagent.noText');
+			if (toolsOffered && (remoteWork || looksLikeRemoteSandbox(text))) {
+				const warning = t('turn.remoteSandbox');
+				params.onProse?.(warning);
+				summary += warning;
+			}
 			onStep({ step, kind: 'done', detail: summary });
 			return { ok: true, outcome: 'done', summary, steps: step };
 		}
+		forcedNote = '';
 
 		// `call` is mutated inside the decoder's closures; a type assertion
 		// (rather than relying on narrowing across that boundary) is used here
