@@ -43,6 +43,12 @@ updates:
     cooldown:
       default-days: 3
       semver-major-days: 7
+    # `@types/vscode` va atado a `engines.vscode` (extensiones/vscode): vsce se
+    # niega a empaquetar si los tipos son más nuevos que el VS Code mínimo, y
+    # subir ese mínimo deja fuera a quien use una versión anterior. Se sube a
+    # mano, las dos cosas a la vez, cuando se decida subir el mínimo.
+    ignore:
+      - dependency-name: "@types/vscode"
     groups:
       production-dependencies:
         dependency-type: production

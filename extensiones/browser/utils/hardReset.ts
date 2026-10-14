@@ -162,7 +162,7 @@ function navigateAndWait(tabId: number, url: string, timeoutMs: number): Promise
       else resolve();
     };
 
-    const listener = (updatedTabId: number, info: chrome.tabs.TabChangeInfo) => {
+    const listener = (updatedTabId: number, info: chrome.tabs.OnUpdatedInfo) => {
       // `complete` llega al final de la navegación, redirecciones
       // incluidas: es lo más cerca que estamos de «ya ha cerrado sesión».
       if (updatedTabId === tabId && info.status === "complete") finish();
@@ -279,8 +279,8 @@ async function removeCookie(
   // nombre: sin pasar su `partitionKey`, `remove` no encuentra nada y la deja.
   const partitionKey = (cookie as { partitionKey?: unknown }).partitionKey;
   // `partitionKey` es más nuevo que los tipos de @types/chrome que usamos:
-  // se añade por intersección en vez de forzar todo el objeto a `Details`.
-  const details: chrome.cookies.Details & { partitionKey?: unknown } = {
+  // se añade por intersección en vez de forzar todo el objeto a `CookieDetails`.
+  const details: chrome.cookies.CookieDetails & { partitionKey?: unknown } = {
     url: cookieUrl(cookie),
     name: cookie.name,
   };
