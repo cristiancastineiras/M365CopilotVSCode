@@ -76,7 +76,7 @@ jobs:
       # Sin comentario en la PR: el token de las PRs de Dependabot es de sólo
       # lectura y no podría escribirlo. El resultado queda en el resumen del job.
       - name: Revisar dependencias
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
           comment-summary-in-pr: never
