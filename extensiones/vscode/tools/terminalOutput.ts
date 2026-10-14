@@ -7,7 +7,7 @@
  *
  * Kept free of the `vscode` import so it can be exercised directly.
  */
-import { t } from '../src/i18n';
+import { t } from "../src/i18n";
 
 // Matching control characters is the entire job of an ANSI stripper, so the
 // no-control-regex rule is deliberately off for these three patterns.
@@ -25,7 +25,7 @@ const ANSI_CSI = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 const ANSI_SINGLE = /\x1b[@-Z\\-_]/g;
 
 export function stripAnsi(text: string): string {
-	return text.replace(ANSI_OSC, '').replace(ANSI_CSI, '').replace(ANSI_SINGLE, '');
+  return text.replace(ANSI_OSC, "").replace(ANSI_CSI, "").replace(ANSI_SINGLE, "");
 }
 
 /**
@@ -33,13 +33,13 @@ export function stripAnsi(text: string): string {
  * final state of each line instead of every frame of the animation.
  */
 export function collapseCarriageReturns(text: string): string {
-	return text
-		.split('\n')
-		.map((line) => {
-			const frames = line.split('\r');
-			return frames[frames.length - 1];
-		})
-		.join('\n');
+  return text
+    .split("\n")
+    .map((line) => {
+      const frames = line.split("\r");
+      return frames[frames.length - 1];
+    })
+    .join("\n");
 }
 
 /**
@@ -49,29 +49,29 @@ export function collapseCarriageReturns(text: string): string {
  * output that legitimately repeats it is left alone.
  */
 export function cleanTerminalOutput(raw: string, command: string): string {
-	// Order matters: CRLF has to become LF *before* collapsing carriage
-	// returns, or every Windows line looks like a progress redraw whose final
-	// frame is empty — which silently wipes the entire output.
-	const text = collapseCarriageReturns(stripAnsi(raw).replace(/\r\n/g, '\n'));
+  // Order matters: CRLF has to become LF *before* collapsing carriage
+  // returns, or every Windows line looks like a progress redraw whose final
+  // frame is empty — which silently wipes the entire output.
+  const text = collapseCarriageReturns(stripAnsi(raw).replace(/\r\n/g, "\n"));
 
-	const lines = text.split('\n');
-	// Shells echo the command back before running it; that is noise here since
-	// the caller already reports the command separately.
-	if (lines[0]?.trim() === command.trim()) lines.shift();
+  const lines = text.split("\n");
+  // Shells echo the command back before running it; that is noise here since
+  // the caller already reports the command separately.
+  if (lines[0]?.trim() === command.trim()) lines.shift();
 
-	return lines
-		.join('\n')
-		.replace(/[ \t]+$/gm, '')
-		.replace(/^\n+/, '')
-		.replace(/\s+$/, '');
+  return lines
+    .join("\n")
+    .replace(/[ \t]+$/gm, "")
+    .replace(/^\n+/, "")
+    .replace(/\s+$/, "");
 }
 
 /** Keep a bounded but still useful slice: the head explains what ran, the
  * tail carries the error you actually need. */
 export function truncateOutput(text: string, maxChars: number): string {
-	if (text.length <= maxChars) return text;
-	const head = Math.floor(maxChars * 0.4);
-	const tail = Math.max(maxChars - head - 40, 0);
-	const omitted = text.length - head - tail;
-	return `${text.slice(0, head)}\n${t('run.charsOmitted', omitted)}\n${text.slice(-tail)}`;
+  if (text.length <= maxChars) return text;
+  const head = Math.floor(maxChars * 0.4);
+  const tail = Math.max(maxChars - head - 40, 0);
+  const omitted = text.length - head - tail;
+  return `${text.slice(0, head)}\n${t("run.charsOmitted", omitted)}\n${text.slice(-tail)}`;
 }

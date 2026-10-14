@@ -7,38 +7,47 @@
  *
  * Uso: node scripts/release-notes.mjs <versión>   (con o sin "v" delante)
  */
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-const version = (process.argv[2] || '').replace(/^v/, '').trim();
+const version = (process.argv[2] || "").replace(/^v/, "").trim();
 if (!version) {
-  console.error('Uso: node scripts/release-notes.mjs <versión>');
+  console.error("Uso: node scripts/release-notes.mjs <versión>");
   process.exit(1);
 }
 
 const COMPONENTS = [
-  { file: 'extensiones/vscode/CHANGELOG.md', title: '🧩 VS Code extension · Extensión de VS Code' },
-  { file: 'extensiones/browser/CHANGELOG.md', title: '🌐 Browser extension · Extensión de navegador' },
-  { file: 'packages/core/CHANGELOG.md', title: '⚙️ Shared core · Núcleo compartido (@m365copilot/core)' },
+  { file: "extensiones/vscode/CHANGELOG.md", title: "🧩 VS Code extension · Extensión de VS Code" },
+  {
+    file: "extensiones/browser/CHANGELOG.md",
+    title: "🌐 Browser extension · Extensión de navegador",
+  },
+  {
+    file: "packages/core/CHANGELOG.md",
+    title: "⚙️ Shared core · Núcleo compartido (@m365copilot/core)",
+  },
 ];
 
 /** Extrae el contenido bajo `## <version>` hasta el siguiente `## ` (o el final del archivo). */
 function extractSection(path, version) {
   let text;
   try {
-    text = readFileSync(join(ROOT, path), 'utf8');
+    text = readFileSync(join(ROOT, path), "utf8");
   } catch {
     return null;
   }
-  const lines = text.split('\n');
+  const lines = text.split("\n");
   const start = lines.findIndex((l) => l.trim() === `## ${version}`);
   if (start === -1) return null;
   let end = lines.findIndex((l, i) => i > start && /^##\s/.test(l));
   if (end === -1) end = lines.length;
-  const section = lines.slice(start + 1, end).join('\n').trim();
+  const section = lines
+    .slice(start + 1, end)
+    .join("\n")
+    .trim();
   return section || null;
 }
 
@@ -49,6 +58,6 @@ const parts = COMPONENTS.map(({ file, title }) => {
 
 console.log(
   parts.length > 0
-    ? parts.join('\n\n')
+    ? parts.join("\n\n")
     : `_No release notes found for version ${version} · No se encontraron notas de cambios para la versión ${version}._`,
 );

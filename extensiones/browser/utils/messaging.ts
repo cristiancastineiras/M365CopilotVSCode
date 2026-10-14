@@ -3,9 +3,9 @@
  * Evita strings mágicos y respuestas sin validar.
  */
 
-import { ext } from './api';
-import type { HardResetReport } from './hardReset';
-import type { RefreshState, SyncState } from './storage';
+import { ext } from "./api";
+import type { HardResetReport } from "./hardReset";
+import type { RefreshState, SyncState } from "./storage";
 
 /** Lo que el popup necesita para explicar en una pantalla qué está pasando. */
 export interface RefreshStatus {
@@ -19,13 +19,13 @@ export interface RefreshStatus {
 }
 
 export interface MessageMap {
-  PING: { request: void; response: { status: 'pong'; url?: string } };
+  PING: { request: void; response: { status: "pong"; url?: string } };
   GET_PROFILE: { request: void; response: { profile: any; lastSyncedAt: string | null } };
   CHECK_VSCODE: { request: void; response: { connected: boolean } };
-  PROFILE_UPDATED: { request: any; response: { status: 'ok' } };
+  PROFILE_UPDATED: { request: any; response: { status: "ok" } };
   COPY_PROFILE: { request: void; response: { profile: any; text: string } };
   COPY_TOKEN: { request: void; response: { token: string } };
-  SEND_TO_VSCODE: { request: void; response: { status: 'ok' } };
+  SEND_TO_VSCODE: { request: void; response: { status: "ok" } };
   /** Estado completo del auto-renovador, para el popup. */
   GET_STATUS: { request: void; response: RefreshStatus };
   /** Renovar ya, saltándose el backoff (botón del popup). */
@@ -51,13 +51,13 @@ export interface MessageMap {
    * background → content script: vuelve a mirar la caché de MSAL. La web renueva
    * su propio token sola; muchas veces basta con recogerlo, sin recargar nada.
    */
-  RESCAN_TOKEN: { request: void; response: { status: 'ok' } };
+  RESCAN_TOKEN: { request: void; response: { status: "ok" } };
 }
 
 export type MessageType = keyof MessageMap;
 
-type RequestOf<T extends MessageType> = MessageMap[T]['request'];
-type ResponseOf<T extends MessageType> = MessageMap[T]['response'];
+type RequestOf<T extends MessageType> = MessageMap[T]["request"];
+type ResponseOf<T extends MessageType> = MessageMap[T]["response"];
 
 export interface Envelope<T extends MessageType = MessageType> {
   type: T;
@@ -66,10 +66,10 @@ export interface Envelope<T extends MessageType = MessageType> {
 
 function isEnvelope(value: unknown): value is Envelope {
   return (
-    typeof value === 'object' &&
+    typeof value === "object" &&
     value !== null &&
-    'type' in value &&
-    typeof (value as { type: unknown }).type === 'string'
+    "type" in value &&
+    typeof (value as { type: unknown }).type === "string"
   );
 }
 
@@ -100,10 +100,10 @@ export async function sendMessage<T extends MessageType>(
 
 function isErrorResponse(value: unknown): value is { error: string } {
   return (
-    typeof value === 'object' &&
+    typeof value === "object" &&
     value !== null &&
     Object.keys(value).length === 1 &&
-    typeof (value as { error?: unknown }).error === 'string'
+    typeof (value as { error?: unknown }).error === "string"
   );
 }
 
@@ -126,15 +126,10 @@ export function registerHandlers(handlers: {
     if (!handler) return false;
 
     Promise.resolve()
-      .then(() =>
-        (handler as Handler<MessageType>)(rawMessage.payload, sender),
-      )
+      .then(() => (handler as Handler<MessageType>)(rawMessage.payload, sender))
       .then(sendResponse)
       .catch((error: unknown) => {
-        console.error(
-          `[messaging] Handler for "${rawMessage.type}" failed:`,
-          error,
-        );
+        console.error(`[messaging] Handler for "${rawMessage.type}" failed:`, error);
         sendResponse({
           error: error instanceof Error ? error.message : String(error),
         });

@@ -9,9 +9,9 @@
  * Todo es puro — nada de `window`, `localStorage` ni `chrome` —: quien lo usa
  * pasa el estado y el reloj, y se puede probar fuera del navegador.
  */
-import type { CopilotProfile, TokenClaims } from './profile';
-import { extractClaims } from './jwt';
-import { isSydneyToken } from './token';
+import type { CopilotProfile, TokenClaims } from "./profile";
+import { extractClaims } from "./jwt";
+import { isSydneyToken } from "./token";
 
 /** Un JWT de verdad no se acerca a esto; algo mayor no es un token. */
 export const MAX_JWT_CHARS = 8 * 1024;
@@ -39,17 +39,17 @@ export interface CaptureStore {
 
 /** Tres partes base64url y un tamaño razonable. */
 export function isValidJwt(token: unknown): token is string {
-  if (typeof token !== 'string' || token.length > MAX_JWT_CHARS) return false;
-  const parts = token.split('.');
+  if (typeof token !== "string" || token.length > MAX_JWT_CHARS) return false;
+  const parts = token.split(".");
   return parts.length === 3 && parts.every((part) => /^[A-Za-z0-9_-]+$/.test(part));
 }
 
 /** `exp` en el futuro y un `iat` coherente con él. */
 export function areClaimsUsable(claims: TokenClaims | null | undefined, now = Date.now()): boolean {
-  if (!claims || typeof claims.exp !== 'number' || claims.exp <= 0) return false;
+  if (!claims || typeof claims.exp !== "number" || claims.exp <= 0) return false;
   if (claims.exp * 1000 <= now) return false;
   const iat = (claims as { iat?: unknown }).iat;
-  if (iat !== undefined && (typeof iat !== 'number' || iat > claims.exp)) return false;
+  if (iat !== undefined && (typeof iat !== "number" || iat > claims.exp)) return false;
   return true;
 }
 
@@ -60,13 +60,13 @@ export function areClaimsUsable(claims: TokenClaims | null | undefined, now = Da
  * no de Sydney»).
  */
 export type TokenDiagnosis =
-  | 'accepted'
-  | 'not-a-jwt'
-  | 'not-sydney'
-  | 'no-claims'
-  | 'expired'
-  | 'duplicate'
-  | 'older-than-current';
+  | "accepted"
+  | "not-a-jwt"
+  | "not-sydney"
+  | "no-claims"
+  | "expired"
+  | "duplicate"
+  | "older-than-current";
 
 /**
  * Diagnostica un token candidato contra el store actual. `accepted` sólo viene
@@ -79,15 +79,16 @@ export function diagnoseToken(
   now = Date.now(),
 ): { diagnosis: TokenDiagnosis; accepted?: { accessToken: string; claims: TokenClaims } } {
   const candidate = token.trim();
-  if (!isValidJwt(candidate)) return { diagnosis: 'not-a-jwt' };
-  if (!isSydneyToken(candidate)) return { diagnosis: 'not-sydney' };
+  if (!isValidJwt(candidate)) return { diagnosis: "not-a-jwt" };
+  if (!isSydneyToken(candidate)) return { diagnosis: "not-sydney" };
   const claims = extractClaims(candidate);
-  if (!claims) return { diagnosis: 'no-claims' };
-  if (!areClaimsUsable(claims, now)) return { diagnosis: 'expired' };
-  if (current.accessToken === candidate) return { diagnosis: 'duplicate' };
+  if (!claims) return { diagnosis: "no-claims" };
+  if (!areClaimsUsable(claims, now)) return { diagnosis: "expired" };
+  if (current.accessToken === candidate) return { diagnosis: "duplicate" };
   const currentExp = current.claims?.exp ?? 0;
-  if (claims.exp && currentExp && claims.exp < currentExp) return { diagnosis: 'older-than-current' };
-  return { diagnosis: 'accepted', accepted: { accessToken: candidate, claims } };
+  if (claims.exp && currentExp && claims.exp < currentExp)
+    return { diagnosis: "older-than-current" };
+  return { diagnosis: "accepted", accepted: { accessToken: candidate, claims } };
 }
 
 /**
@@ -109,12 +110,12 @@ export function acceptToken(
  * `access_token`/`accessToken`, y algunas entradas son el JWT pelado.
  */
 export function tokensInStorageValue(value: string | null | undefined): string[] {
-  if (!value || value.length < 40 || !value.includes('eyJ')) return [];
+  if (!value || value.length < 40 || !value.includes("eyJ")) return [];
   try {
     const parsed = JSON.parse(value) as Record<string, unknown> | null;
-    if (!parsed || typeof parsed !== 'object') return [];
+    if (!parsed || typeof parsed !== "object") return [];
     return [parsed.secret, parsed.access_token, parsed.accessToken].filter(
-      (candidate): candidate is string => typeof candidate === 'string',
+      (candidate): candidate is string => typeof candidate === "string",
     );
   } catch {
     const raw = value.trim();
@@ -125,7 +126,7 @@ export function tokensInStorageValue(value: string | null | undefined): string[]
 /** El token que viaja en la query de la URL del WebSocket, si lo hay. */
 export function tokenInSocketUrl(url: string): string | null {
   try {
-    return new URL(String(url).replace(/^ws/i, 'http')).searchParams.get('access_token');
+    return new URL(String(url).replace(/^ws/i, "http")).searchParams.get("access_token");
   } catch {
     return null;
   }
@@ -143,11 +144,19 @@ export function isCopilotSocketUrl(url: string): boolean {
  * `.microsoft.com`/`.microsoft`, así que lo descartaba y el popup se quedaba
  * con «Endpoint: pendiente» para siempre.
  */
-const MICROSOFT_HOST_SUFFIXES = ['.office.com', '.office.net', '.microsoft.com', '.microsoft', '.cloud.microsoft'];
+const MICROSOFT_HOST_SUFFIXES = [
+  ".office.com",
+  ".office.net",
+  ".microsoft.com",
+  ".microsoft",
+  ".cloud.microsoft",
+];
 
 export function isMicrosoftHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
-  return MICROSOFT_HOST_SUFFIXES.some((suffix) => host === suffix.slice(1) || host.endsWith(suffix));
+  return MICROSOFT_HOST_SUFFIXES.some(
+    (suffix) => host === suffix.slice(1) || host.endsWith(suffix),
+  );
 }
 
 /**
@@ -155,21 +164,27 @@ export function isMicrosoftHost(hostname: string): boolean {
  * un token caducado dentro del endpoint. '' si no es un host de Microsoft.
  */
 export function normalizeEndpoint(raw: string): string {
-  if (typeof raw !== 'string' || raw.length > MAX_ENDPOINT_CHARS) return '';
+  if (typeof raw !== "string" || raw.length > MAX_ENDPOINT_CHARS) return "";
   try {
-    const url = new URL(raw.replace(/^ws/i, 'http'));
-    if (!isMicrosoftHost(url.hostname)) return '';
-    for (const param of ['access_token', 'ConversationId', 'chatsessionid', 'clientrequestid', 'X-SessionId']) {
+    const url = new URL(raw.replace(/^ws/i, "http"));
+    if (!isMicrosoftHost(url.hostname)) return "";
+    for (const param of [
+      "access_token",
+      "ConversationId",
+      "chatsessionid",
+      "clientrequestid",
+      "X-SessionId",
+    ]) {
       url.searchParams.delete(param);
     }
-    return url.toString().replace(/^http/i, 'ws');
+    return url.toString().replace(/^http/i, "ws");
   } catch {
-    return '';
+    return "";
   }
 }
 
 /** SignalR separa los frames con este carácter (record separator). */
-const RS = '\x1e';
+const RS = "\x1e";
 
 /**
  * Mira un envío saliente por el socket: ¿lleva la invocación `chat` (prueba de
@@ -180,8 +195,10 @@ export function inspectOutgoingFrames(data: unknown): {
   template?: Record<string, unknown>;
   invocationType?: number;
 } {
-  if (typeof data !== 'string' || data.length > MAX_FRAME_CHARS) return { sawChat: false };
-  let found: { sawChat: boolean; template?: Record<string, unknown>; invocationType?: number } = { sawChat: false };
+  if (typeof data !== "string" || data.length > MAX_FRAME_CHARS) return { sawChat: false };
+  let found: { sawChat: boolean; template?: Record<string, unknown>; invocationType?: number } = {
+    sawChat: false,
+  };
   for (const chunk of data.split(RS)) {
     if (!chunk) continue;
     let frame: { type?: unknown; target?: unknown; arguments?: unknown };
@@ -191,11 +208,15 @@ export function inspectOutgoingFrames(data: unknown): {
       continue;
     }
     // SignalR: type 4 = StreamInvocation, type 1 = Invocation.
-    if ((frame.type !== 4 && frame.type !== 1) || frame.target !== 'chat') continue;
+    if ((frame.type !== 4 && frame.type !== 1) || frame.target !== "chat") continue;
     found = { sawChat: true };
     const args = Array.isArray(frame.arguments) ? frame.arguments[0] : null;
-    if (args && typeof args === 'object' && JSON.stringify(args).length <= MAX_TEMPLATE_CHARS) {
-      found = { sawChat: true, template: args as Record<string, unknown>, invocationType: frame.type as number };
+    if (args && typeof args === "object" && JSON.stringify(args).length <= MAX_TEMPLATE_CHARS) {
+      found = {
+        sawChat: true,
+        template: args as Record<string, unknown>,
+        invocationType: frame.type as number,
+      };
     }
   }
   return found;
@@ -209,7 +230,7 @@ const MAX_OBSERVED_TONES = 20;
 /** El `tone` (modelo) de una plantilla de invocación `chat`, si es válido. */
 export function toneOfTemplate(template: Record<string, unknown> | undefined): string | null {
   const tone = template?.tone;
-  return typeof tone === 'string' && TONE_PATTERN.test(tone) ? tone : null;
+  return typeof tone === "string" && TONE_PATTERN.test(tone) ? tone : null;
 }
 
 /**
@@ -217,7 +238,10 @@ export function toneOfTemplate(template: Record<string, unknown> | undefined): s
  * Así M365 puede estrenar un modelo y VS Code enterarse sin publicar versión:
  * en cuanto alguien lo usa en la web, la captura lo trae.
  */
-export function withObservedTone(tones: readonly string[] | undefined, tone: string | null): string[] {
+export function withObservedTone(
+  tones: readonly string[] | undefined,
+  tone: string | null,
+): string[] {
   const list = (tones ?? []).filter((item) => item !== tone);
   if (tone) list.push(tone);
   return list.slice(-MAX_OBSERVED_TONES);
@@ -226,7 +250,7 @@ export function withObservedTone(tones: readonly string[] | undefined, tone: str
 /** El store sin el token si éste ya caducó (para invitar a recapturarlo), o null si no hay que tocarlo. */
 export function withoutExpiredToken(store: CaptureStore, now = Date.now()): CaptureStore | null {
   const exp = store.claims?.exp;
-  if (!store.accessToken || typeof exp !== 'number' || exp * 1000 > now) return null;
+  if (!store.accessToken || typeof exp !== "number" || exp * 1000 > now) return null;
   const cleaned: CaptureStore = { ...store };
   delete cleaned.accessToken;
   delete cleaned.tokenSource;
@@ -245,19 +269,24 @@ export function sameCapture(a: CaptureStore, b: CaptureStore): boolean {
 }
 
 /** El perfil que se envía a VS Code, o null si todavía no hay token. */
-export function profileFromCapture(store: CaptureStore, fallbackUserAgent: string): CopilotProfile | null {
+export function profileFromCapture(
+  store: CaptureStore,
+  fallbackUserAgent: string,
+): CopilotProfile | null {
   if (!store.accessToken) return null;
   return {
     version: 1,
     capturedAt: store.capturedAt || new Date().toISOString(),
     accessToken: store.accessToken,
     endpoint: store.endpoint || null,
-    origin: store.origin || 'https://m365.cloud.microsoft',
+    origin: store.origin || "https://m365.cloud.microsoft",
     userAgent: store.userAgent || fallbackUserAgent,
     invocationTemplate: store.invocationTemplate || null,
     invocationType: store.invocationType || 4,
     claims: store.claims || null,
-    ...(store.observedTones && store.observedTones.length > 0 ? { observedTones: [...store.observedTones] } : {}),
+    ...(store.observedTones && store.observedTones.length > 0
+      ? { observedTones: [...store.observedTones] }
+      : {}),
   };
 }
 
@@ -285,7 +314,7 @@ export function nextScan(
     return { delay: grown, missingDelay: grown };
   }
   const exp = store.claims?.exp;
-  const left = typeof exp === 'number' ? exp * 1000 - now : null;
+  const left = typeof exp === "number" ? exp * 1000 - now : null;
   return {
     delay: left !== null && left <= EXPIRY_WATCH_MS ? SCAN_EXPIRING_MS : SCAN_FRESH_MS,
     missingDelay: SCAN_MISSING_MS,

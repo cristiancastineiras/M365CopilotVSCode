@@ -35,20 +35,20 @@ Descárgala desde las
 [releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases):
 
 - **Chrome:** descomprime `m365-copilot-vscode-extension-chrome.zip` →
-  `chrome://extensions` → *Modo de desarrollador* → *Cargar descomprimida*.
+  `chrome://extensions` → _Modo de desarrollador_ → _Cargar descomprimida_.
 - **Edge:** descomprime `m365-copilot-vscode-extension-edge.zip` →
-  `edge://extensions` → *Modo de desarrollador* → *Cargar descomprimida*.
+  `edge://extensions` → _Modo de desarrollador_ → _Cargar descomprimida_.
 - **Firefox (permanente):** abre `m365-copilot-vscode-extension-firefox.xpi` en
   Firefox (o arrástralo a `about:addons`). Es el build firmado por Mozilla, el
   único que Firefox Release instala de forma permanente; las releases sin
   `.xpi` no se firmaron.
-- **Firefox (temporal, sin firma):** `about:debugging` → *Este Firefox* →
-  *Cargar complemento temporal* → elige
+- **Firefox (temporal, sin firma):** `about:debugging` → _Este Firefox_ →
+  _Cargar complemento temporal_ → elige
   `m365-copilot-vscode-extension-firefox.zip` (no hace falta descomprimirlo).
   Firefox lo quita al cerrarse.
 - **Firefox Developer Edition / Nightly / ESR:** pon
   `xpinstall.signatures.required` a `false` en `about:config` y luego
-  `about:addons` → ⚙ → *Instalar complemento desde archivo* con el `.zip`.
+  `about:addons` → ⚙ → _Instalar complemento desde archivo_ con el `.zip`.
 
 Firefox 128 o posterior. Si Firefox dice que el complemento «parece estar
 dañado», el zip es de la 2.0.0 o anterior (no llevaba ID de complemento):
@@ -80,14 +80,14 @@ cerrado, la petición se recoge en el siguiente latido (hasta un minuto).
 
 ### Permisos
 
-| Permiso | Para qué |
-|---------|----------|
-| `storage` | El token capturado y el estado del auto-renovador. |
-| `tabs`, `activeTab` | Encontrar, recargar o abrir la pestaña de M365 Copilot. |
-| `alarms` | El latido de 1 min del auto-renovador (en MV3 el background se duerme). |
-| `cookies` | Borrar las cookies de sesión de Microsoft al cerrar sesión. |
-| `browsingData` | Vaciar la caché de MSAL y el almacenamiento de las webs de Microsoft. |
-| `http://localhost/*` | Enviar el token al servidor local de la extensión de VS Code. |
+| Permiso                                                           | Para qué                                                                                                                              |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `storage`                                                         | El token capturado y el estado del auto-renovador.                                                                                    |
+| `tabs`, `activeTab`                                               | Encontrar, recargar o abrir la pestaña de M365 Copilot.                                                                               |
+| `alarms`                                                          | El latido de 1 min del auto-renovador (en MV3 el background se duerme).                                                               |
+| `cookies`                                                         | Borrar las cookies de sesión de Microsoft al cerrar sesión.                                                                           |
+| `browsingData`                                                    | Vaciar la caché de MSAL y el almacenamiento de las webs de Microsoft.                                                                 |
+| `http://localhost/*`                                              | Enviar el token al servidor local de la extensión de VS Code.                                                                         |
 | `*://*.microsoftonline.com/*` y el resto de dominios de Microsoft | Las dos APIs anteriores exigen permiso sobre cada cookie y cada origen que tocan. La lista la define `signOut.ts` en `packages/core`. |
 
 `cookies`, `browsingData` y los dominios de Microsoft son **nuevos**: al

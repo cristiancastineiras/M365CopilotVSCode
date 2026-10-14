@@ -12,9 +12,7 @@
 [![Issues](https://img.shields.io/github/issues/cristiancastineiras/M365CopilotVSCode?label=issues&logo=github)](https://github.com/cristiancastineiras/M365CopilotVSCode/issues)
 [![License: AGPL-3.0](https://img.shields.io/github/license/cristiancastineiras/M365CopilotVSCode?label=license&color=blue)](LICENSE)
 
-
 **English** · [Español](README.es.md)
-
 
 Monorepo (pnpm workspaces + Turborepo) of the pieces that bring your
 **Microsoft 365 Copilot** subscription into VS Code — as chat models, the
@@ -33,7 +31,6 @@ inline completions — and keep its token in sync. Everything is available in
 >
 > This software is provided "AS IS" without warranties of any kind.
 
-
 ```
 .
 ├── extensiones/
@@ -50,10 +47,10 @@ inline completions — and keep its token in sync. Everything is available in
 └── pnpm-workspace.yaml
 ```
 
-| Package | Docs |
-|---------|------|
+| Package           | Docs                                                                          |
+| ----------------- | ----------------------------------------------------------------------------- |
 | VS Code extension | [README](extensiones/vscode/README.md) · [guide](extensiones/vscode/Guide.md) |
-| Browser extension | [README](extensiones/browser/README.md) |
+| Browser extension | [README](extensiones/browser/README.md)                                       |
 
 ## Getting started
 

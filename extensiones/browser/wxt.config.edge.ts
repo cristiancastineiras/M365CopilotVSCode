@@ -1,13 +1,13 @@
-import { defineConfig } from 'wxt';
-import { fileURLToPath } from 'node:url';
-import { manifestFor } from './wxt.config.base';
+import { defineConfig } from "wxt";
+import { fileURLToPath } from "node:url";
+import { manifestFor } from "./wxt.config.base";
 
 export default defineConfig({
-  extensionApi: 'chrome',
-  outDir: '../../releases/edge',
+  extensionApi: "chrome",
+  outDir: "../../releases/edge",
   alias: {
-    '@': fileURLToPath(new URL('.', import.meta.url)),
-    '@m365copilot/core': fileURLToPath(new URL('../../packages/core/src', import.meta.url)),
+    "@": fileURLToPath(new URL(".", import.meta.url)),
+    "@m365copilot/core": fileURLToPath(new URL("../../packages/core/src", import.meta.url)),
   },
   runner: {
     disabled: true,
@@ -17,8 +17,8 @@ export default defineConfig({
   manifest: manifestFor,
   vite: () => ({
     build: {
-      target: 'esnext',
-      minify: 'esbuild',
+      target: "esnext",
+      minify: "esbuild",
       rollupOptions: {
         output: {
           manualChunks: undefined,
@@ -26,14 +26,14 @@ export default defineConfig({
       },
     },
     esbuild: {
-      target: 'esnext',
+      target: "esnext",
       treeShaking: true,
     },
     optimizeDeps: {
       esbuildOptions: {
-        target: 'esnext',
+        target: "esnext",
       },
     },
   }),
-  publicDir: 'public',
+  publicDir: "public",
 });

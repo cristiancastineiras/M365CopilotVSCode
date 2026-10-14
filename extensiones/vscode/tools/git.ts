@@ -1,9 +1,9 @@
-import { execFile } from 'node:child_process';
-import * as vscode from 'vscode';
-import { t } from '../src/i18n';
-import { debug } from '../src/logger';
-import { ensureNotCancelled, resolveWorkspacePath } from './common';
-import { buildGitArgs, normalizeGitAction, type GitAction } from './gitArgs';
+import { execFile } from "node:child_process";
+import * as vscode from "vscode";
+import { t } from "../src/i18n";
+import { debug } from "../src/logger";
+import { ensureNotCancelled, resolveWorkspacePath } from "./common";
+import { buildGitArgs, normalizeGitAction, type GitAction } from "./gitArgs";
 
 const GIT_TIMEOUT_MS = 15_000;
 const MAX_OUTPUT_CHARS = 20_000;
@@ -12,31 +12,38 @@ const MAX_BUFFER_BYTES = 4 * 1024 * 1024;
 let gitSeq = 0;
 
 export interface GitInfoInput {
-	readonly action?: string;
-	readonly path?: string;
-	readonly staged?: boolean;
-	readonly maxCount?: number;
-	readonly workspaceFolder?: string;
+  readonly action?: string;
+  readonly path?: string;
+  readonly staged?: boolean;
+  readonly maxCount?: number;
+  readonly workspaceFolder?: string;
 }
 
 /** Read-only: status, diff or log. Never commits, pushes or otherwise
  * mutates the repository — there is no write path here at all. */
-export async function getGitInfo(input: GitInfoInput, token: vscode.CancellationToken): Promise<string> {
-	const action: GitAction = normalizeGitAction(input.action);
-	const root = resolveWorkspacePath('', input.workspaceFolder, { allowEmpty: true });
-	const scoped =
-		input.path && input.path.trim() ? resolveWorkspacePath(input.path, input.workspaceFolder) : undefined;
-	ensureNotCancelled(token);
+export async function getGitInfo(
+  input: GitInfoInput,
+  token: vscode.CancellationToken,
+): Promise<string> {
+  const action: GitAction = normalizeGitAction(input.action);
+  const root = resolveWorkspacePath("", input.workspaceFolder, { allowEmpty: true });
+  const scoped =
+    input.path && input.path.trim()
+      ? resolveWorkspacePath(input.path, input.workspaceFolder)
+      : undefined;
+  ensureNotCancelled(token);
 
-	const args = buildGitArgs(action, input, scoped?.relativePath);
-	const output = await execGit(args, root.uri.fsPath, token);
-	const label = scoped ? t('git.scoped', action, scoped.relativePath) : action;
-	if (!output.trim()) return t('git.noOutput', label);
+  const args = buildGitArgs(action, input, scoped?.relativePath);
+  const output = await execGit(args, root.uri.fsPath, token);
+  const label = scoped ? t("git.scoped", action, scoped.relativePath) : action;
+  if (!output.trim()) return t("git.noOutput", label);
 
-	const trimmed = output.trimEnd();
-	const truncated =
-		trimmed.length > MAX_OUTPUT_CHARS ? `${trimmed.slice(0, MAX_OUTPUT_CHARS)}\n${t('git.truncated')}` : trimmed;
-	return [`git ${label}:`, '```text', truncated, '```'].join('\n');
+  const trimmed = output.trimEnd();
+  const truncated =
+    trimmed.length > MAX_OUTPUT_CHARS
+      ? `${trimmed.slice(0, MAX_OUTPUT_CHARS)}\n${t("git.truncated")}`
+      : trimmed;
+  return [`git ${label}:`, "```text", truncated, "```"].join("\n");
 }
 
 /** `execFile` with an argv array — never a shell string, so nothing in
@@ -45,43 +52,58 @@ export async function getGitInfo(input: GitInfoInput, token: vscode.Cancellation
  * for `git add`/`git commit` instead of spawning its own child process.
  * `timeoutMs` is for `git commit`, whose hooks may need more than a status. */
 export function execGit(
-	args: string[],
-	cwd: string,
-	token: vscode.CancellationToken,
-	options: { readonly timeoutMs?: number } = {},
+  args: string[],
+  cwd: string,
+  token: vscode.CancellationToken,
+  options: { readonly timeoutMs?: number } = {},
 ): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const scope = `git#${++gitSeq}`;
-		const started = Date.now();
-		debug(scope, `$ git ${args.join(' ')}`, { cwd, timeoutMs: options.timeoutMs ?? GIT_TIMEOUT_MS });
-		const child = execFile(
-			'git',
-			args,
-			{ cwd, timeout: options.timeoutMs ?? GIT_TIMEOUT_MS, maxBuffer: MAX_BUFFER_BYTES, windowsHide: true },
-			(error, stdout, stderr) => {
-				cancelListener.dispose();
-				debug(scope, `git exited ${error ? `with an error (${(error as NodeJS.ErrnoException).code ?? error.message})` : 'ok'} in ${Date.now() - started} ms`, () => ({
-					stdoutChars: stdout.length,
-					stderr: stderr.trim() || undefined,
-					stdout: stdout.length <= 4000 ? stdout : `${stdout.slice(0, 4000)}… (+${stdout.length - 4000} chars)`,
-				}));
-				if (error) {
-					const err = error as NodeJS.ErrnoException;
-					if (err.code === 'ENOENT') {
-						reject(new Error(t('git.notInstalled')));
-						return;
-					}
-					const message = stderr.trim() || err.message;
-					if (/not a git repository/i.test(message)) {
-						reject(new Error(t('git.notARepo')));
-						return;
-					}
-					reject(new Error(t('git.failed', message)));
-					return;
-				}
-				resolve(stdout);
-			},
-		);
-		const cancelListener = token.onCancellationRequested(() => child.kill());
-	});
+  return new Promise((resolve, reject) => {
+    const scope = `git#${++gitSeq}`;
+    const started = Date.now();
+    debug(scope, `$ git ${args.join(" ")}`, {
+      cwd,
+      timeoutMs: options.timeoutMs ?? GIT_TIMEOUT_MS,
+    });
+    const child = execFile(
+      "git",
+      args,
+      {
+        cwd,
+        timeout: options.timeoutMs ?? GIT_TIMEOUT_MS,
+        maxBuffer: MAX_BUFFER_BYTES,
+        windowsHide: true,
+      },
+      (error, stdout, stderr) => {
+        cancelListener.dispose();
+        debug(
+          scope,
+          `git exited ${error ? `with an error (${(error as NodeJS.ErrnoException).code ?? error.message})` : "ok"} in ${Date.now() - started} ms`,
+          () => ({
+            stdoutChars: stdout.length,
+            stderr: stderr.trim() || undefined,
+            stdout:
+              stdout.length <= 4000
+                ? stdout
+                : `${stdout.slice(0, 4000)}… (+${stdout.length - 4000} chars)`,
+          }),
+        );
+        if (error) {
+          const err = error as NodeJS.ErrnoException;
+          if (err.code === "ENOENT") {
+            reject(new Error(t("git.notInstalled")));
+            return;
+          }
+          const message = stderr.trim() || err.message;
+          if (/not a git repository/i.test(message)) {
+            reject(new Error(t("git.notARepo")));
+            return;
+          }
+          reject(new Error(t("git.failed", message)));
+          return;
+        }
+        resolve(stdout);
+      },
+    );
+    const cancelListener = token.onCancellationRequested(() => child.kill());
+  });
 }

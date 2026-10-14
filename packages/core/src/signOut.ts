@@ -33,25 +33,25 @@
  * sesión también olvida las preferencias de búsqueda de Bing.
  */
 export const MICROSOFT_COOKIE_DOMAINS = [
-	// --- identidad (lo que de verdad evita que vuelva a pedir la contraseña)
-	'microsoftonline.com',
-	'microsoftonline-p.com',
-	'microsoftonline-p.net',
-	'windows.net',
-	'live.com',
-	'msauth.net',
-	'msftauth.net',
-	'msidentity.com',
-	// --- Microsoft 365 / Copilot
-	'microsoft.com',
-	'cloud.microsoft',
-	'office.com',
-	'office.net',
-	'office365.com',
-	'outlook.com',
-	'sharepoint.com',
-	'microsoft365.com',
-	'bing.com',
+  // --- identidad (lo que de verdad evita que vuelva a pedir la contraseña)
+  "microsoftonline.com",
+  "microsoftonline-p.com",
+  "microsoftonline-p.net",
+  "windows.net",
+  "live.com",
+  "msauth.net",
+  "msftauth.net",
+  "msidentity.com",
+  // --- Microsoft 365 / Copilot
+  "microsoft.com",
+  "cloud.microsoft",
+  "office.com",
+  "office.net",
+  "office365.com",
+  "outlook.com",
+  "sharepoint.com",
+  "microsoft365.com",
+  "bing.com",
 ] as const;
 
 /**
@@ -64,34 +64,34 @@ export const MICROSOFT_COOKIE_DOMAINS = [
  * cada web una por una.
  */
 export const MICROSOFT_SESSION_ORIGINS = [
-	// --- identidad
-	'https://login.microsoftonline.com',
-	'https://login.microsoft.com',
-	'https://login.windows.net',
-	'https://login.live.com',
-	'https://account.live.com',
-	'https://account.microsoft.com',
-	'https://aadcdn.msauth.net',
-	'https://aadcdn.msftauth.net',
-	// --- M365 Copilot (donde se captura el token)
-	'https://m365.cloud.microsoft',
-	'https://cloud.microsoft',
-	'https://copilot.cloud.microsoft',
-	'https://word.cloud.microsoft',
-	'https://excel.cloud.microsoft',
-	'https://powerpoint.cloud.microsoft',
-	'https://outlook.cloud.microsoft',
-	// --- el resto de M365
-	'https://www.office.com',
-	'https://office.com',
-	'https://portal.office.com',
-	'https://outlook.office.com',
-	'https://outlook.office365.com',
-	'https://teams.microsoft.com',
-	'https://substrate.office.com',
-	'https://graph.microsoft.com',
-	'https://copilot.microsoft.com',
-	'https://www.bing.com',
+  // --- identidad
+  "https://login.microsoftonline.com",
+  "https://login.microsoft.com",
+  "https://login.windows.net",
+  "https://login.live.com",
+  "https://account.live.com",
+  "https://account.microsoft.com",
+  "https://aadcdn.msauth.net",
+  "https://aadcdn.msftauth.net",
+  // --- M365 Copilot (donde se captura el token)
+  "https://m365.cloud.microsoft",
+  "https://cloud.microsoft",
+  "https://copilot.cloud.microsoft",
+  "https://word.cloud.microsoft",
+  "https://excel.cloud.microsoft",
+  "https://powerpoint.cloud.microsoft",
+  "https://outlook.cloud.microsoft",
+  // --- el resto de M365
+  "https://www.office.com",
+  "https://office.com",
+  "https://portal.office.com",
+  "https://outlook.office.com",
+  "https://outlook.office365.com",
+  "https://teams.microsoft.com",
+  "https://substrate.office.com",
+  "https://graph.microsoft.com",
+  "https://copilot.microsoft.com",
+  "https://www.bing.com",
 ] as const;
 
 /**
@@ -100,7 +100,7 @@ export const MICROSOFT_SESSION_ORIGINS = [
  * cookie que se lee o se borra, y `browsingData` sobre cada origen.
  */
 export const MICROSOFT_HOST_PERMISSIONS: readonly string[] = MICROSOFT_COOKIE_DOMAINS.map(
-	(domain) => `*://*.${domain}/*`,
+  (domain) => `*://*.${domain}/*`,
 );
 
 /**
@@ -117,13 +117,13 @@ export const MICROSOFT_HOST_PERMISSIONS: readonly string[] = MICROSOFT_COOKIE_DO
  * completo es rechazado (ver `hardReset` en la extensión de navegador).
  */
 export const SESSION_DATA_TYPES = [
-	'cookies',
-	'localStorage',
-	'indexedDB',
-	'cacheStorage',
-	'serviceWorkers',
-	'fileSystems',
-	'webSQL',
+  "cookies",
+  "localStorage",
+  "indexedDB",
+  "cacheStorage",
+  "serviceWorkers",
+  "fileSystems",
+  "webSQL",
 ] as const;
 
 export type SessionDataType = (typeof SESSION_DATA_TYPES)[number];
@@ -143,9 +143,9 @@ export type SessionDataType = (typeof SESSION_DATA_TYPES)[number];
  * cerrado la sesión» y es quien llama el que navega al siguiente.
  */
 export const SIGN_OUT_URLS = [
-	'https://login.microsoftonline.com/common/oauth2/v2.0/logout',
-	'https://login.live.com/logout.srf',
-	'https://www.office.com/estslogout',
+  "https://login.microsoftonline.com/common/oauth2/v2.0/logout",
+  "https://login.live.com/logout.srf",
+  "https://www.office.com/estslogout",
 ] as const;
 
 /**
@@ -154,22 +154,22 @@ export const SIGN_OUT_URLS = [
  * usuario: es un contrato entre las dos, así que vive aquí.
  */
 export interface SignOutReport {
-	/** Cookies borradas de verdad (releídas para confirmarlo). */
-	cookiesRemoved: number;
-	/** Cookies que el navegador se negó a borrar (sin permiso, protegidas…). */
-	cookiesFailed: number;
-	/** Orígenes de Microsoft cuyo almacenamiento se vació. */
-	originsCleared: number;
-	/** Tipos de dato que este navegador aceptó borrar. */
-	dataTypes: string[];
-	/** Tipos que no implementa (informativo: no son un fallo). */
-	skippedDataTypes: string[];
-	/** Pestañas de Microsoft que se cerraron. */
-	tabsClosed: number;
-	/** Endpoints de logout que se visitaron con éxito. */
-	signedOutFrom: string[];
-	/** Todo lo que falló, en texto, para poder contarlo sin adivinar. */
-	errors: string[];
+  /** Cookies borradas de verdad (releídas para confirmarlo). */
+  cookiesRemoved: number;
+  /** Cookies que el navegador se negó a borrar (sin permiso, protegidas…). */
+  cookiesFailed: number;
+  /** Orígenes de Microsoft cuyo almacenamiento se vació. */
+  originsCleared: number;
+  /** Tipos de dato que este navegador aceptó borrar. */
+  dataTypes: string[];
+  /** Tipos que no implementa (informativo: no son un fallo). */
+  skippedDataTypes: string[];
+  /** Pestañas de Microsoft que se cerraron. */
+  tabsClosed: number;
+  /** Endpoints de logout que se visitaron con éxito. */
+  signedOutFrom: string[];
+  /** Todo lo que falló, en texto, para poder contarlo sin adivinar. */
+  errors: string[];
 }
 
 /**
@@ -182,29 +182,31 @@ export interface SignOutReport {
  * comprobación, cualquier web podría enlazar esa URL y tirar la sesión de
  * Microsoft del usuario.
  */
-export const SIGN_OUT_PARAM = 'm365copilot-signout';
+export const SIGN_OUT_PARAM = "m365copilot-signout";
 
 /** `…/chat/?m365copilot-signout=<requestId>` */
 export function signOutUrl(chatUrl: string, requestId: string): string {
-	const url = new URL(chatUrl);
-	url.searchParams.set(SIGN_OUT_PARAM, requestId);
-	return url.toString();
+  const url = new URL(chatUrl);
+  url.searchParams.set(SIGN_OUT_PARAM, requestId);
+  return url.toString();
 }
 
 /** El `id` del marcador, o null si esta URL no pide ningún cierre de sesión. */
 export function signOutRequestId(url: string): string | null {
-	try {
-		const value = new URL(url).searchParams.get(SIGN_OUT_PARAM);
-		return value && value.trim() ? value.trim() : null;
-	} catch {
-		return null;
-	}
+  try {
+    const value = new URL(url).searchParams.get(SIGN_OUT_PARAM);
+    return value && value.trim() ? value.trim() : null;
+  } catch {
+    return null;
+  }
 }
 
 /** ¿Este host es uno de los que sostienen la sesión de Microsoft? */
 export function isMicrosoftSessionDomain(host: string): boolean {
-	const hostname = host.replace(/^\.+/, '').toLowerCase();
-	return MICROSOFT_COOKIE_DOMAINS.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
+  const hostname = host.replace(/^\.+/, "").toLowerCase();
+  return MICROSOFT_COOKIE_DOMAINS.some(
+    (domain) => hostname === domain || hostname.endsWith(`.${domain}`),
+  );
 }
 
 /**
@@ -216,18 +218,18 @@ export function isMicrosoftSessionDomain(host: string): boolean {
  * viva (con el nombre `__Secure-`/`__Host-` delante es garantía de fallo).
  */
 export function cookieUrl(cookie: { domain: string; path: string; secure: boolean }): string {
-	const host = cookie.domain.replace(/^\./, '');
-	const path = cookie.path && cookie.path.startsWith('/') ? cookie.path : '/';
-	return `${cookie.secure ? 'https' : 'http'}://${host}${path}`;
+  const host = cookie.domain.replace(/^\./, "");
+  const path = cookie.path && cookie.path.startsWith("/") ? cookie.path : "/";
+  return `${cookie.secure ? "https" : "http"}://${host}${path}`;
 }
 
 /** ¿Es una pestaña de Microsoft (la cierra o la reutiliza el cierre de sesión)? */
 export function isMicrosoftTabUrl(url: string | undefined): boolean {
-	if (!url) return false;
-	try {
-		const { protocol, hostname } = new URL(url);
-		return (protocol === 'https:' || protocol === 'http:') && isMicrosoftSessionDomain(hostname);
-	} catch {
-		return false;
-	}
+  if (!url) return false;
+  try {
+    const { protocol, hostname } = new URL(url);
+    return (protocol === "https:" || protocol === "http:") && isMicrosoftSessionDomain(hostname);
+  } catch {
+    return false;
+  }
 }

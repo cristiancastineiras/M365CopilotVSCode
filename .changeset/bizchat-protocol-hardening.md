@@ -2,14 +2,14 @@
 "m365-copilot-vscode": patch
 ---
 
-**Chats temporales, un *stop* de verdad y avisos claros cuando M365 Copilot limita o rechaza un turno.**
+**Chats temporales, un _stop_ de verdad y avisos claros cuando M365 Copilot limita o rechaza un turno.**
 
 - **Chats temporales:** cada turno (cada paso del agente, cada sugerencia de
   autocompletado) es una conversación propia, y cada una podía quedar en el
   historial de Copilot de la web. Ahora salen como chat temporal
   (`disableMemory=1`): funcionan igual y no dejan nada en ese historial. El
   ajuste nuevo `m365copilot.history.save` los guarda como antes.
-- **Parar de verdad:** al cancelar, la extensión manda la misma trama *stop*
+- **Parar de verdad:** al cancelar, la extensión manda la misma trama _stop_
   que el botón de parar de la web, en vez de cerrar el socket y dejar al modelo
   escribiendo; cierra en cuanto el servicio la confirma, o a los 2 s.
 - **El turno acaba con la llamada a herramienta:** en el chat, en `@m365` y en
@@ -18,7 +18,7 @@
   durante minutos).
 - **Throttling:** `Throttled` / `PerUserThrottled` ya no se reintenta (solo lo
   alargaba). El error lo explica, y el autocompletado, el autocommit (salvo
-  *Comprobar ahora*) y *Comprobar modelos* esperan hasta 75 min después del
+  _Comprobar ahora_) y _Comprobar modelos_ esperan hasta 75 min después del
   último turno limitado, con ⌚ en la barra de estado y un aviso al empezar.
   Cualquier respuesta levanta la pausa.
 - **Cuota y licencia:** el acceso prioritario agotado (`OutOfCredits`, o su

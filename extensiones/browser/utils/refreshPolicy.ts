@@ -23,17 +23,17 @@ export const OPENED_TAB_GRACE_MS = 90 * 1000;
 
 export type RefreshAction =
   /** Nada que hacer: el token tiene cuerda de sobra. */
-  | 'none'
+  | "none"
   /** Pedir a la pestaña que re-escanee la caché de MSAL (la web ya renovó por su cuenta). */
-  | 'rescan'
+  | "rescan"
   /** Recargar la pestaña de M365 para forzar el flujo de autenticación. */
-  | 'reload'
+  | "reload"
   /** No hay ninguna pestaña de M365: abrir una en segundo plano. */
-  | 'open'
+  | "open"
   /** Toca renovar, pero el intento anterior es demasiado reciente. */
-  | 'wait'
+  | "wait"
   /** Se han agotado los intentos automáticos: hace falta que el usuario entre. */
-  | 'needsUser';
+  | "needsUser";
 
 export interface TokenSnapshot {
   readonly hasToken: boolean;
@@ -82,7 +82,7 @@ export function decideRefreshAction(context: RefreshContext): RefreshDecision {
   const needsRenewal = !token.hasToken || left === null || left <= RENEW_MARGIN_MS;
   if (!needsRenewal) {
     return {
-      action: 'none',
+      action: "none",
       reason: `quedan ${Math.round((left ?? 0) / 60000)} min de token`,
     };
   }
@@ -90,13 +90,13 @@ export function decideRefreshAction(context: RefreshContext): RefreshDecision {
   // Sin ninguna captura previa no hay sesión que mantener: abrir pestañas por
   // nuestra cuenta sería intrusivo y no arreglaría nada.
   if (!token.hasToken && !context.hasEverCaptured) {
-    return { action: 'none', reason: 'todavía no se ha capturado ningún token' };
+    return { action: "none", reason: "todavía no se ha capturado ningún token" };
   }
 
   const waitFor = remainingBackoff(context);
   if (waitFor > 0) {
     return {
-      action: 'wait',
+      action: "wait",
       reason: `intento reciente; se reintenta en ${Math.ceil(waitFor / 1000)} s`,
       retryInMs: waitFor,
     };
@@ -104,23 +104,26 @@ export function decideRefreshAction(context: RefreshContext): RefreshDecision {
 
   if (attempts >= ATTEMPTS_BEFORE_HELP) {
     return {
-      action: 'needsUser',
+      action: "needsUser",
       reason: `${attempts} intentos sin conseguir token nuevo: hace falta iniciar sesión`,
     };
   }
 
   if (!hasM365Tab) {
     return context.autoOpenTab
-      ? { action: 'open', reason: 'no hay ninguna pestaña de M365 Copilot abierta' }
-      : { action: 'needsUser', reason: 'no hay pestaña de M365 y la apertura automática está desactivada' };
+      ? { action: "open", reason: "no hay ninguna pestaña de M365 Copilot abierta" }
+      : {
+          action: "needsUser",
+          reason: "no hay pestaña de M365 y la apertura automática está desactivada",
+        };
   }
 
   // Primero lo barato y no destructivo: la web renueva su propio token cada
   // ~50 min, así que muchas veces ya hay uno nuevo en la caché de MSAL que sólo
   // hay que recoger. Recargar la pestaña se deja para cuando eso no basta.
   return attempts === 0
-    ? { action: 'rescan', reason: 'se pide a la pestaña que re-escanee la caché de MSAL' }
-    : { action: 'reload', reason: 'el re-escaneo no dio token nuevo: se recarga la pestaña' };
+    ? { action: "rescan", reason: "se pide a la pestaña que re-escanee la caché de MSAL" }
+    : { action: "reload", reason: "el re-escaneo no dio token nuevo: se recarga la pestaña" };
 }
 
 function remainingBackoff(context: RefreshContext): number {
@@ -134,4 +137,4 @@ function remainingBackoff(context: RefreshContext): number {
 
 // La decisión de re-sincronizar con VS Code vive en @m365copilot/core (la
 // comparte el userscript); se re-exporta aquí para no cambiar a quien la usa.
-export { needsResync, RESYNC_COOLDOWN_MS, type SyncContext } from '@m365copilot/core';
+export { needsResync, RESYNC_COOLDOWN_MS, type SyncContext } from "@m365copilot/core";

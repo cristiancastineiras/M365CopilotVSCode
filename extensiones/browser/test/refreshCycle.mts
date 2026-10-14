@@ -8,7 +8,7 @@
  *
  * Run: node --experimental-strip-types --import ./test/register.mjs test/refreshCycle.mts
  */
-import assert from 'node:assert/strict';
+import assert from "node:assert/strict";
 
 // ---------------------------------------------------------------- chrome falso
 
@@ -32,7 +32,7 @@ function installFakeChrome(options: { tabs?: FakeTab[]; withAlarms?: boolean } =
   let nextTabId = 100;
 
   const chrome: any = {
-    runtime: { id: 'test-extension' },
+    runtime: { id: "test-extension" },
     storage: {
       local: {
         async get(defaults: Record<string, unknown>) {
@@ -50,12 +50,12 @@ function installFakeChrome(options: { tabs?: FakeTab[]; withAlarms?: boolean } =
     tabs: {
       async query({ url }: { url: string[] }) {
         // Basta con distinguir «hay pestaña de M365» de «no la hay».
-        const hosts = url.map((pattern) => pattern.replace(/^https:\/\/|\*|\/.*$/g, ''));
-        return tabs.filter((tab) => hosts.some((host) => tab.url.includes(host.replace('.', '.'))));
+        const hosts = url.map((pattern) => pattern.replace(/^https:\/\/|\*|\/.*$/g, ""));
+        return tabs.filter((tab) => hosts.some((host) => tab.url.includes(host.replace(".", "."))));
       },
       async sendMessage(tabId: number, message: { type: string }) {
         calls.messages.push({ tabId, type: message.type });
-        return { status: 'ok' };
+        return { status: "ok" };
       },
       async reload(tabId: number) {
         calls.reloaded.push(tabId);
@@ -98,24 +98,23 @@ function installFakeChrome(options: { tabs?: FakeTab[]; withAlarms?: boolean } =
 /** Perfil como el que guarda el interceptor. */
 function profileExpiringIn(minutes: number) {
   return {
-    accessToken: 'ey.fake.token',
+    accessToken: "ey.fake.token",
     capturedAt: new Date().toISOString(),
-    claims: { exp: Math.floor((Date.now() + minutes * 60_000) / 1000), upn: 'a@b.c' },
+    claims: { exp: Math.floor((Date.now() + minutes * 60_000) / 1000), upn: "a@b.c" },
   };
 }
 
 // Los módulos leen `chrome` al ejecutarse, así que el stub va antes del import.
 installFakeChrome();
-const { runRefreshCycle, onTokenCaptured, setSyncHandler, setupTokenRefresher } = await import(
-  '../utils/tokenRefresher.ts'
-);
-const { getStorage, setStorage } = await import('../utils/storage.ts');
+const { runRefreshCycle, onTokenCaptured, setSyncHandler, setupTokenRefresher } =
+  await import("../utils/tokenRefresher.ts");
+const { getStorage, setStorage } = await import("../utils/storage.ts");
 
-const M365_TAB: FakeTab = { id: 7, url: 'https://m365.cloud.microsoft/chat/' };
+const M365_TAB: FakeTab = { id: 7, url: "https://m365.cloud.microsoft/chat/" };
 
 async function seed(profile: unknown, extra: Record<string, unknown> = {}) {
-  await setStorage('currentProfile', profile as any);
-  await setStorage('hasEverCaptured', true);
+  await setStorage("currentProfile", profile as any);
+  await setStorage("hasEverCaptured", true);
   for (const [key, value] of Object.entries(extra)) {
     await setStorage(key as any, value as any);
   }
@@ -133,13 +132,13 @@ async function testHealthyTokenSyncsOnce() {
   await seed(profileExpiringIn(45));
 
   const decision = await runRefreshCycle();
-  assert.equal(decision.action, 'none');
+  assert.equal(decision.action, "none");
   // VS Code no tenía este token: se le manda una vez, sin tocar ninguna pestaña.
   assert.equal(sent.length, 1);
   assert.deepEqual(calls.reloaded, []);
   assert.deepEqual(calls.created, []);
 
-  console.log('  ✓ token sano: se reenvía a VS Code una vez y no se toca el navegador');
+  console.log("  ✓ token sano: se reenvía a VS Code una vez y no se toca el navegador");
 }
 
 async function testResyncIsNotRepeated() {
@@ -154,15 +153,15 @@ async function testResyncIsNotRepeated() {
 
   await runRefreshCycle();
   // El envío real es quien anota el `exp` sincronizado; aquí lo simula el stub.
-  await setStorage('syncState', {
+  await setStorage("syncState", {
     syncedTokenExp: profile.claims.exp,
     lastSyncAttemptAt: Date.now() - 60_000,
     lastError: null,
   });
   await runRefreshCycle();
 
-  assert.equal(sends, 1, 'el mismo token no se reenvía en cada latido');
-  console.log('  ✓ el reenvío no se repite mientras VS Code tenga ese mismo token');
+  assert.equal(sends, 1, "el mismo token no se reenvía en cada latido");
+  console.log("  ✓ el reenvío no se repite mientras VS Code tenga ese mismo token");
 }
 
 async function testEscalationOverCycles() {
@@ -171,20 +170,20 @@ async function testEscalationOverCycles() {
   await seed(profileExpiringIn(3));
 
   // 1er ciclo: pedir a la pestaña que re-escanee la caché de MSAL.
-  assert.equal((await runRefreshCycle()).action, 'rescan');
-  assert.deepEqual(calls.messages, [{ tabId: 7, type: 'RESCAN_TOKEN' }]);
+  assert.equal((await runRefreshCycle()).action, "rescan");
+  assert.deepEqual(calls.messages, [{ tabId: 7, type: "RESCAN_TOKEN" }]);
 
   // Inmediatamente después: backoff, no se insiste.
-  assert.equal((await runRefreshCycle()).action, 'wait');
+  assert.equal((await runRefreshCycle()).action, "wait");
   assert.equal(calls.messages.length, 1);
 
   // Pasado el backoff y sin token nuevo: recargar la pestaña.
-  const state = await getStorage('refreshState');
-  await setStorage('refreshState', { ...state, lastAttemptAt: Date.now() - 5 * 60_000 });
-  assert.equal((await runRefreshCycle()).action, 'reload');
+  const state = await getStorage("refreshState");
+  await setStorage("refreshState", { ...state, lastAttemptAt: Date.now() - 5 * 60_000 });
+  assert.equal((await runRefreshCycle()).action, "reload");
   assert.deepEqual(calls.reloaded, [7]);
 
-  console.log('  ✓ re-escaneo → espera (backoff) → recarga, a lo largo de varios latidos');
+  console.log("  ✓ re-escaneo → espera (backoff) → recarga, a lo largo de varios latidos");
 }
 
 async function testOpensAndClosesItsOwnTab() {
@@ -192,21 +191,21 @@ async function testOpensAndClosesItsOwnTab() {
   setSyncHandler(async () => true);
   await seed(profileExpiringIn(2));
 
-  assert.equal((await runRefreshCycle()).action, 'open');
+  assert.equal((await runRefreshCycle()).action, "open");
   assert.equal(calls.created.length, 1);
   assert.match(calls.created[0], /m365\.cloud\.microsoft/);
 
-  const opened = await getStorage('refreshState');
-  assert.ok(opened.openedTabId, 'se recuerda la pestaña abierta para poder cerrarla');
+  const opened = await getStorage("refreshState");
+  assert.ok(opened.openedTabId, "se recuerda la pestaña abierta para poder cerrarla");
 
   // Llega el token nuevo: se cierra la pestaña y se reinicia el backoff.
   await onTokenCaptured(profileExpiringIn(60));
   assert.deepEqual(calls.removed, [opened.openedTabId]);
-  const after = await getStorage('refreshState');
+  const after = await getStorage("refreshState");
   assert.equal(after.attempts, 0);
   assert.equal(after.openedTabId, null);
 
-  console.log('  ✓ sin pestañas: abre una en segundo plano y la cierra al capturar');
+  console.log("  ✓ sin pestañas: abre una en segundo plano y la cierra al capturar");
 }
 
 async function testSurvivesMissingAlarmsPermission() {
@@ -218,10 +217,10 @@ async function testSurvivesMissingAlarmsPermission() {
   console.log('  ✓ sin el permiso "alarms" avisa, pero no tumba el background');
 }
 
-console.log('tokenRefresher.ts (ciclo completo)');
+console.log("tokenRefresher.ts (ciclo completo)");
 await testHealthyTokenSyncsOnce();
 await testResyncIsNotRepeated();
 await testEscalationOverCycles();
 await testOpensAndClosesItsOwnTab();
 await testSurvivesMissingAlarmsPermission();
-console.log('\nAll tests passed.');
+console.log("\nAll tests passed.");

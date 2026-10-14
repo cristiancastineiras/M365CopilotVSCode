@@ -21,50 +21,50 @@
 export const THROTTLE_HOLD_MS = 75 * 60_000;
 
 export interface ThrottleChange {
-	/** When automatic requests may resume (epoch ms), or undefined once lifted. */
-	readonly until: number | undefined;
-	/** True only when the account just went from served to throttled. */
-	readonly began: boolean;
+  /** When automatic requests may resume (epoch ms), or undefined once lifted. */
+  readonly until: number | undefined;
+  /** True only when the account just went from served to throttled. */
+  readonly began: boolean;
 }
 
 let throttledUntil: number | undefined;
 const listeners = new Set<(change: ThrottleChange) => void>();
 
 function notify(change: ThrottleChange): void {
-	for (const listener of listeners) {
-		try {
-			listener(change);
-		} catch {
-			/* a listener's bug must not break the turn that reported the throttle */
-		}
-	}
+  for (const listener of listeners) {
+    try {
+      listener(change);
+    } catch {
+      /* a listener's bug must not break the turn that reported the throttle */
+    }
+  }
 }
 
 /** M365 just throttled a turn: hold automatic requests for {@link THROTTLE_HOLD_MS} from now. */
 export function noteThrottled(now = Date.now()): void {
-	const began = accountThrottledUntil(now) === undefined;
-	throttledUntil = now + THROTTLE_HOLD_MS;
-	notify({ until: throttledUntil, began });
+  const began = accountThrottledUntil(now) === undefined;
+  throttledUntil = now + THROTTLE_HOLD_MS;
+  notify({ until: throttledUntil, began });
 }
 
 /** A turn was answered: whatever throttle there was has lifted. */
 export function noteServed(): void {
-	if (throttledUntil === undefined) return;
-	throttledUntil = undefined;
-	notify({ until: undefined, began: false });
+  if (throttledUntil === undefined) return;
+  throttledUntil = undefined;
+  notify({ until: undefined, began: false });
 }
 
 /** Until when automatic requests should wait (epoch ms), or undefined when the account is not throttled. */
 export function accountThrottledUntil(now = Date.now()): number | undefined {
-	if (throttledUntil !== undefined && throttledUntil <= now) {
-		throttledUntil = undefined;
-		notify({ until: undefined, began: false });
-	}
-	return throttledUntil;
+  if (throttledUntil !== undefined && throttledUntil <= now) {
+    throttledUntil = undefined;
+    notify({ until: undefined, began: false });
+  }
+  return throttledUntil;
 }
 
 /** Subscribe to changes; returns the unsubscribe function. */
 export function onThrottleChange(listener: (change: ThrottleChange) => void): () => void {
-	listeners.add(listener);
-	return () => listeners.delete(listener);
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }

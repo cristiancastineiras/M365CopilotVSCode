@@ -1,4 +1,4 @@
-# M365 Copilot para VS Code 
+# M365 Copilot para VS Code
 
 [![Versión en VS Marketplace](https://flat.badgen.net/vs-marketplace/v/m365-copilot-vscode.m365-copilot-vscode?label=VS%20Marketplace&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode)
 [![Instalaciones](https://flat.badgen.net/vs-marketplace/i/m365-copilot-vscode.m365-copilot-vscode?label=instalaciones&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode)
@@ -11,7 +11,6 @@
 [![Estrellas](https://img.shields.io/github/stars/cristiancastineiras/M365CopilotVSCode?label=estrellas&logo=github&color=e3b341&style=flat)](https://github.com/cristiancastineiras/M365CopilotVSCode/stargazers)
 [![Incidencias](https://img.shields.io/github/issues/cristiancastineiras/M365CopilotVSCode?label=incidencias&logo=github)](https://github.com/cristiancastineiras/M365CopilotVSCode/issues)
 [![Licencia: AGPL-3.0](https://img.shields.io/github/license/cristiancastineiras/M365CopilotVSCode?label=licencia&color=blue)](LICENSE)
-
 
 [English](README.md) · **Español**
 
@@ -33,7 +32,6 @@ disponible en **inglés y español**.
 >
 > Este software se proporciona "TAL CUAL" ("AS IS"), sin garantías de ningún tipo, ya sean expresas o implícitas.
 
-
 ```
 .
 ├── extensiones/
@@ -50,10 +48,10 @@ disponible en **inglés y español**.
 └── pnpm-workspace.yaml
 ```
 
-| Paquete | Documentación |
-|---------|---------------|
-| Extensión de VS Code | [README](extensiones/vscode/README.es.md) · [guía](extensiones/vscode/Guia.md) |
-| Extensión de navegador | [README](extensiones/browser/README.es.md) |
+| Paquete                | Documentación                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| Extensión de VS Code   | [README](extensiones/vscode/README.es.md) · [guía](extensiones/vscode/Guia.md) |
+| Extensión de navegador | [README](extensiones/browser/README.es.md)                                     |
 
 ## Primeros pasos
 

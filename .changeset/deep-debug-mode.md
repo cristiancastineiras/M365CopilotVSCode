@@ -5,9 +5,9 @@
 **Modo debug profundo: una consola que traza todo lo que la extensión recibe, envía y hace, y un registro exportable a `.txt`.**
 
 - **Un ajuste y un botón:** `m365copilot.debug.deep` (con enlaces en su
-  descripción a *Mostrar consola*, *Exportar registro* y *Limpiar registro*),
-  una entrada en el menú rápido del elemento **M365** y el comando *Alternar
-  modo debug profundo*. Al activarlo se abre la consola «M365 Copilot» y el
+  descripción a _Mostrar consola_, _Exportar registro_ y _Limpiar registro_),
+  una entrada en el menú rápido del elemento **M365** y el comando _Alternar
+  modo debug profundo_. Al activarlo se abre la consola «M365 Copilot» y el
   elemento de la barra de estado lleva un 🐞 para que no se olvide encendido.
 - **Lo que recibe:** cada petición al servidor local (método, URL, comprobación
   de origen, cabeceras, cuerpo y respuesta) y cada trama que BizChat devuelve
@@ -22,9 +22,9 @@
   autocompletado, el autocommit, el estado del token y cada cambio de ajustes,
   precedido de una foto del entorno (versiones, sistema, workspace, ajustes y
   perfil sin el token).
-- **Exportar a `.txt`:** *Exportar registro (.txt)* guarda lo que hay en un
+- **Exportar a `.txt`:** _Exportar registro (.txt)_ guarda lo que hay en un
   búfer circular (últimas ~40 000 entradas, ~8 MB) con una cabecera y la hora UTC
-  de cada entrada; *Limpiar registro* lo vacía para reproducir un problema desde
+  de cada entrada; _Limpiar registro_ lo vacía para reproducir un problema desde
   cero. Funciona también con el modo apagado (guarda el registro normal).
 - **Seguro de compartir, con matices:** los tokens, los JWT, las cabeceras
   `Authorization`, las cookies y los `access_token=` se ocultan siempre, en la

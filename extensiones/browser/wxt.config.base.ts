@@ -1,4 +1,4 @@
-import type { ConfigEnv, UserManifest } from 'wxt';
+import type { ConfigEnv, UserManifest } from "wxt";
 // Ojo con este import: tiene que ser el FUENTE, no '@m365copilot/core'.
 // Este archivo de configuración lo carga `wxt prepare`, que corre como
 // postinstall de este paquete — o sea, durante `pnpm install` y antes de que
@@ -7,7 +7,7 @@ import type { ConfigEnv, UserManifest } from 'wxt';
 // con «Cannot find module». El cargador de la config (jiti) sí sabe leer
 // TypeScript, así que el fuente funciona siempre y sigue habiendo una única
 // fuente de verdad para la lista de dominios.
-import { MICROSOFT_HOST_PERMISSIONS } from '../../packages/core/src/signOut';
+import { MICROSOFT_HOST_PERMISSIONS } from "../../packages/core/src/signOut";
 
 /**
  * Piezas compartidas por wxt.config.ts (Chrome), wxt.config.edge.ts (Edge) y
@@ -20,9 +20,9 @@ import { MICROSOFT_HOST_PERMISSIONS } from '../../packages/core/src/signOut';
 export const sharedManifest: UserManifest = {
   // Nombre y descripción traducidos por el i18n nativo del navegador
   // (public/_locales/<idioma>/messages.json); el inglés es el de reserva.
-  default_locale: 'en',
-  name: '__MSG_extName__',
-  description: '__MSG_extDescription__',
+  default_locale: "en",
+  name: "__MSG_extName__",
+  description: "__MSG_extDescription__",
   // Sin `version` aquí: WXT usa la de package.json (`pkg?.version`) por
   // defecto. Fijarla a mano es un tercer sitio que sincronizar a cada release
   // — igual que el bug de duplicación que ya arregló wxt.config.base.ts.
@@ -37,11 +37,11 @@ export const sharedManifest: UserManifest = {
   // de MSAL (localStorage/IndexedDB) de cada web de M365. Sin estos dos
   // permisos, «renovar» sólo podía pedir otro token — y MSAL lo daba en
   // silencio con la sesión de siempre, sin volver a preguntar nada.
-  permissions: ['storage', 'tabs', 'activeTab', 'alarms', 'cookies', 'browsingData'],
+  permissions: ["storage", "tabs", "activeTab", "alarms", "cookies", "browsingData"],
   host_permissions: [
     // Necesario para que el background pueda hacer fetch al servidor local de
     // la extensión de VS Code (http://localhost:51827) sin bloqueo de CORS.
-    'http://localhost/*',
+    "http://localhost/*",
     // La API `cookies` exige permiso sobre la URL de cada cookie que se lee o
     // se borra, y `browsingData` sobre cada origen: la lista sale de
     // signOut.ts en @m365copilot/core, que es la única fuente de verdad de
@@ -49,18 +49,18 @@ export const sharedManifest: UserManifest = {
     ...MICROSOFT_HOST_PERMISSIONS,
   ],
   icons: {
-    16: '/favicon-16x16.png',
-    32: '/favicon-32x32.png',
-    96: '/favicon-96x96.png',
-    120: '/favicon-120x120.png',
+    16: "/favicon-16x16.png",
+    32: "/favicon-32x32.png",
+    96: "/favicon-96x96.png",
+    120: "/favicon-120x120.png",
   },
   action: {
-    default_title: '__MSG_actionTitle__',
+    default_title: "__MSG_actionTitle__",
     default_icon: {
-      16: '/favicon-16x16.png',
-      32: '/favicon-32x32.png',
-      96: '/favicon-96x96.png',
-      120: '/favicon-120x120.png',
+      16: "/favicon-16x16.png",
+      32: "/favicon-32x32.png",
+      96: "/favicon-96x96.png",
+      120: "/favicon-120x120.png",
     },
   },
 };
@@ -72,14 +72,14 @@ export const sharedManifest: UserManifest = {
  * temporales de about:debugging. Una vez firmado en AMO no se puede cambiar
  * — si cambia, Firefox lo trata como otro complemento distinto.
  */
-export const FIREFOX_ADDON_ID = 'm365-copilot-vscode@cristiancastineiras.github.io';
+export const FIREFOX_ADDON_ID = "m365-copilot-vscode@cristiancastineiras.github.io";
 
 /**
  * Manifest por navegador. Chrome y Edge no conocen `browser_specific_settings`
  * (Edge Partner Center lo rechaza o ignora), así que sólo va en Firefox.
  */
 export function manifestFor({ browser }: ConfigEnv): UserManifest {
-  if (browser !== 'firefox') return sharedManifest;
+  if (browser !== "firefox") return sharedManifest;
   return {
     ...sharedManifest,
     browser_specific_settings: {
@@ -88,7 +88,7 @@ export function manifestFor({ browser }: ConfigEnv): UserManifest {
         // 128 es la primera versión con `world: 'MAIN'` en los content
         // scripts del manifest (también en MV2): sin eso el interceptor corre
         // aislado y no ve el WebSocket del chat, así que no captura nada.
-        strict_min_version: '128.0',
+        strict_min_version: "128.0",
         // Consentimiento de datos nativo de Firefox (140+; las anteriores lo
         // ignoran con un aviso). AMO lo exige para firmar extensiones nuevas.
         // Para Mozilla «transmitir» es sacar datos del navegador, y mandar el
@@ -96,7 +96,7 @@ export function manifestFor({ browser }: ConfigEnv): UserManifest {
         // (authenticationInfo) y la plantilla de la invocación `chat`, que
         // incluye el último mensaje escrito en Copilot (personalCommunications).
         data_collection_permissions: {
-          required: ['authenticationInfo', 'personalCommunications'],
+          required: ["authenticationInfo", "personalCommunications"],
         },
       },
     },
@@ -119,10 +119,10 @@ export function manifestFor({ browser }: ConfigEnv): UserManifest {
  */
 export const sharedViteBuild = {
   build: {
-    target: 'esnext',
+    target: "esnext",
     // Oxc (Rust) es el minificador nativo de este Vite: más rápido que la
     // vía esbuild y es el default para builds de cliente, lo dejamos explícito.
-    minify: 'oxc',
+    minify: "oxc",
     rolldownOptions: {
       output: {
         manualChunks: undefined,
@@ -130,6 +130,6 @@ export const sharedViteBuild = {
     },
   },
   oxc: {
-    target: 'esnext',
+    target: "esnext",
   },
 } as const;

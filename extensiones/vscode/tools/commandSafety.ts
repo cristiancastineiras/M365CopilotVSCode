@@ -6,16 +6,16 @@
  * dialog instead of blending in with an ordinary build/test command.
  */
 const RISKY_PATTERNS: readonly RegExp[] = [
-	/\brm\b[^\n]*(-[a-z]*r[a-z]*f|-[a-z]*f[a-z]*r|--recursive|--force)/i,
-	/\bgit\s+push\b[^\n]*(--force\b|\s-f\b)/i,
-	/\bgit\s+reset\s+--hard\b/i,
-	/\bdel\s+\/[a-z]*[fq]/i,
-	/\bformat\s+[a-z]:/i,
-	/\bshutdown\b/i,
-	/\bRemove-Item\b[^\n]*-Recurse[^\n]*-Force\b/i,
-	/>\s*\/dev\/sd[a-z]/i,
+  /\brm\b[^\n]*(-[a-z]*r[a-z]*f|-[a-z]*f[a-z]*r|--recursive|--force)/i,
+  /\bgit\s+push\b[^\n]*(--force\b|\s-f\b)/i,
+  /\bgit\s+reset\s+--hard\b/i,
+  /\bdel\s+\/[a-z]*[fq]/i,
+  /\bformat\s+[a-z]:/i,
+  /\bshutdown\b/i,
+  /\bRemove-Item\b[^\n]*-Recurse[^\n]*-Force\b/i,
+  />\s*\/dev\/sd[a-z]/i,
 ];
 
 export function looksRisky(command: string): boolean {
-	return RISKY_PATTERNS.some((pattern) => pattern.test(command));
+  return RISKY_PATTERNS.some((pattern) => pattern.test(command));
 }

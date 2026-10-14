@@ -33,20 +33,20 @@ Download it from the
 [releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases):
 
 - **Chrome:** unzip `m365-copilot-vscode-extension-chrome.zip` →
-  `chrome://extensions` → *Developer mode* → *Load unpacked*.
+  `chrome://extensions` → _Developer mode_ → _Load unpacked_.
 - **Edge:** unzip `m365-copilot-vscode-extension-edge.zip` →
-  `edge://extensions` → *Developer mode* → *Load unpacked*.
+  `edge://extensions` → _Developer mode_ → _Load unpacked_.
 - **Firefox (permanent):** open `m365-copilot-vscode-extension-firefox.xpi` in
   Firefox (or drag it onto `about:addons`). It is the Mozilla-signed build, the
   only kind Firefox Release installs permanently; releases without the `.xpi`
   were not signed.
-- **Firefox (temporary, no signature needed):** `about:debugging` → *This
-  Firefox* → *Load Temporary Add-on* → choose
+- **Firefox (temporary, no signature needed):** `about:debugging` → _This
+  Firefox_ → _Load Temporary Add-on_ → choose
   `m365-copilot-vscode-extension-firefox.zip` (no need to unzip it). Firefox
   removes it when it closes.
 - **Firefox Developer Edition / Nightly / ESR:** set
   `xpinstall.signatures.required` to `false` in `about:config` and then
-  `about:addons` → ⚙ → *Install Add-on From File* with the `.zip`.
+  `about:addons` → ⚙ → _Install Add-on From File_ with the `.zip`.
 
 Firefox 128 or later. If Firefox says the add-on "appears to be corrupt", the
 zip is 2.0.0 or older (it had no add-on ID): download it again.
@@ -77,14 +77,14 @@ the next heartbeat (up to a minute).
 
 ### Permissions
 
-| Permission | What for |
-|------------|----------|
-| `storage` | The captured token and the auto-renewer’s state. |
-| `tabs`, `activeTab` | Finding, reloading or opening the M365 Copilot tab. |
-| `alarms` | The auto-renewer’s 1-min heartbeat (in MV3 the background sleeps). |
-| `cookies` | Deleting Microsoft’s session cookies on sign-out. |
-| `browsingData` | Clearing MSAL’s cache and the site storage of Microsoft’s sites. |
-| `http://localhost/*` | Sending the token to the VS Code extension’s local server. |
+| Permission                                                  | What for                                                                                                                               |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `storage`                                                   | The captured token and the auto-renewer’s state.                                                                                       |
+| `tabs`, `activeTab`                                         | Finding, reloading or opening the M365 Copilot tab.                                                                                    |
+| `alarms`                                                    | The auto-renewer’s 1-min heartbeat (in MV3 the background sleeps).                                                                     |
+| `cookies`                                                   | Deleting Microsoft’s session cookies on sign-out.                                                                                      |
+| `browsingData`                                              | Clearing MSAL’s cache and the site storage of Microsoft’s sites.                                                                       |
+| `http://localhost/*`                                        | Sending the token to the VS Code extension’s local server.                                                                             |
 | `*://*.microsoftonline.com/*` and Microsoft’s other domains | The two APIs above require permission over every cookie and origin they touch. The list is defined by `signOut.ts` in `packages/core`. |
 
 `cookies`, `browsingData` and Microsoft’s domains are **new**: on update the

@@ -8,18 +8,18 @@
  * Order matters: the canonical field always wins when both are present.
  */
 export function pickText(record: Record<string, unknown>, ...keys: readonly string[]): unknown {
-	for (const key of keys) {
-		if (typeof record[key] === 'string') return record[key];
-	}
-	return undefined;
+  for (const key of keys) {
+    if (typeof record[key] === "string") return record[key];
+  }
+  return undefined;
 }
 
 /** Text a `create` should write: `content`, or the usual mix-ups. */
 export function createContentOf(record: Record<string, unknown>): unknown {
-	return pickText(record, 'content', 'newText', 'text');
+  return pickText(record, "content", "newText", "text");
 }
 
 /** Replacement text for a `replace`: `newText`, or the usual mix-up. */
 export function replaceNewTextOf(record: Record<string, unknown>): unknown {
-	return pickText(record, 'newText', 'content');
+  return pickText(record, "newText", "content");
 }

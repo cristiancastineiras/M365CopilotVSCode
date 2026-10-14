@@ -1,18 +1,18 @@
-import * as vscode from 'vscode';
-import { onModelOutcome, type AccountTier } from './client';
-import { formatMoment, getLocale, t } from './i18n';
+import * as vscode from "vscode";
+import { onModelOutcome, type AccountTier } from "./client";
+import { formatMoment, getLocale, t } from "./i18n";
 import {
-	BUILTIN_MODELS,
-	isPaidSelector,
-	mergeModels,
-	parseCustomModels,
-	parseModelCatalog,
-	unannounced,
-	type CatalogModel,
-	type ModelEntry,
-} from './modelCatalog';
-import type { ProfileStore } from './secrets';
-import { debug } from './logger';
+  BUILTIN_MODELS,
+  isPaidSelector,
+  mergeModels,
+  parseCustomModels,
+  parseModelCatalog,
+  unannounced,
+  type CatalogModel,
+  type ModelEntry,
+} from "./modelCatalog";
+import type { ProfileStore } from "./secrets";
+import { debug } from "./logger";
 
 /**
  * M365 Copilot / BizChat selects a model through the `tone` field of the chat
@@ -25,16 +25,16 @@ export type CopilotModel = CatalogModel;
 
 /** models.json in the project's repository — edit it there to add or retire a model for everyone. */
 export const MODEL_CATALOG_URL =
-	'https://raw.githubusercontent.com/cristiancastineiras/M365CopilotVSCode/main/models.json';
+  "https://raw.githubusercontent.com/cristiancastineiras/M365CopilotVSCode/main/models.json";
 const CATALOG_REFRESH_MS = 12 * 60 * 60_000;
 const CATALOG_TIMEOUT_MS = 8_000;
 /** Give activation room before going to the network. */
 const FIRST_FETCH_DELAY_MS = 5_000;
 
-const CATALOG_CACHE_KEY = 'm365copilot.models.catalog';
-const OBSERVED_KEY = 'm365copilot.models.observed';
-const ANNOUNCED_KEY = 'm365copilot.models.announced';
-const UNAVAILABLE_KEY = 'm365copilot.models.unavailable';
+const CATALOG_CACHE_KEY = "m365copilot.models.catalog";
+const OBSERVED_KEY = "m365copilot.models.observed";
+const ANNOUNCED_KEY = "m365copilot.models.announced";
+const UNAVAILABLE_KEY = "m365copilot.models.unavailable";
 const MAX_OBSERVED = 20;
 /**
  * How long a model the service refused stays flagged. Not for ever: new
@@ -44,18 +44,18 @@ const UNAVAILABLE_TTL_MS = 12 * 60 * 60_000;
 
 /** A model (tone) the service refused for this account, and its words. */
 export interface Unavailability {
-	readonly at: number;
-	readonly reason: string;
-	/**
-	 * When it comes back, if the service said so (epoch ms): a used-up priority
-	 * access refills at midnight UTC. Otherwise the flag lasts UNAVAILABLE_TTL_MS.
-	 */
-	readonly until?: number;
+  readonly at: number;
+  readonly reason: string;
+  /**
+   * When it comes back, if the service said so (epoch ms): a used-up priority
+   * access refills at midnight UTC. Otherwise the flag lasts UNAVAILABLE_TTL_MS.
+   */
+  readonly until?: number;
 }
 
 /** Whether a flag still holds at `now`. */
 function stillUnavailable(entry: Unavailability, now: number): boolean {
-	return entry.until !== undefined ? now < entry.until : now - entry.at < UNAVAILABLE_TTL_MS;
+  return entry.until !== undefined ? now < entry.until : now - entry.at < UNAVAILABLE_TTL_MS;
 }
 
 const MAX_INPUT_TOKENS = 128_000;
@@ -65,11 +65,11 @@ let registry: ModelRegistry | undefined;
 
 /** Every model offered right now (built-ins only until the registry starts). */
 export function allModels(): readonly CopilotModel[] {
-	return registry?.models ?? BUILTIN_MODELS;
+  return registry?.models ?? BUILTIN_MODELS;
 }
 
 export function findModel(id: string): CopilotModel | undefined {
-	return allModels().find((model) => model.id === id);
+  return allModels().find((model) => model.id === id);
 }
 
 /**
@@ -77,13 +77,15 @@ export function findModel(id: string): CopilotModel | undefined {
  * lightbulb fix, the Source Control commit message (`m365copilot.editor.model`).
  */
 export function editorTone(): string | null {
-	const id = vscode.workspace.getConfiguration('m365copilot.editor').get<string>('model', 'm365-copilot-auto');
-	return findModel(id)?.tone ?? null;
+  const id = vscode.workspace
+    .getConfiguration("m365copilot.editor")
+    .get<string>("model", "m365-copilot-auto");
+  return findModel(id)?.tone ?? null;
 }
 
 interface CatalogCache {
-	readonly entries: ModelEntry[];
-	readonly fetchedAt: number;
+  readonly entries: ModelEntry[];
+  readonly fetchedAt: number;
 }
 
 /**
@@ -95,203 +97,235 @@ interface CatalogCache {
  * announced once each.
  */
 export class ModelRegistry implements vscode.Disposable {
-	private current: CopilotModel[] = [...BUILTIN_MODELS];
-	private readonly changed = new vscode.EventEmitter<void>();
-	readonly onDidChange = this.changed.event;
-	private readonly disposables: vscode.Disposable[] = [];
-	private timer: NodeJS.Timeout | undefined;
+  private current: CopilotModel[] = [...BUILTIN_MODELS];
+  private readonly changed = new vscode.EventEmitter<void>();
+  readonly onDidChange = this.changed.event;
+  private readonly disposables: vscode.Disposable[] = [];
+  private timer: NodeJS.Timeout | undefined;
 
-	constructor(
-		private readonly memento: vscode.Memento,
-		private readonly store: ProfileStore,
-		private readonly log: (message: string) => void,
-	) {
-		this.disposables.push(
-			store.onDidChange(() => void this.absorbProfile()),
-			vscode.workspace.onDidChangeConfiguration((event) => {
-				if (!event.affectsConfiguration('m365copilot.models')) return;
-				this.recompute();
-				if (event.affectsConfiguration('m365copilot.models.updateFromCatalog') && catalogEnabled()) {
-					void this.refreshCatalog();
-				}
-			}),
-		);
-		this.recompute(false);
-		void this.absorbProfile();
-		this.timer = setTimeout(() => {
-			void this.refreshCatalog();
-			this.timer = setInterval(() => void this.refreshCatalog(), CATALOG_REFRESH_MS);
-		}, FIRST_FETCH_DELAY_MS);
-	}
+  constructor(
+    private readonly memento: vscode.Memento,
+    private readonly store: ProfileStore,
+    private readonly log: (message: string) => void,
+  ) {
+    this.disposables.push(
+      store.onDidChange(() => void this.absorbProfile()),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (!event.affectsConfiguration("m365copilot.models")) return;
+        this.recompute();
+        if (
+          event.affectsConfiguration("m365copilot.models.updateFromCatalog") &&
+          catalogEnabled()
+        ) {
+          void this.refreshCatalog();
+        }
+      }),
+    );
+    this.recompute(false);
+    void this.absorbProfile();
+    this.timer = setTimeout(() => {
+      void this.refreshCatalog();
+      this.timer = setInterval(() => void this.refreshCatalog(), CATALOG_REFRESH_MS);
+    }, FIRST_FETCH_DELAY_MS);
+  }
 
-	get models(): readonly CopilotModel[] {
-		return this.current;
-	}
+  get models(): readonly CopilotModel[] {
+    return this.current;
+  }
 
-	/**
-	 * Download models.json now. Returns false when it could not be fetched or
-	 * parsed — the cached copy (or the built-ins) stay in use.
-	 */
-	async refreshCatalog(): Promise<boolean> {
-		if (!catalogEnabled()) {
-			debug('models', 'catalog refresh skipped: m365copilot.models.updateFromCatalog is off');
-			return false;
-		}
-		const started = Date.now();
-		try {
-			debug('models', `→ GET ${MODEL_CATALOG_URL}`, { timeoutMs: CATALOG_TIMEOUT_MS, headers: { Accept: 'application/json' } });
-			const response = await fetch(MODEL_CATALOG_URL, {
-				signal: AbortSignal.timeout(CATALOG_TIMEOUT_MS),
-				headers: { Accept: 'application/json' },
-			});
-			debug('models', `← ${response.status} ${response.statusText} (${Date.now() - started} ms)`, () => {
-				const headers: Record<string, string> = {};
-				response.headers.forEach((value, key) => {
-					headers[key] = value;
-				});
-				return headers;
-			});
-			if (!response.ok) throw new Error(`HTTP ${response.status}`);
-			const payload: unknown = await response.json();
-			const entries = parseModelCatalog(payload);
-			if (!entries) throw new Error('models.json has no "models" array');
-			debug('models', `catalog parsed: ${entries.length} entries`, entries);
-			await this.memento.update(CATALOG_CACHE_KEY, { entries, fetchedAt: Date.now() } satisfies CatalogCache);
-			this.log(t('log.modelsCatalog', entries.length));
-			this.recompute();
-			return true;
-		} catch (error) {
-			this.log(t('log.modelsCatalogFailed', error instanceof Error ? error.message : String(error)));
-			return false;
-		}
-	}
+  /**
+   * Download models.json now. Returns false when it could not be fetched or
+   * parsed — the cached copy (or the built-ins) stay in use.
+   */
+  async refreshCatalog(): Promise<boolean> {
+    if (!catalogEnabled()) {
+      debug("models", "catalog refresh skipped: m365copilot.models.updateFromCatalog is off");
+      return false;
+    }
+    const started = Date.now();
+    try {
+      debug("models", `→ GET ${MODEL_CATALOG_URL}`, {
+        timeoutMs: CATALOG_TIMEOUT_MS,
+        headers: { Accept: "application/json" },
+      });
+      const response = await fetch(MODEL_CATALOG_URL, {
+        signal: AbortSignal.timeout(CATALOG_TIMEOUT_MS),
+        headers: { Accept: "application/json" },
+      });
+      debug(
+        "models",
+        `← ${response.status} ${response.statusText} (${Date.now() - started} ms)`,
+        () => {
+          const headers: Record<string, string> = {};
+          response.headers.forEach((value, key) => {
+            headers[key] = value;
+          });
+          return headers;
+        },
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload: unknown = await response.json();
+      const entries = parseModelCatalog(payload);
+      if (!entries) throw new Error('models.json has no "models" array');
+      debug("models", `catalog parsed: ${entries.length} entries`, entries);
+      await this.memento.update(CATALOG_CACHE_KEY, {
+        entries,
+        fetchedAt: Date.now(),
+      } satisfies CatalogCache);
+      this.log(t("log.modelsCatalog", entries.length));
+      this.recompute();
+      return true;
+    } catch (error) {
+      this.log(
+        t("log.modelsCatalogFailed", error instanceof Error ? error.message : String(error)),
+      );
+      return false;
+    }
+  }
 
-	/** When the catalog was last downloaded, if ever. */
-	get catalogFetchedAt(): number | undefined {
-		return this.memento.get<CatalogCache>(CATALOG_CACHE_KEY)?.fetchedAt;
-	}
+  /** When the catalog was last downloaded, if ever. */
+  get catalogFetchedAt(): number | undefined {
+    return this.memento.get<CatalogCache>(CATALOG_CACHE_KEY)?.fetchedAt;
+  }
 
-	/** Whether the service recently refused this model for this account (Auto never is). */
-	unavailability(tone: string | null): Unavailability | undefined {
-		if (!tone) return undefined;
-		const entry = this.memento.get<Record<string, Unavailability>>(UNAVAILABLE_KEY, {})[tone];
-		return entry && stillUnavailable(entry, Date.now()) ? entry : undefined;
-	}
+  /** Whether the service recently refused this model for this account (Auto never is). */
+  unavailability(tone: string | null): Unavailability | undefined {
+    if (!tone) return undefined;
+    const entry = this.memento.get<Record<string, Unavailability>>(UNAVAILABLE_KEY, {})[tone];
+    return entry && stillUnavailable(entry, Date.now()) ? entry : undefined;
+  }
 
-	/**
-	 * Record what a turn with a forced model showed: it ran (clears the flag) or
-	 * the service refused it (flags it). The picker is refreshed when the flag
-	 * flips, so the model shows its warning — or loses it — right away.
-	 */
-	async setAvailability(tone: string, available: boolean, reason = '', until?: number): Promise<void> {
-		const wasFlagged = Boolean(this.unavailability(tone));
-		const now = Date.now();
-		const next = Object.fromEntries(
-			Object.entries(this.memento.get<Record<string, Unavailability>>(UNAVAILABLE_KEY, {})).filter(
-				([key, entry]) => key !== tone && stillUnavailable(entry, now),
-			),
-		);
-		if (!available) {
-			next[tone] = {
-				at: now,
-				reason: reason.replace(/\s+/g, ' ').trim().slice(0, 200),
-				...(until !== undefined && until > now ? { until } : {}),
-			};
-		}
-		else if (!wasFlagged) return;
-		await this.memento.update(UNAVAILABLE_KEY, next);
-		this.log(t(available ? 'log.modelAvailable' : 'log.modelUnavailable', tone, reason));
-		if (wasFlagged !== !available) this.changed.fire();
-	}
+  /**
+   * Record what a turn with a forced model showed: it ran (clears the flag) or
+   * the service refused it (flags it). The picker is refreshed when the flag
+   * flips, so the model shows its warning — or loses it — right away.
+   */
+  async setAvailability(
+    tone: string,
+    available: boolean,
+    reason = "",
+    until?: number,
+  ): Promise<void> {
+    const wasFlagged = Boolean(this.unavailability(tone));
+    const now = Date.now();
+    const next = Object.fromEntries(
+      Object.entries(this.memento.get<Record<string, Unavailability>>(UNAVAILABLE_KEY, {})).filter(
+        ([key, entry]) => key !== tone && stillUnavailable(entry, now),
+      ),
+    );
+    if (!available) {
+      next[tone] = {
+        at: now,
+        reason: reason.replace(/\s+/g, " ").trim().slice(0, 200),
+        ...(until !== undefined && until > now ? { until } : {}),
+      };
+    } else if (!wasFlagged) return;
+    await this.memento.update(UNAVAILABLE_KEY, next);
+    this.log(t(available ? "log.modelAvailable" : "log.modelUnavailable", tone, reason));
+    if (wasFlagged !== !available) this.changed.fire();
+  }
 
-	/** Remember the tones the web app used (they come inside the profile). */
-	private async absorbProfile(): Promise<void> {
-		const profile = await this.store.get();
-		const incoming = profile?.observedTones ?? [];
-		if (incoming.length === 0) return;
-		const known = this.memento.get<string[]>(OBSERVED_KEY, []);
-		const next = [...known.filter((tone) => !incoming.includes(tone)), ...incoming].slice(-MAX_OBSERVED);
-		if (next.length === known.length && next.every((tone, index) => tone === known[index])) return;
-		await this.memento.update(OBSERVED_KEY, next);
-		this.recompute();
-	}
+  /** Remember the tones the web app used (they come inside the profile). */
+  private async absorbProfile(): Promise<void> {
+    const profile = await this.store.get();
+    const incoming = profile?.observedTones ?? [];
+    if (incoming.length === 0) return;
+    const known = this.memento.get<string[]>(OBSERVED_KEY, []);
+    const next = [...known.filter((tone) => !incoming.includes(tone)), ...incoming].slice(
+      -MAX_OBSERVED,
+    );
+    if (next.length === known.length && next.every((tone, index) => tone === known[index])) return;
+    await this.memento.update(OBSERVED_KEY, next);
+    this.recompute();
+  }
 
-	private recompute(announce = true): void {
-		const config = vscode.workspace.getConfiguration('m365copilot.models');
-		const next = mergeModels({
-			catalog: catalogEnabled() ? (this.memento.get<CatalogCache>(CATALOG_CACHE_KEY)?.entries ?? []) : [],
-			observed: config.get<boolean>('detectFromBrowser', true) ? this.memento.get<string[]>(OBSERVED_KEY, []) : [],
-			custom: parseCustomModels(config.get<unknown>('custom', [])),
-		});
-		const before = this.current.map((model) => `${model.id}|${model.name}|${model.tone}`).join(',');
-		const after = next.map((model) => `${model.id}|${model.name}|${model.tone}`).join(',');
-		this.current = next;
-		debug('models', `model list recomputed: ${next.length} models${before !== after ? ' (changed)' : ' (same as before)'}`, () =>
-			next.map((model) => ({ id: model.id, tone: model.tone, source: model.source })),
-		);
-		if (before !== after) this.changed.fire();
-		if (announce) void this.announce(next);
-	}
+  private recompute(announce = true): void {
+    const config = vscode.workspace.getConfiguration("m365copilot.models");
+    const next = mergeModels({
+      catalog: catalogEnabled()
+        ? (this.memento.get<CatalogCache>(CATALOG_CACHE_KEY)?.entries ?? [])
+        : [],
+      observed: config.get<boolean>("detectFromBrowser", true)
+        ? this.memento.get<string[]>(OBSERVED_KEY, [])
+        : [],
+      custom: parseCustomModels(config.get<unknown>("custom", [])),
+    });
+    const before = this.current.map((model) => `${model.id}|${model.name}|${model.tone}`).join(",");
+    const after = next.map((model) => `${model.id}|${model.name}|${model.tone}`).join(",");
+    this.current = next;
+    debug(
+      "models",
+      `model list recomputed: ${next.length} models${before !== after ? " (changed)" : " (same as before)"}`,
+      () => next.map((model) => ({ id: model.id, tone: model.tone, source: model.source })),
+    );
+    if (before !== after) this.changed.fire();
+    if (announce) void this.announce(next);
+  }
 
-	/** One notification per model that appears for the first time (not on every start). */
-	private async announce(models: readonly CopilotModel[]): Promise<void> {
-		const known = new Set(this.memento.get<string[]>(ANNOUNCED_KEY, []));
-		const fresh = unannounced(models, known);
-		if (fresh.length === 0) return;
-		for (const model of fresh) known.add(model.tone!);
-		await this.memento.update(ANNOUNCED_KEY, [...known]);
-		const names = fresh.map((model) => model.name.replace(/^M365 Copilot · /, '')).join(', ');
-		const open = t('paste.openChat');
-		const picked = await vscode.window.showInformationMessage(t('models.new', names), open);
-		if (picked === open) await vscode.commands.executeCommand('workbench.action.chat.open');
-	}
+  /** One notification per model that appears for the first time (not on every start). */
+  private async announce(models: readonly CopilotModel[]): Promise<void> {
+    const known = new Set(this.memento.get<string[]>(ANNOUNCED_KEY, []));
+    const fresh = unannounced(models, known);
+    if (fresh.length === 0) return;
+    for (const model of fresh) known.add(model.tone!);
+    await this.memento.update(ANNOUNCED_KEY, [...known]);
+    const names = fresh.map((model) => model.name.replace(/^M365 Copilot · /, "")).join(", ");
+    const open = t("paste.openChat");
+    const picked = await vscode.window.showInformationMessage(t("models.new", names), open);
+    if (picked === open) await vscode.commands.executeCommand("workbench.action.chat.open");
+  }
 
-	dispose(): void {
-		// clearTimeout also clears an interval in Node.
-		if (this.timer) clearTimeout(this.timer);
-		if (registry === this) onModelOutcome(undefined);
-		this.changed.dispose();
-		for (const disposable of this.disposables) disposable.dispose();
-		if (registry === this) registry = undefined;
-	}
+  dispose(): void {
+    // clearTimeout also clears an interval in Node.
+    if (this.timer) clearTimeout(this.timer);
+    if (registry === this) onModelOutcome(undefined);
+    this.changed.dispose();
+    for (const disposable of this.disposables) disposable.dispose();
+    if (registry === this) registry = undefined;
+  }
 }
 
 /** Create the registry and make it the source of {@link allModels} / {@link findModel}. */
 export function installModelRegistry(
-	memento: vscode.Memento,
-	store: ProfileStore,
-	log: (message: string) => void,
+  memento: vscode.Memento,
+  store: ProfileStore,
+  log: (message: string) => void,
 ): ModelRegistry {
-	registry = new ModelRegistry(memento, store, log);
-	// Every turn with a forced model, from any feature (chat, inline edit,
-	// review, commit messages…), tells the registry whether that model ran.
-	const current = registry;
-	onModelOutcome((tone, available, reason, until) => void current.setAvailability(tone, available, reason, until));
-	return registry;
+  registry = new ModelRegistry(memento, store, log);
+  // Every turn with a forced model, from any feature (chat, inline edit,
+  // review, commit messages…), tells the registry whether that model ran.
+  const current = registry;
+  onModelOutcome(
+    (tone, available, reason, until) =>
+      void current.setAvailability(tone, available, reason, until),
+  );
+  return registry;
 }
 
 /** The registry, once installed: for the picker's "not available" flags. */
 export function modelRegistry(): ModelRegistry | undefined {
-	return registry;
+  return registry;
 }
 
 function catalogEnabled(): boolean {
-	return vscode.workspace.getConfiguration('m365copilot.models').get<boolean>('updateFromCatalog', true);
+  return vscode.workspace
+    .getConfiguration("m365copilot.models")
+    .get<boolean>("updateFromCatalog", true);
 }
 
 /** The picker's one-line description of a model. */
 export function modelDetail(model: CopilotModel): string {
-	if (model.detailKey) return t(model.detailKey);
-	const text = model.detail?.[getLocale()] ?? model.detail?.en;
-	if (text) return text;
-	return t(
-		model.source === 'observed'
-			? 'models.source.observed'
-			: model.source === 'custom'
-				? 'models.source.custom'
-				: 'models.source.catalog',
-		model.tone ?? '',
-	);
+  if (model.detailKey) return t(model.detailKey);
+  const text = model.detail?.[getLocale()] ?? model.detail?.en;
+  if (text) return text;
+  return t(
+    model.source === "observed"
+      ? "models.source.observed"
+      : model.source === "custom"
+        ? "models.source.custom"
+        : "models.source.catalog",
+    model.tone ?? "",
+  );
 }
 
 /**
@@ -308,13 +342,13 @@ export function modelDetail(model: CopilotModel): string {
  *   its own budget.
  */
 type PickerChatInformation = vscode.LanguageModelChatInformation & {
-	readonly isUserSelectable: boolean;
-	readonly isBYOK?: true;
-	readonly statusIcon?: vscode.ThemeIcon;
+  readonly isUserSelectable: boolean;
+  readonly isBYOK?: true;
+  readonly statusIcon?: vscode.ThemeIcon;
 };
 
 /** Whether the stored token can be used right now — drives the picker's warning state. */
-export type TokenState = 'ok' | 'missing' | 'expired';
+export type TokenState = "ok" | "missing" | "expired";
 
 /**
  * Build the model information VS Code renders in the picker. A model the
@@ -322,52 +356,57 @@ export type TokenState = 'ok' | 'missing' | 'expired';
  * says so, with the service's reason in the tooltip.
  */
 export function toChatInformation(
-	model: CopilotModel,
-	tokenState: TokenState,
-	unavailable?: Unavailability,
-	tier: AccountTier = 'unknown',
+  model: CopilotModel,
+  tokenState: TokenState,
+  unavailable?: Unavailability,
+  tier: AccountTier = "unknown",
 ): vscode.LanguageModelChatInformation {
-	// A model of the Microsoft 365 Copilot licence, on an account the web app
-	// showed with Copilot Chat only: it stays selectable, but says so.
-	const detail = tier === 'included' && isPaidSelector(model.tone) ? t('model.needsPremium') : modelDetail(model);
-	const tone = model.tone ? ` (tone: ${model.tone})` : '';
-	const unavailableText = unavailable ? unavailabilityText(unavailable) : '';
-	const info: PickerChatInformation = {
-		id: model.id,
-		name: model.name,
-		family: model.family,
-		version: '1.0.0',
-		maxInputTokens: MAX_INPUT_TOKENS,
-		maxOutputTokens: MAX_OUTPUT_TOKENS,
-		detail:
-			tokenState !== 'ok'
-				? t(tokenState === 'missing' ? 'model.needsToken' : 'model.tokenExpired')
-				: unavailable
-					? unavailableText
-					: detail,
-		tooltip: unavailable ? `${unavailableText}${tone} — ${unavailable.reason}` : `${detail}${tone}`,
-		// This is what surfaces the model in the in-chat picker (not just in
-		// "Manage Models").
-		isUserSelectable: true,
-		isBYOK: true,
-		statusIcon: tokenState === 'ok' && !unavailable ? undefined : new vscode.ThemeIcon('warning'),
-		capabilities: {
-			// We advertise tool calling so the models also appear in the default
-			// Agent/Edit chat mode (which filters out models without it). BizChat
-			// has no native tool execution: the calls are a text protocol we
-			// describe in the prompt and decode from the reply (see
-			// toolProtocol.ts), covering both our tools and the editor's own —
-			// so the agent loop does work, one tool call per turn.
-			toolCalling: true,
-			// Screenshots pasted in the chat are uploaded like the web app does
-			// (client.ts, `images`).
-			imageInput: true,
-		},
-	};
-	return info;
+  // A model of the Microsoft 365 Copilot licence, on an account the web app
+  // showed with Copilot Chat only: it stays selectable, but says so.
+  const detail =
+    tier === "included" && isPaidSelector(model.tone)
+      ? t("model.needsPremium")
+      : modelDetail(model);
+  const tone = model.tone ? ` (tone: ${model.tone})` : "";
+  const unavailableText = unavailable ? unavailabilityText(unavailable) : "";
+  const info: PickerChatInformation = {
+    id: model.id,
+    name: model.name,
+    family: model.family,
+    version: "1.0.0",
+    maxInputTokens: MAX_INPUT_TOKENS,
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
+    detail:
+      tokenState !== "ok"
+        ? t(tokenState === "missing" ? "model.needsToken" : "model.tokenExpired")
+        : unavailable
+          ? unavailableText
+          : detail,
+    tooltip: unavailable ? `${unavailableText}${tone} — ${unavailable.reason}` : `${detail}${tone}`,
+    // This is what surfaces the model in the in-chat picker (not just in
+    // "Manage Models").
+    isUserSelectable: true,
+    isBYOK: true,
+    statusIcon: tokenState === "ok" && !unavailable ? undefined : new vscode.ThemeIcon("warning"),
+    capabilities: {
+      // We advertise tool calling so the models also appear in the default
+      // Agent/Edit chat mode (which filters out models without it). BizChat
+      // has no native tool execution: the calls are a text protocol we
+      // describe in the prompt and decode from the reply (see
+      // toolProtocol.ts), covering both our tools and the editor's own —
+      // so the agent loop does work, one tool call per turn.
+      toolCalling: true,
+      // Screenshots pasted in the chat are uploaded like the web app does
+      // (client.ts, `images`).
+      imageInput: true,
+    },
+  };
+  return info;
 }
 
 /** How the picker says a model is flagged: until when, when the service said so. */
 export function unavailabilityText(unavailable: Unavailability): string {
-	return unavailable.until !== undefined ? t('model.quotaUntil', formatMoment(unavailable.until)) : t('model.unavailable');
+  return unavailable.until !== undefined
+    ? t("model.quotaUntil", formatMoment(unavailable.until))
+    : t("model.unavailable");
 }

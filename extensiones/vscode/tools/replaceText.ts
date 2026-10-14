@@ -1,18 +1,21 @@
-import { t } from '../src/i18n';
+import { t } from "../src/i18n";
 
 export function requireText(value: unknown, fieldName: string, allowEmpty = true): string {
-	if (typeof value !== 'string') throw new Error(t('edit.text.notString', fieldName));
-	if (!allowEmpty && !value) throw new Error(t('edit.text.empty', fieldName));
-	return value;
+  if (typeof value !== "string") throw new Error(t("edit.text.notString", fieldName));
+  if (!allowEmpty && !value) throw new Error(t("edit.text.empty", fieldName));
+  return value;
 }
 
-type MatchResult = { readonly kind: 'unique'; readonly index: number } | { readonly kind: 'none' } | { readonly kind: 'multiple' };
+type MatchResult =
+  | { readonly kind: "unique"; readonly index: number }
+  | { readonly kind: "none" }
+  | { readonly kind: "multiple" };
 
 function findMatch(haystack: string, needle: string): MatchResult {
-	const first = haystack.indexOf(needle);
-	if (first === -1) return { kind: 'none' };
-	if (haystack.indexOf(needle, first + needle.length) !== -1) return { kind: 'multiple' };
-	return { kind: 'unique', index: first };
+  const first = haystack.indexOf(needle);
+  if (first === -1) return { kind: "none" };
+  if (haystack.indexOf(needle, first + needle.length) !== -1) return { kind: "multiple" };
+  return { kind: "unique", index: first };
 }
 
 /**
@@ -30,35 +33,35 @@ function findMatch(haystack: string, needle: string): MatchResult {
  * back to CRLF (the file's own style) instead of failing.
  */
 export function replaceTextOnce(
-	content: string,
-	oldText: string,
-	newText: string,
-	relativePath: string,
+  content: string,
+  oldText: string,
+  newText: string,
+  relativePath: string,
 ): string {
-	const direct = findMatch(content, oldText);
-	if (direct.kind === 'unique') {
-		return `${content.slice(0, direct.index)}${newText}${content.slice(direct.index + oldText.length)}`;
-	}
-	if (direct.kind === 'multiple') {
-		throw new Error(t('edit.oldText.multiple', relativePath));
-	}
+  const direct = findMatch(content, oldText);
+  if (direct.kind === "unique") {
+    return `${content.slice(0, direct.index)}${newText}${content.slice(direct.index + oldText.length)}`;
+  }
+  if (direct.kind === "multiple") {
+    throw new Error(t("edit.oldText.multiple", relativePath));
+  }
 
-	if (content.includes('\r\n')) {
-		const normalizedContent = content.replace(/\r\n/g, '\n');
-		const normalizedOld = oldText.replace(/\r\n/g, '\n');
-		const viaLf = findMatch(normalizedContent, normalizedOld);
-		if (viaLf.kind === 'unique') {
-			const normalizedNew = newText.replace(/\r\n/g, '\n');
-			const merged =
-				normalizedContent.slice(0, viaLf.index) +
-				normalizedNew +
-				normalizedContent.slice(viaLf.index + normalizedOld.length);
-			return merged.replace(/\n/g, '\r\n');
-		}
-		if (viaLf.kind === 'multiple') {
-			throw new Error(t('edit.oldText.multiple', relativePath));
-		}
-	}
+  if (content.includes("\r\n")) {
+    const normalizedContent = content.replace(/\r\n/g, "\n");
+    const normalizedOld = oldText.replace(/\r\n/g, "\n");
+    const viaLf = findMatch(normalizedContent, normalizedOld);
+    if (viaLf.kind === "unique") {
+      const normalizedNew = newText.replace(/\r\n/g, "\n");
+      const merged =
+        normalizedContent.slice(0, viaLf.index) +
+        normalizedNew +
+        normalizedContent.slice(viaLf.index + normalizedOld.length);
+      return merged.replace(/\n/g, "\r\n");
+    }
+    if (viaLf.kind === "multiple") {
+      throw new Error(t("edit.oldText.multiple", relativePath));
+    }
+  }
 
-	throw new Error(t('edit.oldText.noMatch', relativePath));
+  throw new Error(t("edit.oldText.noMatch", relativePath));
 }

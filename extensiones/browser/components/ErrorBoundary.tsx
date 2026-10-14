@@ -1,5 +1,5 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { t } from '@/utils/i18n';
+import { Component, type ErrorInfo, type ReactNode } from "react";
+import { t } from "@/utils/i18n";
 
 interface Props {
   children: ReactNode;
@@ -12,22 +12,22 @@ interface State {
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  override state: State = { hasError: false, message: '' };
+  override state: State = { hasError: false, message: "" };
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, message: error.message };
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error('[ErrorBoundary]', error, info.componentStack);
+    console.error("[ErrorBoundary]", error, info.componentStack);
   }
 
   override render(): ReactNode {
     if (this.state.hasError) {
       return (
         this.props.fallback ?? (
-          <div style={{ padding: 16, color: '#b91c1c' }}>
-            <h2>{t('error.title')}</h2>
+          <div style={{ padding: 16, color: "#b91c1c" }}>
+            <h2>{t("error.title")}</h2>
             <p style={{ fontSize: 12 }}>{this.state.message}</p>
           </div>
         )

@@ -19,14 +19,14 @@
  * unit tests can run the client without a VS Code host.
  */
 export interface LogSink {
-	appendLine(line: string): void;
-	show?(preserveFocus?: boolean): void;
-	clear?(): void;
+  appendLine(line: string): void;
+  show?(preserveFocus?: boolean): void;
+  clear?(): void;
 }
 
 interface Entry {
-	readonly at: number;
-	readonly text: string;
+  readonly at: number;
+  readonly text: string;
 }
 
 /** Oldest entries are dropped past either bound: a deep trace must not eat the extension host's memory. */
@@ -42,27 +42,27 @@ let bufferedChars = 0;
 let dropped = 0;
 
 export function initLogger(target: LogSink): void {
-	sink = target;
+  sink = target;
 }
 
 /** A line that is always written, whatever the debug setting. */
 export function log(message: string): void {
-	record(undefined, message);
+  record(undefined, message);
 }
 
 export function showLog(): void {
-	sink?.show?.(true);
+  sink?.show?.(true);
 }
 
 // ------------------------------------------------------------------ deep debug
 
 export function setDeepDebug(on: boolean): void {
-	deep = on;
+  deep = on;
 }
 
 /** Whether the deep trace is on — for call sites that would pay to build their data. */
 export function isDeepDebug(): boolean {
-	return deep;
+  return deep;
 }
 
 /**
@@ -72,59 +72,62 @@ export function isDeepDebug(): boolean {
  * nothing is formatted while the mode is off. Never throws.
  */
 export function debug(scope: string, message: string, data?: unknown): void {
-	if (!deep) return;
-	let detail: string | undefined;
-	try {
-		const value = typeof data === 'function' ? (data as () => unknown)() : data;
-		if (value !== undefined) detail = formatDebugData(value);
-	} catch (error) {
-		detail = `<could not format the data: ${String(error)}>`;
-	}
-	record(scope, message, detail);
+  if (!deep) return;
+  let detail: string | undefined;
+  try {
+    const value = typeof data === "function" ? (data as () => unknown)() : data;
+    if (value !== undefined) detail = formatDebugData(value);
+  } catch (error) {
+    detail = `<could not format the data: ${String(error)}>`;
+  }
+  record(scope, message, detail);
 }
 
 /** Strings as they are (prompts stay readable); everything else as JSON that survives errors, cycles and binary. */
 export function formatDebugData(value: unknown): string {
-	if (typeof value === 'string') return value;
-	if (value instanceof Error) return value.stack ?? `${value.name}: ${value.message}`;
-	const seen = new WeakSet<object>();
-	try {
-		return (
-			JSON.stringify(
-				value,
-				(_key, item: unknown) => {
-					if (typeof item === 'bigint') return item.toString();
-					if (typeof item === 'function') return undefined;
-					if (item instanceof Error) return { name: item.name, message: item.message, stack: item.stack };
-					if (item instanceof Map) return Object.fromEntries(item);
-					if (item instanceof Set) return [...item];
-					if (ArrayBuffer.isView(item)) return `<${item.byteLength} bytes>`;
-					if (item && typeof item === 'object') {
-						const record = item as { type?: unknown; data?: unknown };
-						// Buffer#toJSON runs before this replacer.
-						if (record.type === 'Buffer' && Array.isArray(record.data)) return `<${record.data.length} bytes>`;
-						if (seen.has(item)) return '[Circular]';
-						seen.add(item);
-					}
-					return item;
-				},
-				2,
-			) ?? String(value)
-		);
-	} catch {
-		return String(value);
-	}
+  if (typeof value === "string") return value;
+  if (value instanceof Error) return value.stack ?? `${value.name}: ${value.message}`;
+  const seen = new WeakSet<object>();
+  try {
+    return (
+      JSON.stringify(
+        value,
+        (_key, item: unknown) => {
+          if (typeof item === "bigint") return item.toString();
+          if (typeof item === "function") return undefined;
+          if (item instanceof Error)
+            return { name: item.name, message: item.message, stack: item.stack };
+          if (item instanceof Map) return Object.fromEntries(item);
+          if (item instanceof Set) return [...item];
+          if (ArrayBuffer.isView(item)) return `<${item.byteLength} bytes>`;
+          if (item && typeof item === "object") {
+            const record = item as { type?: unknown; data?: unknown };
+            // Buffer#toJSON runs before this replacer.
+            if (record.type === "Buffer" && Array.isArray(record.data))
+              return `<${record.data.length} bytes>`;
+            if (seen.has(item)) return "[Circular]";
+            seen.add(item);
+          }
+          return item;
+        },
+        2,
+      ) ?? String(value)
+    );
+  } catch {
+    return String(value);
+  }
 }
 
 // ------------------------------------------------------------------- redaction
 
 const JWT = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/g;
 const URL_SECRET =
-	/([?&](?:access_token|id_token|refresh_token|token|sig|signature|client_secret|password|api[_-]?key)=)[^&\s"'#]+/gi;
+  /([?&](?:access_token|id_token|refresh_token|token|sig|signature|client_secret|password|api[_-]?key)=)[^&\s"'#]+/gi;
 const AUTH_SCHEME = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/g;
 const JSON_SECRET =
-	/("(?:access_?token|id_?token|refresh_?token|token|password|passwd|secret|client_?secret|authorization|cookie|set-cookie|api_?key)"\s*:\s*")((?:[^"\\]|\\.)*)(")/gi;
-const HEADER_SECRET = /^(\s*(?:authorization|proxy-authorization|cookie|set-cookie|x-api-key)\s*[:=]\s*).+$/gim;
+  /("(?:access_?token|id_?token|refresh_?token|token|password|passwd|secret|client_?secret|authorization|cookie|set-cookie|api_?key)"\s*:\s*")((?:[^"\\]|\\.)*)(")/gi;
+const HEADER_SECRET =
+  /^(\s*(?:authorization|proxy-authorization|cookie|set-cookie|x-api-key)\s*[:=]\s*).+$/gim;
 
 /**
  * Hides what must never leave the machine in a shared log: JWTs (shown as a
@@ -132,69 +135,70 @@ const HEADER_SECRET = /^(\s*(?:authorization|proxy-authorization|cookie|set-cook
  * query values, `Bearer …`, secret-looking JSON fields and credential headers.
  */
 export function redactSecrets(text: string): string {
-	return text
-		.replace(URL_SECRET, '$1<REDACTED>')
-		.replace(JSON_SECRET, '$1<REDACTED>$3')
-		.replace(HEADER_SECRET, '$1<REDACTED>')
-		.replace(AUTH_SCHEME, '$1 <REDACTED>')
-		.replace(JWT, (jwt) => `<JWT ${jwt.length} chars>`);
+  return text
+    .replace(URL_SECRET, "$1<REDACTED>")
+    .replace(JSON_SECRET, "$1<REDACTED>$3")
+    .replace(HEADER_SECRET, "$1<REDACTED>")
+    .replace(AUTH_SCHEME, "$1 <REDACTED>")
+    .replace(JWT, (jwt) => `<JWT ${jwt.length} chars>`);
 }
 
 /** Redact the access_token query param so logs are safe to share. */
 export function redactUrl(url: string): string {
-	return redactSecrets(url);
+  return redactSecrets(url);
 }
 
 /** Truncate a long frame for readable logs. */
 export function truncate(text: string, max = 1200): string {
-	return text.length > max ? `${text.slice(0, max)}… (+${text.length - max} chars)` : text;
+  return text.length > max ? `${text.slice(0, max)}… (+${text.length - max} chars)` : text;
 }
 
 // ---------------------------------------------------------------------- buffer
 
 function record(scope: string | undefined, message: string, detail?: string): void {
-	const at = Date.now();
-	let text = scope ? `[${scope}] ${message}` : message;
-	if (detail) text += `\n${indent(detail)}`;
-	text = redactSecrets(text);
-	if (text.length > MAX_ENTRY_CHARS) {
-		text = `${text.slice(0, MAX_ENTRY_CHARS)}\n… (+${text.length - MAX_ENTRY_CHARS} chars not kept)`;
-	}
-	entries.push({ at, text });
-	bufferedChars += text.length;
-	trim();
-	sink?.appendLine(`[${new Date(at).toISOString().slice(11, 23)}] ${text}`);
+  const at = Date.now();
+  let text = scope ? `[${scope}] ${message}` : message;
+  if (detail) text += `\n${indent(detail)}`;
+  text = redactSecrets(text);
+  if (text.length > MAX_ENTRY_CHARS) {
+    text = `${text.slice(0, MAX_ENTRY_CHARS)}\n… (+${text.length - MAX_ENTRY_CHARS} chars not kept)`;
+  }
+  entries.push({ at, text });
+  bufferedChars += text.length;
+  trim();
+  sink?.appendLine(`[${new Date(at).toISOString().slice(11, 23)}] ${text}`);
 }
 
 function indent(text: string): string {
-	return text.replace(/^/gm, '    ');
+  return text.replace(/^/gm, "    ");
 }
 
 /** Drops the oldest tenth in one go, so trimming stays cheap on every append. */
 function trim(): void {
-	if (entries.length <= MAX_ENTRIES && bufferedChars <= MAX_BUFFER_CHARS) return;
-	const count = Math.max(1, Math.ceil(entries.length / 10));
-	for (const entry of entries.slice(0, count)) bufferedChars -= entry.text.length;
-	entries = entries.slice(count);
-	dropped += count;
+  if (entries.length <= MAX_ENTRIES && bufferedChars <= MAX_BUFFER_CHARS) return;
+  const count = Math.max(1, Math.ceil(entries.length / 10));
+  for (const entry of entries.slice(0, count)) bufferedChars -= entry.text.length;
+  entries = entries.slice(count);
+  dropped += count;
 }
 
 export function logEntryCount(): number {
-	return entries.length;
+  return entries.length;
 }
 
 /** Forgets everything buffered (and clears the Output channel), to reproduce a problem from a clean slate. */
 export function clearLog(): void {
-	entries = [];
-	bufferedChars = 0;
-	dropped = 0;
-	sink?.clear?.();
+  entries = [];
+  bufferedChars = 0;
+  dropped = 0;
+  sink?.clear?.();
 }
 
 /** The whole buffered log as plain text — `header` first, then one stamped entry per line block. */
 export function renderLogText(header: string): string {
-	const lines = [redactSecrets(header).trimEnd(), ''];
-	if (dropped > 0) lines.push(`# ${dropped} older entries were dropped to keep the log bounded`, '');
-	for (const entry of entries) lines.push(`${new Date(entry.at).toISOString()} ${entry.text}`);
-	return `${lines.join('\n')}\n`;
+  const lines = [redactSecrets(header).trimEnd(), ""];
+  if (dropped > 0)
+    lines.push(`# ${dropped} older entries were dropped to keep the log bounded`, "");
+  for (const entry of entries) lines.push(`${new Date(entry.at).toISOString()} ${entry.text}`);
+  return `${lines.join("\n")}\n`;
 }

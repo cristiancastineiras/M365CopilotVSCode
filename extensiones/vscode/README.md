@@ -23,27 +23,27 @@ sent to the model — is available in **English and Spanish**.
 There is no dashboard and no API key: you capture your session token in the
 browser and VS Code uses it.
 
-| Piece | Where | What it does |
-|-------|-------|--------------|
-| **Browser extension** (recommended) | [`extensiones/browser`](https://github.com/cristiancastineiras/M365CopilotVSCode/tree/main/extensiones/browser) · [releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases) | Captures the token on the M365 Copilot website, renews it before it expires and sends it to VS Code automatically. |
-| **Userscript** (alternative) | [`m365copilot-token.user.js`](m365copilot-token.user.js) | The same capture as the browser extension, for Tampermonkey/Violentmonkey: it sends the token to VS Code by itself and shows the connection in a small panel. |
-| **VS Code extension** | this folder | Registers the models, the `@m365` participant, the editor/SCM actions and the agent tools, and talks to Microsoft 365 Copilot with your token. |
+| Piece                               | Where                                                                                                                                                                                           | What it does                                                                                                                                                  |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Browser extension** (recommended) | [`extensiones/browser`](https://github.com/cristiancastineiras/M365CopilotVSCode/tree/main/extensiones/browser) · [releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases) | Captures the token on the M365 Copilot website, renews it before it expires and sends it to VS Code automatically.                                            |
+| **Userscript** (alternative)        | [`m365copilot-token.user.js`](m365copilot-token.user.js)                                                                                                                                        | The same capture as the browser extension, for Tampermonkey/Violentmonkey: it sends the token to VS Code by itself and shows the connection in a small panel. |
+| **VS Code extension**               | this folder                                                                                                                                                                                     | Registers the models, the `@m365` participant, the editor/SCM actions and the agent tools, and talks to Microsoft 365 Copilot with your token.                |
 
 ## Quick start
 
 1. **Get the token into VS Code**
-   - *With the browser extension:* install it, open
+   - _With the browser extension:_ install it, open
      <https://m365.cloud.microsoft/chat/> once and send any message. The popup
      turns green and the token reaches VS Code by itself — and keeps being
      renewed while some M365 tab is open.
-   - *With the userscript:* install [Tampermonkey](https://www.tampermonkey.net/),
+   - _With the userscript:_ install [Tampermonkey](https://www.tampermonkey.net/),
      open [the userscript](https://raw.githubusercontent.com/cristiancastineiras/M365CopilotVSCode/main/extensiones/vscode/m365copilot-token.user.js) to install it (it then updates itself), open
      M365 Copilot and send a message. The first time, Tampermonkey asks to let
      it connect to `localhost` — allow it: that is VS Code. The panel lights up
      when VS Code has the token. Without that permission, **Copy token** in the
      panel and **M365 Copilot: Paste profile or token** still work (the token in
      the clipboard is detected, so Enter is enough).
-   - *Without installing anything (e.g. a managed browser):* open
+   - _Without installing anything (e.g. a managed browser):_ open
      <https://m365.cloud.microsoft/chat/>, open DevTools (F12) → **Network**,
      type `chathub` in the filter, send a message, right-click the request that
      appears → **Copy** → **Copy URL**, and run **M365 Copilot: Paste profile or token** (the URL in
@@ -62,7 +62,7 @@ browser and VS Code uses it.
 The **M365** item in the status bar tells you at a glance whether the token is
 valid and opens a menu with everything else, and VS Code's **Accounts** menu
 shows who is signed in. The **Get started** walkthrough
-(*Help → Welcome*, or the menu) walks through the same steps step by step — see
+(_Help → Welcome_, or the menu) walks through the same steps step by step — see
 also the [illustrated guide](Guide.md).
 
 ## Editor integration
@@ -71,8 +71,8 @@ also the [illustrated guide](Guide.md).
 
 Select some code (or just place the cursor inside a function) and press
 **Ctrl+Shift+Alt+I** (`Cmd+Shift+Alt+I` on macOS) — or right-click →
-**M365 Copilot → Edit code…** — and type what should change: *"add error
-handling"*, *"convert to async/await"*, *"make it generic"*… Recent instructions
+**M365 Copilot → Edit code…** — and type what should change: _"add error
+handling"_, _"convert to async/await"_, _"make it generic"_… Recent instructions
 are offered again, followed by a few common ones (simplify, add types, clearer
 names, comments, performance…). M365 Copilot rewrites exactly that block, in place, and the
 result appears under the Keep/Undo review below; the chat is not involved. The
@@ -108,14 +108,14 @@ comments**. Up to 10 files per review, two at a time; the model is the one in
 `@m365` always answers with Microsoft 365 Copilot, whatever model is selected in
 the picker (if an M365 model is selected, its variant is used).
 
-| Command | What it does |
-|---------|--------------|
-| `@m365 /explain` | Explains the selected code — or, with no selection, the **function/class at the cursor** (found through the language's own symbol provider). Read-only. |
-| `@m365 /fix` | Fixes the problems in that code, including the diagnostics VS Code reports there, and applies the fix with Keep/Undo review. |
-| `@m365 /doc` | Adds documentation comments in the language's conventions. |
-| `@m365 /tests` | Writes unit tests with the framework the project already uses. |
-| `@m365 /terminal` | Explains the **last command of the active terminal** — its output and exit code — and how to fix it. |
-| `@m365 <anything>` | Free-form request with the workspace tools; the current selection and `#file` attachments are included as context. |
+| Command            | What it does                                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@m365 /explain`   | Explains the selected code — or, with no selection, the **function/class at the cursor** (found through the language's own symbol provider). Read-only. |
+| `@m365 /fix`       | Fixes the problems in that code, including the diagnostics VS Code reports there, and applies the fix with Keep/Undo review.                            |
+| `@m365 /doc`       | Adds documentation comments in the language's conventions.                                                                                              |
+| `@m365 /tests`     | Writes unit tests with the framework the project already uses.                                                                                          |
+| `@m365 /terminal`  | Explains the **last command of the active terminal** — its output and exit code — and how to fix it.                                                    |
+| `@m365 <anything>` | Free-form request with the workspace tools; the current selection and `#file` attachments are included as context.                                      |
 
 The participant shows which code it used as a reference, streams its answer,
 reports each tool step, offers a **Review pending changes** button after
@@ -123,13 +123,13 @@ editing, and suggests follow-ups (`/doc`, `/tests`…).
 
 ### Context menu, lightbulb and editor title
 
-- **Right-click → M365 Copilot**: *Edit code…*, *Explain code*, *Ask about this
-  code…*, *Review code*, *Fix code*, *Document code*, *Generate tests*, *Fix all
-  problems in this file*. *Explain*, *Ask*, *Fix*, *Document* and *Tests* open
+- **Right-click → M365 Copilot**: _Edit code…_, _Explain code_, _Ask about this
+  code…_, _Review code_, _Fix code_, _Document code_, _Generate tests_, _Fix all
+  problems in this file_. _Explain_, _Ask_, _Fix_, _Document_ and _Tests_ open
   the chat with the right `@m365` command and the exact code you were on.
 - **Lightbulb (Ctrl+.)**: **Fix with M365 Copilot: «error»** on errors and
   warnings (fixed in place), **Fix all N problems in this file** when there are
-  several, and *Edit… / Explain / Document with M365 Copilot* on a selection.
+  several, and _Edit… / Explain / Document with M365 Copilot_ on a selection.
   Can be turned off with `m365copilot.editor.codeActions`.
 - **Editor title bar**: when the open file has agent changes waiting for review,
   ↑ / ↓ (previous / next change), ✓ **Keep**, ↶ **Undo** and ⇄ **Diff** buttons
@@ -143,7 +143,7 @@ editing, and suggests follow-ups (`/doc`, `/tests`…).
 
 M365 Copilot is also an account in VS Code's **Accounts** menu (the person icon
 at the bottom of the activity bar): with a valid token it shows the account
-(`you@company.com`) under *M365 Copilot*, and **Sign Out** deletes the token.
+(`you@company.com`) under _M365 Copilot_, and **Sign Out** deletes the token.
 Without a token — or once it expires — the menu shows a badge and **Sign in
 with M365 Copilot**, which opens M365 Copilot in the browser and waits for the
 browser extension or the userscript to send the token (or lets you paste it).
@@ -152,7 +152,7 @@ If another extension ever asks for this account, VS Code asks you first.
 ### The renewal that really renews: sign out and sign in again
 
 **`Sign out and sign in again`** (quick menu and command palette) is the only
-renewal that asks for your credentials again. The others renew the *token*, and
+renewal that asks for your credentials again. The others renew the _token_, and
 the token was never the problem:
 
 - the Copilot token is handed out by the **browser’s Microsoft session**
@@ -210,17 +210,17 @@ the token, a short status-bar message confirms it.
 
 ### Editor settings
 
-| Setting | Default | Purpose |
-|---------|---------|---------|
-| `m365copilot.editor.codeActions` | `true` | M365 Copilot actions in the lightbulb. |
-| `m365copilot.editor.model` | `auto` | Model for answers written straight into the editor: *Edit code…*, the lightbulb fixes, the code review and the commit message. |
-| `m365copilot.terminal.captureOutput` | `true` | Keep the last commands' output in memory for `@m365 /terminal`. |
-| `m365copilot.notifications.tokenExpiry` | `true` | Warn when the token is about to expire or expires. |
+| Setting                                 | Default | Purpose                                                                                                                        |
+| --------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `m365copilot.editor.codeActions`        | `true`  | M365 Copilot actions in the lightbulb.                                                                                         |
+| `m365copilot.editor.model`              | `auto`  | Model for answers written straight into the editor: _Edit code…_, the lightbulb fixes, the code review and the commit message. |
+| `m365copilot.terminal.captureOutput`    | `true`  | Keep the last commands' output in memory for `@m365 /terminal`.                                                                |
+| `m365copilot.notifications.tokenExpiry` | `true`  | Warn when the token is about to expire or expires.                                                                             |
 
 ### Source Control: commit message with M365
 
-The ✨ button in the **Source Control** title bar (*Generate commit message with
-M365 Copilot*) writes a [Conventional Commits](https://www.conventionalcommits.org/)
+The ✨ button in the **Source Control** title bar (_Generate commit message with
+M365 Copilot_) writes a [Conventional Commits](https://www.conventionalcommits.org/)
 message from the staged diff — or the working tree's, new files included, if
 nothing is staged — straight into the commit box, in the extension's language
 (or the repository's, when all its recent commits use another one). It never
@@ -276,12 +276,12 @@ repository — watching, deciding, or why it is waiting — and its menu has
 **Check now** (ask right away, ignoring the idle time and interval), **Undo the
 last auto-commit**, settings and turn off. Submodules are left alone.
 
-| Setting | Default | Purpose |
-|---------|---------|---------|
-| `m365copilot.autoCommit.mode` | `auto` | `auto` commits on its own (with **Undo**); `confirm` proposes the commits and waits for **Commit**. |
-| `m365copilot.autoCommit.idleSeconds` | `120` | Seconds without changes before it looks (20–3600). |
-| `m365copilot.autoCommit.minIntervalMinutes` | `5` | Minimum minutes since the last commit (0 = none). |
-| `m365copilot.autoCommit.waitForErrors` | `true` | Wait while the changed files have errors. |
+| Setting                                     | Default | Purpose                                                                                             |
+| ------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------- |
+| `m365copilot.autoCommit.mode`               | `auto`  | `auto` commits on its own (with **Undo**); `confirm` proposes the commits and waits for **Commit**. |
+| `m365copilot.autoCommit.idleSeconds`        | `120`   | Seconds without changes before it looks (20–3600).                                                  |
+| `m365copilot.autoCommit.minIntervalMinutes` | `5`     | Minimum minutes since the last commit (0 = none).                                                   |
+| `m365copilot.autoCommit.waitForErrors`      | `true`  | Wait while the changed files have errors.                                                           |
 
 ## Understands your project (local index)
 
@@ -298,10 +298,10 @@ so M365 Copilot knows which files exist, where things live and how they connect:
   C/C++, PHP, Ruby, shell, SQL and Markdown), what it imports — resolved to
   files, including the workspace's own packages in a monorepo and aliases such
   as `@/utils` — and which files import it.
-- **Search:** BM25 over identifier-aware terms (`getUserToken` matches *get*,
-  *user*, *token*), ranking higher what names the file or a symbol, covers more
+- **Search:** BM25 over identifier-aware terms (`getUserToken` matches _get_,
+  _user_, _token_), ranking higher what names the file or a symbol, covers more
   of the question and sits near the file you are in. Questions in Spanish find
-  English code (*«¿dónde se guarda el token?»* → *save / store / storage*).
+  English code (_«¿dónde se guarda el token?»_ → _save / store / storage_).
 - **Always up to date:** built in the background a few seconds after start (a
   spinner in the status bar; this repository takes under a second) and updated
   file by file as you create, change or delete files.
@@ -318,21 +318,21 @@ It is used in three ways:
    `m365_project_map` (structure, packages, entry points, most imported modules;
    or a file's outline, imports and importers) — the model is told to use them
    first.
-3. **For you.** *M365 Copilot: Search the project…* (results as you type; Enter
-   opens the code), *Show project map* and *Rebuild project index*, also in the
+3. **For you.** _M365 Copilot: Search the project…_ (results as you type; Enter
+   opens the code), _Show project map_ and _Rebuild project index_, also in the
    **M365** status bar menu.
 
 Only the code included in a request leaves the machine, to Microsoft 365
 Copilot — the same as when you paste it — and only in a trusted workspace.
 
-| Setting | Default | Purpose |
-|---------|---------|---------|
-| `m365copilot.index.enabled` | `true` | Keep the project index. |
-| `m365copilot.index.maxFiles` | `5000` | Files indexed at most (source code first). |
-| `m365copilot.index.maxFileKB` | `256` | Larger files are not indexed. |
-| `m365copilot.index.exclude` | `[]` | Extra globs to leave out, e.g. `**/fixtures/**`. |
-| `m365copilot.context.autoRetrieve` | `true` | Add the project context to every chat request. |
-| `m365copilot.context.maxChars` | `8000` | Size of that context. |
+| Setting                            | Default | Purpose                                          |
+| ---------------------------------- | ------- | ------------------------------------------------ |
+| `m365copilot.index.enabled`        | `true`  | Keep the project index.                          |
+| `m365copilot.index.maxFiles`       | `5000`  | Files indexed at most (source code first).       |
+| `m365copilot.index.maxFileKB`      | `256`   | Larger files are not indexed.                    |
+| `m365copilot.index.exclude`        | `[]`    | Extra globs to leave out, e.g. `**/fixtures/**`. |
+| `m365copilot.context.autoRetrieve` | `true`  | Add the project context to every chat request.   |
+| `m365copilot.context.maxChars`     | `8000`  | Size of that context.                            |
 
 ## Internet access (web search)
 
@@ -346,7 +346,7 @@ used to have **no internet**. Now:
   extension runs a **separate** turn the way the web app does — its own request,
   as captured by the browser extension or the userscript, with web search — and
   gives the answer and its **sources** back to the turn that asked.
-- **Requests without tools** (e.g. *Ask* mode) go out that way directly, with
+- **Requests without tools** (e.g. _Ask_ mode) go out that way directly, with
   the sources listed under the answer. If BizChat turns that request down, the
   answer comes without web search instead of failing.
 
@@ -376,12 +376,12 @@ answering, so they are slower) and **GPT 5.6 Quick response**, available again
 once you use them on M365 Copilot with the browser extension or the userscript
 installed.
 
-| Source | How it works |
-|--------|--------------|
-| Built in | The models this version ships with — always available, also offline. |
-| Online catalog | [`models.json`](https://github.com/cristiancastineiras/M365CopilotVSCode/blob/main/models.json) in the repository, downloaded on start and every 12 h. Adding a model there (or `"hidden": true` to retire one) reaches every user without a new release. |
-| Detected in the web app | When you use a model on M365 Copilot, the browser extension / userscript sees its `tone` in the chat invocation and sends it with the token. If VS Code does not know it yet, it is added — that proves it exists for your account. |
-| Your settings | `m365copilot.models.custom`, e.g. `["Gpt_5_9_Chat"]`, to try a model before it reaches the catalog. |
+| Source                  | How it works                                                                                                                                                                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Built in                | The models this version ships with — always available, also offline.                                                                                                                                                                                      |
+| Online catalog          | [`models.json`](https://github.com/cristiancastineiras/M365CopilotVSCode/blob/main/models.json) in the repository, downloaded on start and every 12 h. Adding a model there (or `"hidden": true` to retire one) reaches every user without a new release. |
+| Detected in the web app | When you use a model on M365 Copilot, the browser extension / userscript sees its `tone` in the chat invocation and sends it with the token. If VS Code does not know it yet, it is added — that proves it exists for your account.                       |
+| Your settings           | `m365copilot.models.custom`, e.g. `["Gpt_5_9_Chat"]`, to try a model before it reaches the catalog.                                                                                                                                                       |
 
 New models are announced once with a notification. **M365 Copilot: Update
 models** (also in the menu) downloads the catalog right away and lists every
@@ -395,14 +395,14 @@ answer, and flags the model in the picker (⚠ "not available on your account
 right now") for 12 hours or until it works again — or, when its priority
 access is used up, until it refills (see
 [Limits and refusals](#limits-and-refusals-from-m365-copilot)). **M365 Copilot:
-Check models** (also the first entry of *Update models*) sends a short message
+Check models** (also the first entry of _Update models_) sends a short message
 to each model, one conversation each, and lists which ones work for you.
 
-| Setting | Default | Purpose |
-|---------|---------|---------|
-| `m365copilot.models.updateFromCatalog` | `true` | Download `models.json` (a plain GET to GitHub; nothing is sent). |
-| `m365copilot.models.detectFromBrowser` | `true` | Add the models the web app uses. |
-| `m365copilot.models.custom` | `[]` | Extra models by `tone` (or `{ "tone", "name" }`). |
+| Setting                                | Default | Purpose                                                          |
+| -------------------------------------- | ------- | ---------------------------------------------------------------- |
+| `m365copilot.models.updateFromCatalog` | `true`  | Download `models.json` (a plain GET to GitHub; nothing is sent). |
+| `m365copilot.models.detectFromBrowser` | `true`  | Add the models the web app uses.                                 |
+| `m365copilot.models.custom`            | `[]`    | Extra models by `tone` (or `{ "tone", "name" }`).                |
 
 The model settings of sub-agents, inline completions and editor answers
 (`*.model`) offer the built-in models.
@@ -414,21 +414,21 @@ the model. The extension recognises them, says what happened in plain words
 (with the service's own message) and does not retry: the same request would get
 the same answer.
 
-| M365 Copilot says | What the extension does |
-|-------------------|-------------------------|
-| **Throttled** (`Throttled` / `PerUserThrottled`): too many requests in a short time | It lifts by itself after about an hour without requests, and retrying sooner only extends it. So what runs on its own — inline completions, the auto-commit (except *Check now*), *Check models* — waits until 75 minutes after the last throttled turn: ⌚ on the status item (until when, in its tooltip) and one notification when it starts. What you ask yourself still goes out, and the first answer lifts the pause. |
-| **Priority access used up** (`OutOfCredits`): metered models allow so many turns a day, some also a week | Says when it refills — midnight UTC, the weekly allowance on Monday, shown in your time — and flags the model in the picker until then. Pick another model, or Auto, in the meantime. |
-| **No valid licence** (`InvalidCopilotLicense`) | Says so. It is about the account, not the model, so nothing is flagged: ask your Microsoft 365 admin. |
-| **Declined to answer** (`Disengaged`) | An error, never text: an inline edit or a commit message never ends up with the notice instead of an answer. |
+| M365 Copilot says                                                                                        | What the extension does                                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Throttled** (`Throttled` / `PerUserThrottled`): too many requests in a short time                      | It lifts by itself after about an hour without requests, and retrying sooner only extends it. So what runs on its own — inline completions, the auto-commit (except _Check now_), _Check models_ — waits until 75 minutes after the last throttled turn: ⌚ on the status item (until when, in its tooltip) and one notification when it starts. What you ask yourself still goes out, and the first answer lifts the pause. |
+| **Priority access used up** (`OutOfCredits`): metered models allow so many turns a day, some also a week | Says when it refills — midnight UTC, the weekly allowance on Monday, shown in your time — and flags the model in the picker until then. Pick another model, or Auto, in the meantime.                                                                                                                                                                                                                                        |
+| **No valid licence** (`InvalidCopilotLicense`)                                                           | Says so. It is about the account, not the model, so nothing is flagged: ask your Microsoft 365 admin.                                                                                                                                                                                                                                                                                                                        |
+| **Declined to answer** (`Disengaged`)                                                                    | An error, never text: an inline edit or a commit message never ends up with the notice instead of an answer.                                                                                                                                                                                                                                                                                                                 |
 
 ## Languages (English / Spanish)
 
-`m365copilot.language` (also *Change language* in the menu):
+`m365copilot.language` (also _Change language_ in the menu):
 
-| Value | Behaviour |
-|-------|-----------|
+| Value            | Behaviour                                                                              |
+| ---------------- | -------------------------------------------------------------------------------------- |
 | `auto` (default) | Follows VS Code's display language: Spanish for any Spanish locale, English otherwise. |
-| `en` / `es` | Forces that language. |
+| `en` / `es`      | Forces that language.                                                                  |
 
 It applies immediately to notifications, the status bar, the menu, tool results,
 CodeLens, logs — **and to the instructions sent to the model**, so it answers
@@ -458,8 +458,8 @@ This extension's own tools, inside the open workspace:
 - prepare a batch of exact edits, new files or deletions;
 - read the errors/warnings VS Code already shows (read-only, compiles nothing);
 - query git read-only (`status`/`diff`/`log`; never commits or pushes);
-- generate the commit message by triggering VS Code's **native** ✨ *Generate
-  Commit Message*, with the staged diff as a fallback;
+- generate the commit message by triggering VS Code's **native** ✨ _Generate
+  Commit Message_, with the staged diff as a fallback;
 - create a real commit with that message, validated as Conventional Commits —
   **always** after you confirm the exact message and what will be staged;
 - run a terminal command (build, tests…) — **always** after you confirm the
@@ -473,11 +473,11 @@ the result says so. Listing and search respect your `files.exclude` and
 `search.exclude` plus a built-in baseline (`node_modules`, `.git`, `dist`…), and
 search **says when it was not exhaustive** instead of claiming "no matches".
 
-| Setting | Default | Purpose |
-|---------|---------|---------|
-| `m365copilot.tools.includeEditorTools` | `true` | Also describe native/MCP tools. `false` = only the `m365_*` tools. |
-| `m365copilot.tools.duplicates` | `preferEditor` | Which tool the model should try first when a native one and ours do the same thing. The other stays as a fallback. |
-| `m365copilot.tools.maxAdvertised` | `48` | Cap on tools described in the prompt (the catalog travels as text). Undescribed tools can still run if the model names them. |
+| Setting                                | Default        | Purpose                                                                                                                      |
+| -------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `m365copilot.tools.includeEditorTools` | `true`         | Also describe native/MCP tools. `false` = only the `m365_*` tools.                                                           |
+| `m365copilot.tools.duplicates`         | `preferEditor` | Which tool the model should try first when a native one and ours do the same thing. The other stays as a fallback.           |
+| `m365copilot.tools.maxAdvertised`      | `48`           | Cap on tools described in the prompt (the catalog travels as text). Undescribed tools can still run if the model names them. |
 
 ### How the prompt keeps the context
 
@@ -521,7 +521,7 @@ Nothing is written to disk until you save (new files are created, and **Undo**
 deletes them). If you Keep a batch and change your mind, **M365 Copilot: Undo
 last batch of agent changes** reverts it.
 
-> The *chat editing* API used by GitHub Copilot Edits is a proposed API not
+> The _chat editing_ API used by GitHub Copilot Edits is a proposed API not
 > available to normally installed extensions, so this reproduces it with stable
 > API (decorations + CodeLens + diff + editor title actions).
 
@@ -538,16 +538,16 @@ their own loop of the same workspace tools (edits, commands and commits
 included, with the usual Keep/Undo review and confirmations). Each sub-agent
 only sees its task and returns a concise summary, so broad exploration does not
 fill the main conversation's context. Calls that edit, run commands or touch git
-are serialised among sub-agents; read-only ones run in parallel. *Known
-limitation:* the confirmation dialog does not say which sub-agent asked; the
+are serialised among sub-agents; read-only ones run in parallel. _Known
+limitation:_ the confirmation dialog does not say which sub-agent asked; the
 progress notification and the log do.
 
-| Setting | Default | Purpose |
-|---------|---------|---------|
-| `m365copilot.subagents.enabled` | `true` | Allow delegation. |
-| `m365copilot.subagents.maxConcurrent` | `3` | Sub-agents running at once. |
-| `m365copilot.subagents.maxSteps` | `6` | Tool calls per sub-agent before a partial summary. |
-| `m365copilot.subagents.model` | `auto` | Model (tone) for sub-agents. |
+| Setting                               | Default | Purpose                                            |
+| ------------------------------------- | ------- | -------------------------------------------------- |
+| `m365copilot.subagents.enabled`       | `true`  | Allow delegation.                                  |
+| `m365copilot.subagents.maxConcurrent` | `3`     | Sub-agents running at once.                        |
+| `m365copilot.subagents.maxSteps`      | `6`     | Tool calls per sub-agent before a partial summary. |
+| `m365copilot.subagents.model`         | `auto`  | Model (tone) for sub-agents.                       |
 
 ## Inline completions (ghost text)
 
@@ -562,14 +562,14 @@ suggestion is a request against your M365 plan; set `triggerMode` to `manual`
 and ask with `Alt+\` if that is too much. A cache keeps the suggestion alive
 while you type exactly what it proposed, so it does not flicker.
 
-| Setting | Default | Purpose |
-|---------|---------|---------|
-| `inlineCompletions.enabled` | `true` | Turn ghost text on or off. |
-| `inlineCompletions.triggerMode` | `automatic` | `manual` only suggests when asked (far less usage). |
-| `inlineCompletions.debounceMs` | `500` | Typing pause before asking. |
-| `inlineCompletions.maxLines` | `6` | Max lines per suggestion. |
-| `inlineCompletions.timeoutMs` | `6000` | Discard after this long. |
-| `inlineCompletions.model` | `auto` | Model to use; `reasoning` is too slow here. |
+| Setting                               | Default                     | Purpose                                                                        |
+| ------------------------------------- | --------------------------- | ------------------------------------------------------------------------------ |
+| `inlineCompletions.enabled`           | `true`                      | Turn ghost text on or off.                                                     |
+| `inlineCompletions.triggerMode`       | `automatic`                 | `manual` only suggests when asked (far less usage).                            |
+| `inlineCompletions.debounceMs`        | `500`                       | Typing pause before asking.                                                    |
+| `inlineCompletions.maxLines`          | `6`                         | Max lines per suggestion.                                                      |
+| `inlineCompletions.timeoutMs`         | `6000`                      | Discard after this long.                                                       |
+| `inlineCompletions.model`             | `auto`                      | Model to use; `reasoning` is too slow here.                                    |
 | `inlineCompletions.disabledLanguages` | `["scminput", "plaintext"]` | Languages where it never triggers automatically (`scminput` = the commit box). |
 
 Output panes, read-only diff sides and git views never trigger a suggestion.
@@ -613,42 +613,42 @@ keeps streaming to `m365copilot-debug.log` in the system temp folder, as before.
 All of them are in the menu behind the **M365** status item, and in the command
 palette under **M365 Copilot**.
 
-| Command | Action |
-|---------|--------|
-| `Show menu` | The quick menu (same as clicking the status item). |
-| `Open chat with @m365` | Opens the chat with `@m365` ready. |
-| `Edit code…` | Edits the selection (or the function at the cursor) in place from an instruction — **Ctrl+Shift+Alt+I**. |
-| `Explain last terminal command` | `@m365 /terminal` on the active terminal (also in the terminal's context menu). |
-| `Explain code` / `Fix code` / `Document code` / `Generate tests` / `Ask about this code…` | Editor actions (also in the context menu). |
-| `Review code` | Reviews the selection or the file; findings become comments on the lines. |
-| `Fix all problems in this file` | One inline edit per block with errors/warnings, under Keep/Undo. |
-| `Review changes with M365 Copilot` | Reviews the uncommitted changes (Source Control title bar). |
-| `Clear all review comments` | Removes the review comments. |
-| `Generate commit message with M365 Copilot` | Writes the commit message in Source Control. |
-| `Turn auto-commit on/off` | Starts or stops the [auto-commit](#auto-commit) in this workspace. |
-| `Auto-commit: check now` | Asks right away whether the current changes deserve a commit. |
-| `Undo last auto-commit` | Takes the last auto-commit back out of the history, keeping its changes. |
-| `Paste profile or token` | Stores the token in SecretStorage (encrypted). |
-| `Token status` | User, expiry and capture time. |
-| `Delete credentials` | Deletes the stored token. |
-| `Sign out and sign in again` | Deletes the token **and** the browser’s Microsoft session (cookies, MSAL’s cache, site storage) so it asks for your credentials again. |
-| `Toggle inline completions` | Ghost text on/off. |
-| `Change language` | English / Spanish / automatic. |
-| `Update models` | Downloads the model catalog now and lists every model with its source. |
-| `Check models` | Sends a short message to each model and lists which ones work on your account. |
-| `Search the project…` | Ranked search in the project index; Enter opens the code. |
-| `Show project map` | The project map (structure, packages, entry points, most imported modules) as a document. |
-| `Rebuild project index` | Indexes the workspace again. |
-| `Get started` | Opens the walkthrough. |
-| `Show log (diagnostics)` | Opens the "M365 Copilot" output channel. |
-| `Toggle deep debug mode` | Turns the [deep debug mode](#deep-debug-mode) on or off. |
-| `Export log (.txt)` | Saves the whole log as a text file (tokens hidden). |
-| `Clear log` | Empties the log and the console. |
-| `Review pending agent changes` | Diff of the changes awaiting review. |
-| `Keep agent changes` / `Undo agent changes` / `Show diff of agent changes` | Review actions for a whole file (also in the editor title bar). |
-| `Next agent change` / `Previous agent change` | Jump between pending changes, across files. |
-| `Discard all pending agent changes` | Reverts everything pending at once. |
-| `Undo last batch of agent changes` | Restores the last batch you kept. |
+| Command                                                                                   | Action                                                                                                                                 |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `Show menu`                                                                               | The quick menu (same as clicking the status item).                                                                                     |
+| `Open chat with @m365`                                                                    | Opens the chat with `@m365` ready.                                                                                                     |
+| `Edit code…`                                                                              | Edits the selection (or the function at the cursor) in place from an instruction — **Ctrl+Shift+Alt+I**.                               |
+| `Explain last terminal command`                                                           | `@m365 /terminal` on the active terminal (also in the terminal's context menu).                                                        |
+| `Explain code` / `Fix code` / `Document code` / `Generate tests` / `Ask about this code…` | Editor actions (also in the context menu).                                                                                             |
+| `Review code`                                                                             | Reviews the selection or the file; findings become comments on the lines.                                                              |
+| `Fix all problems in this file`                                                           | One inline edit per block with errors/warnings, under Keep/Undo.                                                                       |
+| `Review changes with M365 Copilot`                                                        | Reviews the uncommitted changes (Source Control title bar).                                                                            |
+| `Clear all review comments`                                                               | Removes the review comments.                                                                                                           |
+| `Generate commit message with M365 Copilot`                                               | Writes the commit message in Source Control.                                                                                           |
+| `Turn auto-commit on/off`                                                                 | Starts or stops the [auto-commit](#auto-commit) in this workspace.                                                                     |
+| `Auto-commit: check now`                                                                  | Asks right away whether the current changes deserve a commit.                                                                          |
+| `Undo last auto-commit`                                                                   | Takes the last auto-commit back out of the history, keeping its changes.                                                               |
+| `Paste profile or token`                                                                  | Stores the token in SecretStorage (encrypted).                                                                                         |
+| `Token status`                                                                            | User, expiry and capture time.                                                                                                         |
+| `Delete credentials`                                                                      | Deletes the stored token.                                                                                                              |
+| `Sign out and sign in again`                                                              | Deletes the token **and** the browser’s Microsoft session (cookies, MSAL’s cache, site storage) so it asks for your credentials again. |
+| `Toggle inline completions`                                                               | Ghost text on/off.                                                                                                                     |
+| `Change language`                                                                         | English / Spanish / automatic.                                                                                                         |
+| `Update models`                                                                           | Downloads the model catalog now and lists every model with its source.                                                                 |
+| `Check models`                                                                            | Sends a short message to each model and lists which ones work on your account.                                                         |
+| `Search the project…`                                                                     | Ranked search in the project index; Enter opens the code.                                                                              |
+| `Show project map`                                                                        | The project map (structure, packages, entry points, most imported modules) as a document.                                              |
+| `Rebuild project index`                                                                   | Indexes the workspace again.                                                                                                           |
+| `Get started`                                                                             | Opens the walkthrough.                                                                                                                 |
+| `Show log (diagnostics)`                                                                  | Opens the "M365 Copilot" output channel.                                                                                               |
+| `Toggle deep debug mode`                                                                  | Turns the [deep debug mode](#deep-debug-mode) on or off.                                                                               |
+| `Export log (.txt)`                                                                       | Saves the whole log as a text file (tokens hidden).                                                                                    |
+| `Clear log`                                                                               | Empties the log and the console.                                                                                                       |
+| `Review pending agent changes`                                                            | Diff of the changes awaiting review.                                                                                                   |
+| `Keep agent changes` / `Undo agent changes` / `Show diff of agent changes`                | Review actions for a whole file (also in the editor title bar).                                                                        |
+| `Next agent change` / `Previous agent change`                                             | Jump between pending changes, across files.                                                                                            |
+| `Discard all pending agent changes`                                                       | Reverts everything pending at once.                                                                                                    |
+| `Undo last batch of agent changes`                                                        | Restores the last batch you kept.                                                                                                      |
 
 ## How it works
 
@@ -677,7 +677,7 @@ Every turn is a conversation of its own — each agent step, each inline
 suggestion — so it goes out as a **temporary chat** (`disableMemory=1`, the web
 app's temporary chat): it works the same, but adds no chat to your Copilot
 history. Turn on `m365copilot.history.save` to keep them there. **Stopping** a
-request sends the same *stop* as the web app's stop button, so M365 Copilot
+request sends the same _stop_ as the web app's stop button, so M365 Copilot
 stops writing instead of finishing the answer for nobody; and a turn ends as
 soon as its tool call is complete, without waiting for whatever the model
 writes after it.
@@ -730,7 +730,7 @@ pnpm test             # protocol, tools, i18n and mock-BizChat tests (no VS Code
 pnpm package          # .vsix into ../../releases/vscode, userscript into ../../releases/tampermonkey
 ```
 
-Press `F5` in VS Code to launch an *Extension Development Host*.
+Press `F5` in VS Code to launch an _Extension Development Host_.
 
 **Userscript.** `m365copilot-token.user.js` is generated — edit
 [`userscript/main.ts`](userscript/main.ts). `pnpm build` bundles it with the

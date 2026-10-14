@@ -9,12 +9,12 @@
  * Uso: node rename-zip.mjs <directorio> <sufijo-sin-guion> <nombre-final>
  *   node rename-zip.mjs ../../releases/chrome chrome m365-copilot-vscode-extension-chrome.zip
  */
-import { readdirSync, renameSync } from 'node:fs';
-import { join } from 'node:path';
+import { readdirSync, renameSync } from "node:fs";
+import { join } from "node:path";
 
 const [, , dir, suffix, stableName] = process.argv;
 if (!dir || !suffix || !stableName) {
-  console.error('Uso: node rename-zip.mjs <directorio> <sufijo> <nombre-final>');
+  console.error("Uso: node rename-zip.mjs <directorio> <sufijo> <nombre-final>");
   process.exit(1);
 }
 

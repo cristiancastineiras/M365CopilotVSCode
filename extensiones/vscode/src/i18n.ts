@@ -20,19 +20,19 @@
  * missing or misspelled key is a compile error, and the Spanish catalog is
  * checked against the English one key by key (see locales/es.ts).
  */
-import { en } from './locales/en';
-import { es } from './locales/es';
+import { en } from "./locales/en";
+import { es } from "./locales/es";
 
-export type Locale = 'en' | 'es';
+export type Locale = "en" | "es";
 export type MessageKey = keyof typeof en;
 /** Value of the `m365copilot.language` setting. */
-export type LanguageSetting = 'auto' | Locale;
+export type LanguageSetting = "auto" | Locale;
 
-export const LOCALES: readonly Locale[] = ['en', 'es'];
+export const LOCALES: readonly Locale[] = ["en", "es"];
 
 const CATALOGS: Readonly<Record<Locale, Readonly<Record<MessageKey, string>>>> = { en, es };
 
-let current: Locale = 'en';
+let current: Locale = "en";
 
 /**
  * `auto` (or anything unrecognised) follows VS Code's display language: any
@@ -40,16 +40,16 @@ let current: Locale = 'en';
  * to English.
  */
 export function resolveLocale(setting: unknown, displayLanguage: string | undefined): Locale {
-	if (setting === 'en' || setting === 'es') return setting;
-	return (displayLanguage ?? '').toLowerCase().startsWith('es') ? 'es' : 'en';
+  if (setting === "en" || setting === "es") return setting;
+  return (displayLanguage ?? "").toLowerCase().startsWith("es") ? "es" : "en";
 }
 
 export function setLocale(locale: Locale): void {
-	current = locale;
+  current = locale;
 }
 
 export function getLocale(): Locale {
-	return current;
+  return current;
 }
 
 /**
@@ -58,17 +58,21 @@ export function getLocale(): Locale {
  * makes a forgotten argument visible instead of silently printing "undefined".
  */
 export function t(key: MessageKey, ...args: readonly (string | number)[]): string {
-	return format(CATALOGS[current][key] ?? en[key] ?? key, args);
+  return format(CATALOGS[current][key] ?? en[key] ?? key, args);
 }
 
 /** Same as {@link t}, for an explicit locale (tests, and the catalog parity check). */
-export function tIn(locale: Locale, key: MessageKey, ...args: readonly (string | number)[]): string {
-	return format(CATALOGS[locale][key] ?? en[key] ?? key, args);
+export function tIn(
+  locale: Locale,
+  key: MessageKey,
+  ...args: readonly (string | number)[]
+): string {
+  return format(CATALOGS[locale][key] ?? en[key] ?? key, args);
 }
 
 /** `message.locale` BizChat expects for the current language. */
 export function bizChatLocale(): string {
-	return current === 'es' ? 'es-ES' : 'en-US';
+  return current === "es" ? "es-ES" : "en-US";
 }
 
 /**
@@ -77,31 +81,31 @@ export function bizChatLocale(): string {
  * 02:00") — for "paused until…" and "resets at…".
  */
 export function formatMoment(epochMs: number, now = Date.now()): string {
-	const when = new Date(epochMs);
-	const sameDay = when.toDateString() === new Date(now).toDateString();
-	return when.toLocaleString(bizChatLocale(), {
-		...(sameDay ? {} : { weekday: 'long', day: 'numeric', month: 'short' }),
-		hour: '2-digit',
-		minute: '2-digit',
-	});
+  const when = new Date(epochMs);
+  const sameDay = when.toDateString() === new Date(now).toDateString();
+  return when.toLocaleString(bizChatLocale(), {
+    ...(sameDay ? {} : { weekday: "long", day: "numeric", month: "short" }),
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 /** Every key of the reference (English) catalog — used by the parity test. */
 export function messageKeys(): MessageKey[] {
-	return Object.keys(en) as MessageKey[];
+  return Object.keys(en) as MessageKey[];
 }
 
 /** Placeholder indices used by a message (`{0}`, `{2}` → [0, 2]), sorted. */
 export function placeholdersOf(locale: Locale, key: MessageKey): number[] {
-	const found = new Set<number>();
-	for (const match of CATALOGS[locale][key].matchAll(/\{(\d+)\}/g)) found.add(Number(match[1]));
-	return [...found].sort((a, b) => a - b);
+  const found = new Set<number>();
+  for (const match of CATALOGS[locale][key].matchAll(/\{(\d+)\}/g)) found.add(Number(match[1]));
+  return [...found].sort((a, b) => a - b);
 }
 
 function format(template: string, args: readonly (string | number)[]): string {
-	if (args.length === 0) return template;
-	return template.replace(/\{(\d+)\}/g, (placeholder, index: string) => {
-		const value = args[Number(index)];
-		return value === undefined ? placeholder : String(value);
-	});
+  if (args.length === 0) return template;
+  return template.replace(/\{(\d+)\}/g, (placeholder, index: string) => {
+    const value = args[Number(index)];
+    return value === undefined ? placeholder : String(value);
+  });
 }

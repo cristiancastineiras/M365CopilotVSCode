@@ -8,21 +8,21 @@
  * unresolved relative specifier with the usual extensions, so the tests can
  * import the real sources unchanged.
  */
-const CANDIDATES = ['.ts', '.js', '.mjs', '/index.ts', '/index.js'];
+const CANDIDATES = [".ts", ".js", ".mjs", "/index.ts", "/index.js"];
 
 export async function resolve(specifier, context, nextResolve) {
-	try {
-		return await nextResolve(specifier, context);
-	} catch (error) {
-		const extensionless = specifier.startsWith('.') && !/\.[cm]?[jt]sx?$/i.test(specifier);
-		if (!extensionless || error?.code !== 'ERR_MODULE_NOT_FOUND') throw error;
-		for (const candidate of CANDIDATES) {
-			try {
-				return await nextResolve(`${specifier}${candidate}`, context);
-			} catch {
-				/* try the next extension */
-			}
-		}
-		throw error;
-	}
+  try {
+    return await nextResolve(specifier, context);
+  } catch (error) {
+    const extensionless = specifier.startsWith(".") && !/\.[cm]?[jt]sx?$/i.test(specifier);
+    if (!extensionless || error?.code !== "ERR_MODULE_NOT_FOUND") throw error;
+    for (const candidate of CANDIDATES) {
+      try {
+        return await nextResolve(`${specifier}${candidate}`, context);
+      } catch {
+        /* try the next extension */
+      }
+    }
+    throw error;
+  }
 }

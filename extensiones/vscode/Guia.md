@@ -13,7 +13,7 @@ Hay dos formas de llevar el token de Microsoft 365 Copilot a VS Code:
   y botones para copiar el token a mano.
 
 > Dentro de VS Code tienes además el recorrido **Primeros pasos** de M365
-> Copilot (*Ayuda → Bienvenida*, o desde el menú del elemento **M365** de la
+> Copilot (_Ayuda → Bienvenida_, o desde el menú del elemento **M365** de la
 > barra de estado), con estos mismos pasos.
 
 ## 1. Opción A: extensión de navegador
@@ -21,9 +21,9 @@ Hay dos formas de llevar el token de Microsoft 365 Copilot a VS Code:
 1. Descarga la extensión para tu navegador desde las
    [releases del repositorio](https://github.com/cristiancastineiras/M365CopilotVSCode/releases)
    (Chrome/Edge o Firefox) y cárgala (en Chrome/Edge: descomprímela y
-   `chrome://extensions` → *Modo de desarrollador* → *Cargar descomprimida*; en
-   Firefox: abre el `.xpi` firmado o, si no lo hay, `about:debugging` → *Este
-   Firefox* → *Cargar complemento temporal* con el `.zip` — más detalle en el
+   `chrome://extensions` → _Modo de desarrollador_ → _Cargar descomprimida_; en
+   Firefox: abre el `.xpi` firmado o, si no lo hay, `about:debugging` → _Este
+   Firefox_ → _Cargar complemento temporal_ con el `.zip` — más detalle en el
    [README de la extensión de navegador](https://github.com/cristiancastineiras/M365CopilotVSCode/blob/main/extensiones/browser/README.es.md#instalación)).
 2. Entra en [Microsoft 365 Copilot](https://m365.cloud.microsoft/chat/) y envía
    cualquier mensaje.
@@ -112,7 +112,7 @@ pulsarlo se abre el menú con todas las acciones.
 
 Si usas el userscript, pega el token: abre la paleta de comandos con
 `Ctrl + Shift + P`, busca `M365` y ejecuta **M365 Copilot: Pegar perfil o token**
-(o elige *Pegar perfil o token* en el menú de la barra de estado).
+(o elige _Pegar perfil o token_ en el menú de la barra de estado).
 
 ![Comandos de M365 Copilot en la paleta de VS Code](imgs/m365-ctrl-shift-p.png)
 
@@ -166,7 +166,7 @@ Desde el propio editor:
   varios.
 - **Source Control**: el botón ✨ de la barra de título redacta el mensaje de
   commit con M365 Copilot, y ☑ revisa como comentarios tus cambios sin commitear.
-- **Autocommit** (menú rápido → *Activar el autocommit*, o el menú `…` de Source
+- **Autocommit** (menú rápido → _Activar el autocommit_, o el menú `…` de Source
   Control): mientras trabajas, M365 Copilot hace commit de tus cambios cuando
   forman una unidad terminada — con un mensaje que explica qué y por qué — y
   espera mientras están a medias. Nunca hace push; cada autocommit tiene
@@ -185,6 +185,7 @@ el código relevante a cada petición, y **M365 Copilot: Buscar en el proyecto�
 encuentra código por su significado («dónde se guarda el token»). Con la
 extensión de navegador o el userscript, también puede **buscar en internet**
 cuando lo necesita.
+
 - **Terminal**: si un comando falla, clic derecho en el terminal → **Explicar el
   último comando del terminal**.
 

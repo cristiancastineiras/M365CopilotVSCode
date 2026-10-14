@@ -6,7 +6,7 @@
  * segundos: TODO el estado del auto-renovador vive aquí, nunca en variables de
  * módulo, porque esas no sobreviven al siguiente despertar.
  */
-import { ext } from './api';
+import { ext } from "./api";
 
 /** Estado del auto-renovador entre despertares del service worker. */
 export interface RefreshState {
@@ -81,9 +81,7 @@ const DEFAULTS: StorageSchema = {
 
 const isStorageAvailable = (): boolean => Boolean(ext()?.storage?.local);
 
-export async function getStorage<K extends keyof StorageSchema>(
-  key: K,
-): Promise<StorageSchema[K]> {
+export async function getStorage<K extends keyof StorageSchema>(key: K): Promise<StorageSchema[K]> {
   if (!isStorageAvailable()) return DEFAULTS[key];
 
   try {
@@ -109,7 +107,7 @@ export async function setStorage<K extends keyof StorageSchema>(
 }
 
 /** Fusiona campos en un valor de objeto (estado del renovador, de la sync…). */
-export async function patchStorage<K extends 'refreshState' | 'syncState'>(
+export async function patchStorage<K extends "refreshState" | "syncState">(
   key: K,
   patch: Partial<StorageSchema[K]>,
 ): Promise<StorageSchema[K]> {
@@ -121,7 +119,7 @@ export async function patchStorage<K extends 'refreshState' | 'syncState'>(
 
 /** Incrementa un contador numérico de forma atómica dentro del storage. */
 export async function incrementStorage(
-  key: keyof Pick<StorageSchema, 'clickCount'>,
+  key: keyof Pick<StorageSchema, "clickCount">,
 ): Promise<number> {
   const current = await getStorage(key);
   const next = current + 1;

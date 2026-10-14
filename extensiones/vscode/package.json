@@ -1,29 +1,49 @@
 {
   "name": "m365-copilot-vscode",
   "displayName": "%displayName%",
-  "description": "%description%",
   "version": "3.0.2",
-  "publisher": "m365-copilot-vscode",
+  "description": "%description%",
+  "categories": [
+    "AI",
+    "Chat"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/cristiancastineiras/M365CopilotVSCode.git",
     "directory": "extensiones/vscode"
   },
-  "icon": "logo/m365-vscode.png",
-  "engines": {
-    "vscode": "^1.104.0"
-  },
-  "categories": [
-    "AI",
-    "Chat"
-  ],
-  "main": "./dist/extension.cjs",
+  "publisher": "m365-copilot-vscode",
   "type": "module",
-  "activationEvents": [
-    "onStartupFinished",
-    "onLanguageModelChatProvider:m365copilot"
-  ],
+  "main": "./dist/extension.cjs",
+  "scripts": {
+    "build": "tsdown && node scripts/build-userscript.mjs",
+    "watch": "tsdown --watch",
+    "typecheck": "tsc --noEmit && tsc -p userscript/tsconfig.json",
+    "lint": "oxlint src tools userscript",
+    "test": "node --experimental-strip-types --import ./test/register.mjs test/e2e.mts && node scripts/build-userscript.mjs --check && node --experimental-strip-types --import ./test/register.mjs test/userscript.mts",
+    "icon": "node scripts/render-icon.mjs",
+    "package": "pnpm build && node scripts/build-userscript.mjs --release ../../releases/tampermonkey && node -e \"require('node:fs').mkdirSync('../../releases/vscode',{recursive:true})\" && vsce package --no-dependencies --allow-missing-repository --out ../../releases/vscode",
+    "vscode:prepublish": "pnpm build",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm build && changeset publish"
+  },
+  "dependencies": {
+    "@m365copilot/core": "workspace:*",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.1",
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/node": "^26.4.1",
+    "@types/vscode": "^1.104.0",
+    "@types/ws": "^8.18.2",
+    "@vscode/vsce": "^3.6.2",
+    "oxlint": "^1.81.0",
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2"
+  },
   "contributes": {
     "languageModelChatProviders": [
       {
@@ -1416,32 +1436,12 @@
       }
     ]
   },
-  "scripts": {
-    "build": "tsdown && node scripts/build-userscript.mjs",
-    "watch": "tsdown --watch",
-    "typecheck": "tsc --noEmit && tsc -p userscript/tsconfig.json",
-    "lint": "oxlint src tools userscript",
-    "test": "node --experimental-strip-types --import ./test/register.mjs test/e2e.mts && node scripts/build-userscript.mjs --check && node --experimental-strip-types --import ./test/register.mjs test/userscript.mts",
-    "icon": "node scripts/render-icon.mjs",
-    "package": "pnpm build && node scripts/build-userscript.mjs --release ../../releases/tampermonkey && node -e \"require('node:fs').mkdirSync('../../releases/vscode',{recursive:true})\" && vsce package --no-dependencies --allow-missing-repository --out ../../releases/vscode",
-    "vscode:prepublish": "pnpm build",
-    "changeset": "changeset",
-    "version": "changeset version",
-    "release": "pnpm build && changeset publish"
-  },
-  "dependencies": {
-    "@m365copilot/core": "workspace:*",
-    "ws": "^8.22.0"
-  },
-  "devDependencies": {
-    "@changesets/cli": "^2.27.1",
-    "@resvg/resvg-js": "^2.6.2",
-    "@types/node": "^26.4.1",
-    "@types/vscode": "^1.104.0",
-    "@types/ws": "^8.18.2",
-    "@vscode/vsce": "^3.6.2",
-    "oxlint": "^1.81.0",
-    "tsdown": "^0.22.14",
-    "typescript": "^7.0.2"
+  "activationEvents": [
+    "onLanguageModelChatProvider:m365copilot",
+    "onStartupFinished"
+  ],
+  "icon": "logo/m365-vscode.png",
+  "engines": {
+    "vscode": "^1.104.0"
   }
 }

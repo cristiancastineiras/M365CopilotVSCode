@@ -15,8 +15,8 @@ import {
   withObservedTone,
   withoutExpiredToken,
   type CaptureStore,
-} from '@m365copilot/core';
-import { logger } from '@/utils/logger';
+} from "@m365copilot/core";
+import { logger } from "@/utils/logger";
 
 /**
  * Traza de diagnóstico, apagada salvo que alguien ponga
@@ -28,13 +28,13 @@ import { logger } from '@/utils/logger';
  */
 const VERBOSE = (() => {
   try {
-    return localStorage.getItem('m365copilot.debug') === '1';
+    return localStorage.getItem("m365copilot.debug") === "1";
   } catch {
     return false;
   }
 })();
 function diag(...args: unknown[]): void {
-  if (VERBOSE) logger.info('[diag]', ...args);
+  if (VERBOSE) logger.info("[diag]", ...args);
 }
 
 /**
@@ -58,21 +58,21 @@ export default defineContentScript({
   // ni veía el WebSocket del chat ni la caché de MSAL del iframe: no capturaba
   // nada y no dejaba ni un log. Con esto corre en cada frame de Microsoft.
   allFrames: true,
-  runAt: 'document_start',
-  world: 'MAIN',
+  runAt: "document_start",
+  world: "MAIN",
   main() {
-    logger.info('M365 Copilot Token Interceptor (MAIN) loaded on:', window.location.href);
-    diag('verbose activado; top frame =', window.top === window.self);
+    logger.info("M365 Copilot Token Interceptor (MAIN) loaded on:", window.location.href);
+    diag("verbose activado; top frame =", window.top === window.self);
 
     /** Publica el perfil hacia el puente (mundo ISOLATED) para que lo reenvíe al background. */
     function postProfile(profile: CaptureStore): void {
       try {
         window.postMessage(
-          { [BRIDGE_MESSAGE_MARKER]: true, kind: 'PROFILE_UPDATED', payload: profile },
+          { [BRIDGE_MESSAGE_MARKER]: true, kind: "PROFILE_UPDATED", payload: profile },
           location.origin,
         );
       } catch (err) {
-        logger.error('Error posting profile to bridge:', err);
+        logger.error("Error posting profile to bridge:", err);
       }
     }
 
@@ -131,13 +131,13 @@ export default defineContentScript({
       // Se registra TODO socket (recortado) en modo verboso: así se distingue
       // «la web no abre ningún socket aquí» (mal frame/dominio) de «lo abre
       // pero no lo reconozco» (patrón de URL a actualizar).
-      diag('WebSocket:', String(url).split('?')[0], copilot ? '(copilot)' : '(ignorado)');
+      diag("WebSocket:", String(url).split("?")[0], copilot ? "(copilot)" : "(ignorado)");
       if (!copilot) return;
 
       // El token viaja en la query: se extrae ANTES de normalizar la URL.
       const token = tokenInSocketUrl(url);
-      diag('socket de copilot; token en la URL:', Boolean(token));
-      if (token) offerToken(token, 'websocket-url');
+      diag("socket de copilot; token en la URL:", Boolean(token));
+      if (token) offerToken(token, "websocket-url");
 
       // Substrate abre varios WebSockets (presencia, notificaciones…). Guardamos
       // éste sólo de forma tentativa hasta que veamos que envía un frame `chat`,
@@ -161,7 +161,9 @@ export default defineContentScript({
               ...(endpoint ? { endpoint, endpointConfirmed: true } : {}),
               origin: location.origin,
               userAgent: navigator.userAgent,
-              ...(frames.template ? { invocationTemplate: frames.template, invocationType: frames.invocationType } : {}),
+              ...(frames.template
+                ? { invocationTemplate: frames.template, invocationType: frames.invocationType }
+                : {}),
             });
           }
         } catch {
@@ -191,7 +193,7 @@ export default defineContentScript({
     function headerValue(headers: any, name: string): string | null {
       if (!headers) return null;
       try {
-        if (typeof Headers !== 'undefined' && headers instanceof Headers) return headers.get(name);
+        if (typeof Headers !== "undefined" && headers instanceof Headers) return headers.get(name);
         if (Array.isArray(headers)) {
           const hit = headers.find((h: any) => String(h[0]).toLowerCase() === name.toLowerCase());
           return hit ? hit[1] : null;
@@ -209,11 +211,11 @@ export default defineContentScript({
       const nativeFetch = window.fetch;
       window.fetch = function (input: any, init?: any) {
         try {
-          let auth = headerValue(init && init.headers, 'authorization');
-          if (!auth && typeof Request !== 'undefined' && input instanceof Request) {
-            auth = input.headers.get('authorization');
+          let auth = headerValue(init && init.headers, "authorization");
+          if (!auth && typeof Request !== "undefined" && input instanceof Request) {
+            auth = input.headers.get("authorization");
           }
-          if (auth && /^bearer /i.test(auth)) offerToken(auth.slice(7).trim(), 'fetch-header');
+          if (auth && /^bearer /i.test(auth)) offerToken(auth.slice(7).trim(), "fetch-header");
         } catch {
           /* ignorar */
         }
@@ -225,8 +227,8 @@ export default defineContentScript({
       const setHeader = window.XMLHttpRequest.prototype.setRequestHeader;
       window.XMLHttpRequest.prototype.setRequestHeader = function (name: string, value: string) {
         try {
-          if (String(name).toLowerCase() === 'authorization' && /^bearer /i.test(String(value))) {
-            offerToken(String(value).slice(7).trim(), 'xhr-header');
+          if (String(name).toLowerCase() === "authorization" && /^bearer /i.test(String(value))) {
+            offerToken(String(value).slice(7).trim(), "xhr-header");
           }
         } catch {
           /* ignorar */
@@ -254,7 +256,7 @@ export default defineContentScript({
             keysScanned++;
             for (const token of tokensInStorageValue(store.getItem(key))) {
               candidates++;
-              offerToken(token, 'msal-cache');
+              offerToken(token, "msal-cache");
             }
           } catch {
             /* entrada ilegible: la siguiente */
@@ -283,12 +285,12 @@ export default defineContentScript({
     // `storage` avisa de lo que escriben OTRAS pestañas del mismo origen: en
     // ambos casos suele haber un token nuevo esperando a que lo recojan.
     for (const [target, event] of [
-      [document, 'visibilitychange'],
-      [window, 'focus'],
-      [window, 'storage'],
+      [document, "visibilitychange"],
+      [window, "focus"],
+      [window, "storage"],
     ] as const) {
       target.addEventListener(event, () => {
-        if (event === 'visibilitychange' && document.visibilityState !== 'visible') return;
+        if (event === "visibilitychange" && document.visibilityState !== "visible") return;
         try {
           scanStorages();
         } catch {
@@ -298,7 +300,7 @@ export default defineContentScript({
     }
 
     // Peticiones del puente (mundo ISOLATED), que a su vez vienen del background.
-    window.addEventListener('message', (event: MessageEvent) => {
+    window.addEventListener("message", (event: MessageEvent) => {
       if (event.source !== window) return;
       const data: any = event.data;
       if (!data || data[BRIDGE_MESSAGE_MARKER] !== true) return;
@@ -306,7 +308,7 @@ export default defineContentScript({
       // Renovación pedida desde el background: mirar otra vez la caché de MSAL y
       // republicar lo que haya, aunque no haya cambiado — así el background
       // puede re-sincronizar con VS Code sin esperar a la siguiente captura.
-      if (data.kind === 'RESCAN_REQUEST' || data.kind === 'REQUEST_PROFILE') {
+      if (data.kind === "RESCAN_REQUEST" || data.kind === "REQUEST_PROFILE") {
         try {
           scanStorages();
         } catch {

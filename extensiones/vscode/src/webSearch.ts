@@ -10,80 +10,98 @@
  * pasted by hand, the lean one with the search plugin — and returns its answer
  * with the sources to the turn that asked.
  */
-import * as vscode from 'vscode';
-import { registerTracedTool } from './debugMode';
-import { streamCopilotTurnWithRetry, CopilotClientError, type WebSource } from './client';
-import { isTokenUsable } from './profile';
-import type { ProfileStore } from './secrets';
-import { buildWebSearchPrompt, formatWebResult } from './webSearchPrompt';
-import { toolResult } from './agentTools';
-import { M365_TOOL_NAMES } from './toolProtocol';
-import { CancelledError } from '../tools/common';
-import { t } from './i18n';
-import { debug } from './logger';
+import * as vscode from "vscode";
+import { registerTracedTool } from "./debugMode";
+import { streamCopilotTurnWithRetry, CopilotClientError, type WebSource } from "./client";
+import { isTokenUsable } from "./profile";
+import type { ProfileStore } from "./secrets";
+import { buildWebSearchPrompt, formatWebResult } from "./webSearchPrompt";
+import { toolResult } from "./agentTools";
+import { M365_TOOL_NAMES } from "./toolProtocol";
+import { CancelledError } from "../tools/common";
+import { t } from "./i18n";
+import { debug } from "./logger";
 
 export interface WebSearchInput {
-	readonly query?: unknown;
+  readonly query?: unknown;
 }
 
 /** `m365copilot.web.enabled`. */
 export function webSearchEnabled(): boolean {
-	return vscode.workspace.getConfiguration('m365copilot.web').get<boolean>('enabled', true);
+  return vscode.workspace.getConfiguration("m365copilot.web").get<boolean>("enabled", true);
 }
 
-export function registerWebSearchTool(store: ProfileStore, log: (message: string) => void): vscode.Disposable {
-	return registerTracedTool<WebSearchInput>(M365_TOOL_NAMES.webSearch, {
-		prepareInvocation: (options) => ({
-			invocationMessage: t('tool.webSearching', typeof options.input.query === 'string' ? options.input.query : ''),
-		}),
-		invoke: (options, token) => toolResult(() => searchWeb(store, options.input, token, log)),
-	});
+export function registerWebSearchTool(
+  store: ProfileStore,
+  log: (message: string) => void,
+): vscode.Disposable {
+  return registerTracedTool<WebSearchInput>(M365_TOOL_NAMES.webSearch, {
+    prepareInvocation: (options) => ({
+      invocationMessage: t(
+        "tool.webSearching",
+        typeof options.input.query === "string" ? options.input.query : "",
+      ),
+    }),
+    invoke: (options, token) => toolResult(() => searchWeb(store, options.input, token, log)),
+  });
 }
 
 async function searchWeb(
-	store: ProfileStore,
-	input: WebSearchInput,
-	token: vscode.CancellationToken,
-	log: (message: string) => void,
+  store: ProfileStore,
+  input: WebSearchInput,
+  token: vscode.CancellationToken,
+  log: (message: string) => void,
 ): Promise<string> {
-	const query = typeof input.query === 'string' ? input.query.trim() : '';
-	debug('web', 'web search requested', { query });
-	if (!query) throw new Error(t('web.noQuery'));
-	if (!webSearchEnabled()) {
-		debug('web', 'refused: m365copilot.web.enabled is off');
-		return t('web.disabled');
-	}
-	const profile = await store.get();
-	if (!profile || !isTokenUsable(profile)) throw new Error(t(profile ? 'participant.tokenExpired' : 'participant.noToken'));
-	debug('web', profile.invocationTemplate ? 'using the captured web invocation' : 'no captured web invocation: the lean one with BingWebSearch');
+  const query = typeof input.query === "string" ? input.query.trim() : "";
+  debug("web", "web search requested", { query });
+  if (!query) throw new Error(t("web.noQuery"));
+  if (!webSearchEnabled()) {
+    debug("web", "refused: m365copilot.web.enabled is off");
+    return t("web.disabled");
+  }
+  const profile = await store.get();
+  if (!profile || !isTokenUsable(profile))
+    throw new Error(t(profile ? "participant.tokenExpired" : "participant.noToken"));
+  debug(
+    "web",
+    profile.invocationTemplate
+      ? "using the captured web invocation"
+      : "no captured web invocation: the lean one with BingWebSearch",
+  );
 
-	const controller = new AbortController();
-	const cancel = token.onCancellationRequested(() => controller.abort());
-	let answer = '';
-	const sources: WebSource[] = [];
-	try {
-		log(t('log.webSearch', query));
-		await streamCopilotTurnWithRetry({
-			profile,
-			prompt: buildWebSearchPrompt(query),
-			tone: null,
-			mode: 'web',
-			signal: controller.signal,
-			log,
-			callbacks: {
-				onText: (delta) => (answer += delta),
-				onSources: (found) => sources.push(...found),
-			},
-		});
-	} catch (error) {
-		if (token.isCancellationRequested || (error instanceof CopilotClientError && error.message === '__CANCELLED__')) {
-			throw new CancelledError();
-		}
-		throw error;
-	} finally {
-		cancel.dispose();
-	}
-	log(t('log.webSearchDone', answer.length, sources.length));
-	debug('web', `web search answered (${answer.length} chars)`, () => ({ sources: sources.map((source) => `${source.title} — ${source.url}`), answer }));
-	return formatWebResult(query, answer, sources);
+  const controller = new AbortController();
+  const cancel = token.onCancellationRequested(() => controller.abort());
+  let answer = "";
+  const sources: WebSource[] = [];
+  try {
+    log(t("log.webSearch", query));
+    await streamCopilotTurnWithRetry({
+      profile,
+      prompt: buildWebSearchPrompt(query),
+      tone: null,
+      mode: "web",
+      signal: controller.signal,
+      log,
+      callbacks: {
+        onText: (delta) => (answer += delta),
+        onSources: (found) => sources.push(...found),
+      },
+    });
+  } catch (error) {
+    if (
+      token.isCancellationRequested ||
+      (error instanceof CopilotClientError && error.message === "__CANCELLED__")
+    ) {
+      throw new CancelledError();
+    }
+    throw error;
+  } finally {
+    cancel.dispose();
+  }
+  log(t("log.webSearchDone", answer.length, sources.length));
+  debug("web", `web search answered (${answer.length} chars)`, () => ({
+    sources: sources.map((source) => `${source.title} — ${source.url}`),
+    answer,
+  }));
+  return formatWebResult(query, answer, sources);
 }

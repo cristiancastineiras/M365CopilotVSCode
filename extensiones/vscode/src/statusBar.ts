@@ -1,11 +1,11 @@
-import * as vscode from 'vscode';
-import { isTokenUsable, minutesUntilExpiry, type CopilotProfile } from './profile';
-import type { CompletionBusySink } from './completions';
-import type { ProfileStore } from './secrets';
-import { formatMoment, t } from './i18n';
-import { accountThrottledUntil } from './throttle';
+import * as vscode from "vscode";
+import { isTokenUsable, minutesUntilExpiry, type CopilotProfile } from "./profile";
+import type { CompletionBusySink } from "./completions";
+import type { ProfileStore } from "./secrets";
+import { formatMoment, t } from "./i18n";
+import { accountThrottledUntil } from "./throttle";
 
-const COMPLETIONS_SECTION = 'm365copilot.inlineCompletions';
+const COMPLETIONS_SECTION = "m365copilot.inlineCompletions";
 /** Below this many minutes left, the item shows a countdown instead of the plain icon. */
 const COUNTDOWN_MINUTES = 10;
 
@@ -20,121 +20,130 @@ const COUNTDOWN_MINUTES = 10;
  * looked perfectly healthy.
  */
 export class M365StatusBar implements CompletionBusySink, vscode.Disposable {
-	private readonly item: vscode.StatusBarItem;
-	private readonly disposables: vscode.Disposable[] = [];
-	private profile: CopilotProfile | null = null;
-	private busy = false;
-	private pendingEdits = 0;
-	private debugOn = false;
+  private readonly item: vscode.StatusBarItem;
+  private readonly disposables: vscode.Disposable[] = [];
+  private profile: CopilotProfile | null = null;
+  private busy = false;
+  private pendingEdits = 0;
+  private debugOn = false;
 
-	constructor(private readonly store: ProfileStore) {
-		this.item = vscode.window.createStatusBarItem('m365copilot.status', vscode.StatusBarAlignment.Right, 90);
-		this.item.name = 'M365 Copilot';
-		this.item.command = 'm365copilot.showMenu';
-		this.disposables.push(
-			store.onDidChange(() => void this.reload()),
-			vscode.workspace.onDidChangeConfiguration((event) => {
-				if (event.affectsConfiguration(COMPLETIONS_SECTION)) this.render();
-			}),
-		);
-		this.render();
-		this.item.show();
-		void this.reload();
-	}
+  constructor(private readonly store: ProfileStore) {
+    this.item = vscode.window.createStatusBarItem(
+      "m365copilot.status",
+      vscode.StatusBarAlignment.Right,
+      90,
+    );
+    this.item.name = "M365 Copilot";
+    this.item.command = "m365copilot.showMenu";
+    this.disposables.push(
+      store.onDidChange(() => void this.reload()),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration(COMPLETIONS_SECTION)) this.render();
+      }),
+    );
+    this.render();
+    this.item.show();
+    void this.reload();
+  }
 
-	setBusy(busy: boolean): void {
-		if (this.busy === busy) return;
-		this.busy = busy;
-		this.render();
-	}
+  setBusy(busy: boolean): void {
+    if (this.busy === busy) return;
+    this.busy = busy;
+    this.render();
+  }
 
-	setPendingEdits(count: number): void {
-		if (this.pendingEdits === count) return;
-		this.pendingEdits = count;
-		this.render();
-	}
+  setPendingEdits(count: number): void {
+    if (this.pendingEdits === count) return;
+    this.pendingEdits = count;
+    this.render();
+  }
 
-	/** Deep debug mode on or off: the item says so, so nobody forgets it is tracing everything. */
-	setDebug(on: boolean): void {
-		if (this.debugOn === on) return;
-		this.debugOn = on;
-		this.render();
-	}
+  /** Deep debug mode on or off: the item says so, so nobody forgets it is tracing everything. */
+  setDebug(on: boolean): void {
+    if (this.debugOn === on) return;
+    this.debugOn = on;
+    this.render();
+  }
 
-	/** Re-render with the current clock and locale (the token watcher calls this every tick). */
-	refresh(): void {
-		this.render();
-	}
+  /** Re-render with the current clock and locale (the token watcher calls this every tick). */
+  refresh(): void {
+    this.render();
+  }
 
-	private async reload(): Promise<void> {
-		this.profile = await this.store.get();
-		this.render();
-	}
+  private async reload(): Promise<void> {
+    this.profile = await this.store.get();
+    this.render();
+  }
 
-	private render(): void {
-		const completionsOn = vscode.workspace.getConfiguration(COMPLETIONS_SECTION).get<boolean>('enabled', true);
-		const profile = this.profile;
-		const usable = profile ? isTokenUsable(profile) : false;
-		const minutes = profile ? minutesUntilExpiry(profile) : null;
+  private render(): void {
+    const completionsOn = vscode.workspace
+      .getConfiguration(COMPLETIONS_SECTION)
+      .get<boolean>("enabled", true);
+    const profile = this.profile;
+    const usable = profile ? isTokenUsable(profile) : false;
+    const minutes = profile ? minutesUntilExpiry(profile) : null;
 
-		let icon = completionsOn ? '$(sparkle)' : '$(circle-slash)';
-		let suffix = '';
-		let background: vscode.ThemeColor | undefined;
-		if (!profile) {
-			icon = '$(key)';
-		} else if (!usable) {
-			icon = '$(warning)';
-			background = new vscode.ThemeColor('statusBarItem.warningBackground');
-		} else if (minutes !== null && minutes <= COUNTDOWN_MINUTES) {
-			icon = '$(clock)';
-			suffix = ` ${minutes}m`;
-		}
-		// M365 is limiting the account: automatic requests are paused (throttle.ts).
-		const throttledUntil = accountThrottledUntil();
-		if (usable && throttledUntil !== undefined) icon = '$(watch)';
-		if (this.busy) icon = '$(loading~spin)';
+    let icon = completionsOn ? "$(sparkle)" : "$(circle-slash)";
+    let suffix = "";
+    let background: vscode.ThemeColor | undefined;
+    if (!profile) {
+      icon = "$(key)";
+    } else if (!usable) {
+      icon = "$(warning)";
+      background = new vscode.ThemeColor("statusBarItem.warningBackground");
+    } else if (minutes !== null && minutes <= COUNTDOWN_MINUTES) {
+      icon = "$(clock)";
+      suffix = ` ${minutes}m`;
+    }
+    // M365 is limiting the account: automatic requests are paused (throttle.ts).
+    const throttledUntil = accountThrottledUntil();
+    if (usable && throttledUntil !== undefined) icon = "$(watch)";
+    if (this.busy) icon = "$(loading~spin)";
 
-		this.item.text = `${icon} M365${suffix}${this.debugOn ? ' $(bug)' : ''}`;
-		this.item.backgroundColor = background;
-		this.item.tooltip = this.tooltip(profile, usable, minutes, completionsOn, throttledUntil);
-	}
+    this.item.text = `${icon} M365${suffix}${this.debugOn ? " $(bug)" : ""}`;
+    this.item.backgroundColor = background;
+    this.item.tooltip = this.tooltip(profile, usable, minutes, completionsOn, throttledUntil);
+  }
 
-	private tooltip(
-		profile: CopilotProfile | null,
-		usable: boolean,
-		minutes: number | null,
-		completionsOn: boolean,
-		throttledUntil: number | undefined,
-	): vscode.MarkdownString {
-		const lines = [`**${t('statusbar.tooltip.title')}**`, ''];
-		if (profile?.claims?.upn) lines.push(`$(account) ${t('statusbar.tooltip.account', profile.claims.upn)}`);
-		if (!profile) {
-			lines.push(`$(key) ${t('statusbar.tooltip.tokenMissing')}`);
-		} else if (!usable) {
-			lines.push(`$(warning) ${t('statusbar.tooltip.tokenExpired', Math.abs(minutes ?? 0))}`);
-		} else {
-			lines.push(
-				`$(pass) ${minutes === null ? t('statusbar.tooltip.tokenValidNoExpiry') : t('statusbar.tooltip.tokenValid', minutes)}`,
-			);
-		}
-		lines.push(
-			completionsOn
-				? `$(sparkle) ${t('statusbar.tooltip.completionsOn')}`
-				: `$(circle-slash) ${t('statusbar.tooltip.completionsOff')}`,
-		);
-		if (throttledUntil !== undefined) lines.push(`$(watch) ${t('statusbar.tooltip.throttled', formatMoment(throttledUntil))}`);
-		if (this.busy) lines.push(`$(loading~spin) ${t('statusbar.tooltip.busy')}`);
-		if (this.pendingEdits > 0) lines.push(`$(edit) ${t('statusbar.tooltip.pendingEdits', this.pendingEdits)}`);
-		if (this.debugOn) lines.push(`$(bug) ${t('statusbar.tooltip.debug')}`);
-		lines.push('', t('statusbar.tooltip.click'));
+  private tooltip(
+    profile: CopilotProfile | null,
+    usable: boolean,
+    minutes: number | null,
+    completionsOn: boolean,
+    throttledUntil: number | undefined,
+  ): vscode.MarkdownString {
+    const lines = [`**${t("statusbar.tooltip.title")}**`, ""];
+    if (profile?.claims?.upn)
+      lines.push(`$(account) ${t("statusbar.tooltip.account", profile.claims.upn)}`);
+    if (!profile) {
+      lines.push(`$(key) ${t("statusbar.tooltip.tokenMissing")}`);
+    } else if (!usable) {
+      lines.push(`$(warning) ${t("statusbar.tooltip.tokenExpired", Math.abs(minutes ?? 0))}`);
+    } else {
+      lines.push(
+        `$(pass) ${minutes === null ? t("statusbar.tooltip.tokenValidNoExpiry") : t("statusbar.tooltip.tokenValid", minutes)}`,
+      );
+    }
+    lines.push(
+      completionsOn
+        ? `$(sparkle) ${t("statusbar.tooltip.completionsOn")}`
+        : `$(circle-slash) ${t("statusbar.tooltip.completionsOff")}`,
+    );
+    if (throttledUntil !== undefined)
+      lines.push(`$(watch) ${t("statusbar.tooltip.throttled", formatMoment(throttledUntil))}`);
+    if (this.busy) lines.push(`$(loading~spin) ${t("statusbar.tooltip.busy")}`);
+    if (this.pendingEdits > 0)
+      lines.push(`$(edit) ${t("statusbar.tooltip.pendingEdits", this.pendingEdits)}`);
+    if (this.debugOn) lines.push(`$(bug) ${t("statusbar.tooltip.debug")}`);
+    lines.push("", t("statusbar.tooltip.click"));
 
-		// Markdown collapses single newlines; two trailing spaces force a hard
-		// break so each entry gets its own row. `true` enables $(icon) syntax.
-		return new vscode.MarkdownString(lines.join('  \n'), true);
-	}
+    // Markdown collapses single newlines; two trailing spaces force a hard
+    // break so each entry gets its own row. `true` enables $(icon) syntax.
+    return new vscode.MarkdownString(lines.join("  \n"), true);
+  }
 
-	dispose(): void {
-		this.item.dispose();
-		for (const disposable of this.disposables) disposable.dispose();
-	}
+  dispose(): void {
+    this.item.dispose();
+    for (const disposable of this.disposables) disposable.dispose();
+  }
 }

@@ -7,7 +7,7 @@
  *
  * Run: node --experimental-strip-types test/refreshPolicy.mts
  */
-import assert from 'node:assert/strict';
+import assert from "node:assert/strict";
 import {
   ATTEMPTS_BEFORE_HELP,
   BASE_BACKOFF_MS,
@@ -19,7 +19,7 @@ import {
   msUntilExpiry,
   needsResync,
   type RefreshContext,
-} from '../utils/refreshPolicy.ts';
+} from "../utils/refreshPolicy.ts";
 
 const NOW = 1_700_000_000_000;
 const MINUTE = 60_000;
@@ -43,20 +43,20 @@ function expiringIn(minutes: number) {
 }
 
 function testHealthyToken() {
-  assert.equal(decideRefreshAction(context()).action, 'none');
+  assert.equal(decideRefreshAction(context()).action, "none");
 
   // Justo en el borde del margen todavía no se toca nada; un minuto por debajo, sí.
   const atMargin = expiringIn(RENEW_MARGIN_MS / MINUTE + 1);
-  assert.equal(decideRefreshAction(context({ token: atMargin })).action, 'none');
+  assert.equal(decideRefreshAction(context({ token: atMargin })).action, "none");
   const belowMargin = expiringIn(RENEW_MARGIN_MS / MINUTE - 1);
-  assert.equal(decideRefreshAction(context({ token: belowMargin })).action, 'rescan');
+  assert.equal(decideRefreshAction(context({ token: belowMargin })).action, "rescan");
 
-  console.log('  ✓ un token con cuerda no se toca; por debajo del margen se renueva');
+  console.log("  ✓ un token con cuerda no se toca; por debajo del margen se renueva");
 }
 
 function testEscalation() {
   // 1º lo barato: pedir a la pestaña que mire otra vez la caché de MSAL.
-  assert.equal(decideRefreshAction(context({ token: expiringIn(3) })).action, 'rescan');
+  assert.equal(decideRefreshAction(context({ token: expiringIn(3) })).action, "rescan");
 
   // 2º si el re-escaneo no trajo token nuevo, recargar — pero sólo cuando haya
   // pasado el backoff.
@@ -66,25 +66,24 @@ function testEscalation() {
     lastAttemptAt: NOW - 10_000,
   });
   const waiting = decideRefreshAction(afterRescan);
-  assert.equal(waiting.action, 'wait');
-  assert.ok((waiting.retryInMs ?? 0) > 0, 'wait debe decir cuánto falta');
+  assert.equal(waiting.action, "wait");
+  assert.ok((waiting.retryInMs ?? 0) > 0, "wait debe decir cuánto falta");
 
   assert.equal(
     decideRefreshAction({ ...afterRescan, lastAttemptAt: NOW - BASE_BACKOFF_MS - 1 }).action,
-    'reload',
+    "reload",
   );
 
   // 3º sin ninguna pestaña de M365, abrir una en segundo plano.
   assert.equal(
     decideRefreshAction(context({ token: expiringIn(3), hasM365Tab: false })).action,
-    'open',
+    "open",
   );
   // …salvo que el usuario lo haya desactivado.
   assert.equal(
-    decideRefreshAction(
-      context({ token: expiringIn(3), hasM365Tab: false, autoOpenTab: false }),
-    ).action,
-    'needsUser',
+    decideRefreshAction(context({ token: expiringIn(3), hasM365Tab: false, autoOpenTab: false }))
+      .action,
+    "needsUser",
   );
 
   // 4º tras varios intentos seguidos, hace falta que entre el usuario.
@@ -96,22 +95,20 @@ function testEscalation() {
         lastAttemptAt: NOW - MAX_BACKOFF_MS - 1,
       }),
     ).action,
-    'needsUser',
+    "needsUser",
   );
 
-  console.log('  ✓ escalada re-escaneo → recarga → pestaña nueva → avisar al usuario');
+  console.log("  ✓ escalada re-escaneo → recarga → pestaña nueva → avisar al usuario");
 }
 
 function testExpiredAndMissing() {
   // Un token ya caducado se trata igual que uno a punto de caducar.
-  assert.equal(decideRefreshAction(context({ token: expiringIn(-5) })).action, 'rescan');
+  assert.equal(decideRefreshAction(context({ token: expiringIn(-5) })).action, "rescan");
 
   // Sin token pero con capturas previas hay sesión que recuperar.
   assert.equal(
-    decideRefreshAction(
-      context({ token: { hasToken: false, expEpochSeconds: null } }),
-    ).action,
-    'rescan',
+    decideRefreshAction(context({ token: { hasToken: false, expEpochSeconds: null } })).action,
+    "rescan",
   );
 
   // Sin haber capturado nunca no se abre nada por nuestra cuenta.
@@ -119,33 +116,33 @@ function testExpiredAndMissing() {
     decideRefreshAction(
       context({ token: { hasToken: false, expEpochSeconds: null }, hasEverCaptured: false }),
     ).action,
-    'none',
+    "none",
   );
 
   // Un token sin `exp` no se puede evaluar: se renueva por si acaso.
   assert.equal(
     decideRefreshAction(context({ token: { hasToken: true, expEpochSeconds: null } })).action,
-    'rescan',
+    "rescan",
   );
 
-  console.log('  ✓ token caducado, ausente, sin exp y sin captura previa');
+  console.log("  ✓ token caducado, ausente, sin exp y sin captura previa");
 }
 
 function testBackoff() {
   assert.equal(backoffFor(0), 0);
   assert.equal(backoffFor(1), BASE_BACKOFF_MS);
   assert.equal(backoffFor(2), BASE_BACKOFF_MS * 2);
-  assert.equal(backoffFor(99), MAX_BACKOFF_MS, 'el backoff tiene tope');
+  assert.equal(backoffFor(99), MAX_BACKOFF_MS, "el backoff tiene tope");
 
   // Un reloj que salta hacia atrás (suspender el portátil, cambio de hora) no
   // puede dejar la renovación bloqueada para siempre.
   const future = context({ token: expiringIn(1), attempts: 1, lastAttemptAt: NOW + 60 * MINUTE });
-  assert.notEqual(decideRefreshAction(future).action, 'wait');
+  assert.notEqual(decideRefreshAction(future).action, "wait");
 
   assert.equal(msUntilExpiry({ hasToken: true, expEpochSeconds: NOW / 1000 + 60 }, NOW), 60_000);
   assert.equal(msUntilExpiry({ hasToken: false, expEpochSeconds: 1 }, NOW), null);
 
-  console.log('  ✓ backoff creciente con tope y a prueba de saltos de reloj');
+  console.log("  ✓ backoff creciente con tope y a prueba de saltos de reloj");
 }
 
 function testResync() {
@@ -175,13 +172,13 @@ function testResync() {
     true,
   );
 
-  console.log('  ✓ reenvío a VS Code sólo cuando hace falta, con cooldown');
+  console.log("  ✓ reenvío a VS Code sólo cuando hace falta, con cooldown");
 }
 
-console.log('refreshPolicy.ts');
+console.log("refreshPolicy.ts");
 testHealthyToken();
 testEscalation();
 testExpiredAndMissing();
 testBackoff();
 testResync();
-console.log('\nAll tests passed.');
+console.log("\nAll tests passed.");

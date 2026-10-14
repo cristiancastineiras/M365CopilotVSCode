@@ -10,120 +10,123 @@
  * error de compilación (`es` está tipado contra las claves de `en`).
  */
 
-export type Locale = 'en' | 'es';
+export type Locale = "en" | "es";
 
 const en = {
-  'popup.title': 'M365 Copilot for VS Code',
-  'art.title': 'Connection between Microsoft 365 Copilot and VS Code',
-  'hero.needsUser.title': 'Sign-in required',
-  'hero.needsUser.sub': 'Open M365 Copilot and sign in with your account.',
-  'hero.noToken.title': 'Waiting for a token',
-  'hero.noToken.sub': 'Open M365 Copilot and send a message.',
-  'hero.expired.title': 'Renewing the token',
-  'hero.expired.sub': 'The extension is renewing it by itself.',
-  'hero.noVSCode.title': 'Token ready',
-  'hero.noVSCode.sub': 'VS Code is not answering. Open it with the extension enabled.',
-  'hero.ok.title': 'Connected to VS Code',
-  'hero.ok.sub': 'The token syncs automatically.',
-  'row.token': 'Token',
-  'row.vscode': 'VS Code',
-  'row.renewal': 'Renewal',
-  'token.none': 'Not captured',
-  'token.expired': 'Expired',
-  'token.expiresIn': 'Expires in {0} min',
-  'token.active': 'Active',
-  'vscode.connected': 'Connected',
-  'vscode.disconnected': 'Not connected',
-  'vscode.checking': 'Checking…',
-  'refresh.none': 'Automatic',
-  'refresh.captured': 'Token renewed',
-  'refresh.rescan': 'Looking for a new token…',
-  'refresh.reload': 'Reloading M365…',
-  'refresh.open': 'Opening M365…',
-  'refresh.wait': 'Retrying shortly',
-  'refresh.needsUser': 'Sign in to M365',
-  'button.send': 'Send to VS Code',
-  'button.sent': '✓ Sent to VS Code',
-  'button.copyToken': 'Copy token',
-  'button.copied': '✓ Copied',
-  'button.renew': 'Renew now',
-  'button.openM365': 'Open M365 Copilot',
-  'button.signOut': 'Sign out of Microsoft',
-  'button.signOut.confirm': 'Delete the session and sign in again',
-  'button.signOut.running': 'Signing out…',
-  'signOut.warning':
-    'Deletes the Microsoft cookies and site data of this browser (M365 Copilot, Outlook, Teams, Office…), ' +
-    'closes the session on Microsoft’s side and asks you to sign in again. It is the only way to get a ' +
-    'genuinely new token: without it, M365 renews the old session in silence.',
-  'footer.captured': 'Captured {0}',
-  'time.justNow': 'just now',
-  'time.minutesAgo': '{0} min ago',
-  'time.hoursAgo': '{0} h ago',
-  'error.title': 'Something went wrong',
-  'error.noProfile': 'No profile has been captured yet. Open M365 Copilot and send a message.',
-  'error.noToken': 'No token has been captured yet. Open M365 Copilot and send a message.',
-  'error.tokenExpired': 'The saved token has expired. Press “Renew now”.',
-  'error.vscodeUnreachable': 'VS Code is not answering. Is it open with the M365 Copilot extension enabled?',
-  'error.signOutNotRequested':
-    'This sign-out was not requested from VS Code, so it was refused. Use the extension’s own button, ' +
-    'or run “M365 Copilot: Sign out and sign in again” in VS Code.',
+  "popup.title": "M365 Copilot for VS Code",
+  "art.title": "Connection between Microsoft 365 Copilot and VS Code",
+  "hero.needsUser.title": "Sign-in required",
+  "hero.needsUser.sub": "Open M365 Copilot and sign in with your account.",
+  "hero.noToken.title": "Waiting for a token",
+  "hero.noToken.sub": "Open M365 Copilot and send a message.",
+  "hero.expired.title": "Renewing the token",
+  "hero.expired.sub": "The extension is renewing it by itself.",
+  "hero.noVSCode.title": "Token ready",
+  "hero.noVSCode.sub": "VS Code is not answering. Open it with the extension enabled.",
+  "hero.ok.title": "Connected to VS Code",
+  "hero.ok.sub": "The token syncs automatically.",
+  "row.token": "Token",
+  "row.vscode": "VS Code",
+  "row.renewal": "Renewal",
+  "token.none": "Not captured",
+  "token.expired": "Expired",
+  "token.expiresIn": "Expires in {0} min",
+  "token.active": "Active",
+  "vscode.connected": "Connected",
+  "vscode.disconnected": "Not connected",
+  "vscode.checking": "Checking…",
+  "refresh.none": "Automatic",
+  "refresh.captured": "Token renewed",
+  "refresh.rescan": "Looking for a new token…",
+  "refresh.reload": "Reloading M365…",
+  "refresh.open": "Opening M365…",
+  "refresh.wait": "Retrying shortly",
+  "refresh.needsUser": "Sign in to M365",
+  "button.send": "Send to VS Code",
+  "button.sent": "✓ Sent to VS Code",
+  "button.copyToken": "Copy token",
+  "button.copied": "✓ Copied",
+  "button.renew": "Renew now",
+  "button.openM365": "Open M365 Copilot",
+  "button.signOut": "Sign out of Microsoft",
+  "button.signOut.confirm": "Delete the session and sign in again",
+  "button.signOut.running": "Signing out…",
+  "signOut.warning":
+    "Deletes the Microsoft cookies and site data of this browser (M365 Copilot, Outlook, Teams, Office…), " +
+    "closes the session on Microsoft’s side and asks you to sign in again. It is the only way to get a " +
+    "genuinely new token: without it, M365 renews the old session in silence.",
+  "footer.captured": "Captured {0}",
+  "time.justNow": "just now",
+  "time.minutesAgo": "{0} min ago",
+  "time.hoursAgo": "{0} h ago",
+  "error.title": "Something went wrong",
+  "error.noProfile": "No profile has been captured yet. Open M365 Copilot and send a message.",
+  "error.noToken": "No token has been captured yet. Open M365 Copilot and send a message.",
+  "error.tokenExpired": "The saved token has expired. Press “Renew now”.",
+  "error.vscodeUnreachable":
+    "VS Code is not answering. Is it open with the M365 Copilot extension enabled?",
+  "error.signOutNotRequested":
+    "This sign-out was not requested from VS Code, so it was refused. Use the extension’s own button, " +
+    "or run “M365 Copilot: Sign out and sign in again” in VS Code.",
 };
 
 const es: Record<keyof typeof en, string> = {
-  'popup.title': 'M365 Copilot para VS Code',
-  'art.title': 'Conexión entre Microsoft 365 Copilot y VS Code',
-  'hero.needsUser.title': 'Hace falta iniciar sesión',
-  'hero.needsUser.sub': 'Abre M365 Copilot y entra con tu cuenta.',
-  'hero.noToken.title': 'Esperando token',
-  'hero.noToken.sub': 'Abre M365 Copilot y escribe un mensaje.',
-  'hero.expired.title': 'Renovando token',
-  'hero.expired.sub': 'La extensión lo está renovando sola.',
-  'hero.noVSCode.title': 'Token listo',
-  'hero.noVSCode.sub': 'VS Code no responde. Ábrelo con la extensión activa.',
-  'hero.ok.title': 'Conectado con VS Code',
-  'hero.ok.sub': 'El token se sincroniza automáticamente.',
-  'row.token': 'Token',
-  'row.vscode': 'VS Code',
-  'row.renewal': 'Renovación',
-  'token.none': 'Sin capturar',
-  'token.expired': 'Caducado',
-  'token.expiresIn': 'Caduca en {0} min',
-  'token.active': 'Activo',
-  'vscode.connected': 'Conectado',
-  'vscode.disconnected': 'Sin conexión',
-  'vscode.checking': 'Comprobando…',
-  'refresh.none': 'Automática',
-  'refresh.captured': 'Token renovado',
-  'refresh.rescan': 'Buscando token nuevo…',
-  'refresh.reload': 'Recargando M365…',
-  'refresh.open': 'Abriendo M365…',
-  'refresh.wait': 'Reintentando en breve',
-  'refresh.needsUser': 'Inicia sesión en M365',
-  'button.send': 'Enviar a VS Code',
-  'button.sent': '✓ Enviado a VS Code',
-  'button.copyToken': 'Copiar token',
-  'button.copied': '✓ Copiado',
-  'button.renew': 'Renovar ahora',
-  'button.openM365': 'Abrir M365 Copilot',
-  'button.signOut': 'Cerrar sesión de Microsoft',
-  'button.signOut.confirm': 'Borrar la sesión y volver a entrar',
-  'button.signOut.running': 'Cerrando la sesión…',
-  'signOut.warning':
-    'Borra las cookies y los datos de las webs de Microsoft en este navegador (M365 Copilot, Outlook, ' +
-    'Teams, Office…), cierra la sesión también en el servidor de Microsoft y te la vuelve a pedir. Es la ' +
-    'única forma de conseguir un token nuevo de verdad: si no, M365 renueva la sesión de siempre en silencio.',
-  'footer.captured': 'Capturado {0}',
-  'time.justNow': 'hace un momento',
-  'time.minutesAgo': 'hace {0} min',
-  'time.hoursAgo': 'hace {0} h',
-  'error.title': 'Algo salió mal',
-  'error.noProfile': 'Todavía no se ha capturado ningún perfil. Abre M365 Copilot y envía un mensaje.',
-  'error.noToken': 'Todavía no se ha capturado ningún token. Abre M365 Copilot y envía un mensaje.',
-  'error.tokenExpired': 'El token guardado ha caducado. Pulsa «Renovar ahora».',
-  'error.vscodeUnreachable': 'VS Code no responde. ¿Está abierto con la extensión M365 Copilot activa?',
-  'error.signOutNotRequested':
-    'Este cierre de sesión no lo ha pedido VS Code, así que se ha rechazado. Usa el botón de la propia ' +
-    'extensión o ejecuta «M365 Copilot: Cerrar sesión y volver a entrar» en VS Code.',
+  "popup.title": "M365 Copilot para VS Code",
+  "art.title": "Conexión entre Microsoft 365 Copilot y VS Code",
+  "hero.needsUser.title": "Hace falta iniciar sesión",
+  "hero.needsUser.sub": "Abre M365 Copilot y entra con tu cuenta.",
+  "hero.noToken.title": "Esperando token",
+  "hero.noToken.sub": "Abre M365 Copilot y escribe un mensaje.",
+  "hero.expired.title": "Renovando token",
+  "hero.expired.sub": "La extensión lo está renovando sola.",
+  "hero.noVSCode.title": "Token listo",
+  "hero.noVSCode.sub": "VS Code no responde. Ábrelo con la extensión activa.",
+  "hero.ok.title": "Conectado con VS Code",
+  "hero.ok.sub": "El token se sincroniza automáticamente.",
+  "row.token": "Token",
+  "row.vscode": "VS Code",
+  "row.renewal": "Renovación",
+  "token.none": "Sin capturar",
+  "token.expired": "Caducado",
+  "token.expiresIn": "Caduca en {0} min",
+  "token.active": "Activo",
+  "vscode.connected": "Conectado",
+  "vscode.disconnected": "Sin conexión",
+  "vscode.checking": "Comprobando…",
+  "refresh.none": "Automática",
+  "refresh.captured": "Token renovado",
+  "refresh.rescan": "Buscando token nuevo…",
+  "refresh.reload": "Recargando M365…",
+  "refresh.open": "Abriendo M365…",
+  "refresh.wait": "Reintentando en breve",
+  "refresh.needsUser": "Inicia sesión en M365",
+  "button.send": "Enviar a VS Code",
+  "button.sent": "✓ Enviado a VS Code",
+  "button.copyToken": "Copiar token",
+  "button.copied": "✓ Copiado",
+  "button.renew": "Renovar ahora",
+  "button.openM365": "Abrir M365 Copilot",
+  "button.signOut": "Cerrar sesión de Microsoft",
+  "button.signOut.confirm": "Borrar la sesión y volver a entrar",
+  "button.signOut.running": "Cerrando la sesión…",
+  "signOut.warning":
+    "Borra las cookies y los datos de las webs de Microsoft en este navegador (M365 Copilot, Outlook, " +
+    "Teams, Office…), cierra la sesión también en el servidor de Microsoft y te la vuelve a pedir. Es la " +
+    "única forma de conseguir un token nuevo de verdad: si no, M365 renueva la sesión de siempre en silencio.",
+  "footer.captured": "Capturado {0}",
+  "time.justNow": "hace un momento",
+  "time.minutesAgo": "hace {0} min",
+  "time.hoursAgo": "hace {0} h",
+  "error.title": "Algo salió mal",
+  "error.noProfile":
+    "Todavía no se ha capturado ningún perfil. Abre M365 Copilot y envía un mensaje.",
+  "error.noToken": "Todavía no se ha capturado ningún token. Abre M365 Copilot y envía un mensaje.",
+  "error.tokenExpired": "El token guardado ha caducado. Pulsa «Renovar ahora».",
+  "error.vscodeUnreachable":
+    "VS Code no responde. ¿Está abierto con la extensión M365 Copilot activa?",
+  "error.signOutNotRequested":
+    "Este cierre de sesión no lo ha pedido VS Code, así que se ha rechazado. Usa el botón de la propia " +
+    "extensión o ejecuta «M365 Copilot: Cerrar sesión y volver a entrar» en VS Code.",
 };
 
 export type MessageKey = keyof typeof en;
@@ -132,14 +135,14 @@ const CATALOGS: Readonly<Record<Locale, Readonly<Record<MessageKey, string>>>> =
 
 /** Idioma de la interfaz del navegador: español para cualquier variante, inglés si no. */
 export function detectLocale(): Locale {
-  let language = '';
+  let language = "";
   try {
-    language = typeof chrome !== 'undefined' ? (chrome.i18n?.getUILanguage?.() ?? '') : '';
+    language = typeof chrome !== "undefined" ? (chrome.i18n?.getUILanguage?.() ?? "") : "";
   } catch {
     /* fuera del contexto de extensión (tests) */
   }
-  if (!language && typeof navigator !== 'undefined') language = navigator.language ?? '';
-  return language.toLowerCase().startsWith('es') ? 'es' : 'en';
+  if (!language && typeof navigator !== "undefined") language = navigator.language ?? "";
+  return language.toLowerCase().startsWith("es") ? "es" : "en";
 }
 
 let current: Locale | undefined;

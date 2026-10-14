@@ -34,7 +34,8 @@
 
   --radius: 8px;
   --radius-control: 4px;
-  --font: 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font:
+    "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 * {
@@ -145,13 +146,13 @@ body {
   background: var(--neutral);
 }
 
-.dot[data-tone='ok'] {
+.dot[data-tone="ok"] {
   background: var(--success);
 }
-.dot[data-tone='warn'] {
+.dot[data-tone="warn"] {
   background: var(--warning);
 }
-.dot[data-tone='bad'] {
+.dot[data-tone="bad"] {
   background: var(--danger);
 }
 

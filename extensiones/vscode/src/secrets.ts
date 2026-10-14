@@ -1,8 +1,8 @@
-import * as vscode from 'vscode';
-import { describeProfile, parsePastedProfile, type CopilotProfile } from './profile';
-import { debug } from './logger';
+import * as vscode from "vscode";
+import { describeProfile, parsePastedProfile, type CopilotProfile } from "./profile";
+import { debug } from "./logger";
 
-const SECRET_KEY = 'm365copilot.profile.v1';
+const SECRET_KEY = "m365copilot.profile.v1";
 
 /**
  * Stores the captured Copilot profile in VS Code SecretStorage (encrypted,
@@ -10,66 +10,66 @@ const SECRET_KEY = 'm365copilot.profile.v1';
  * refresh its warning state.
  */
 export class ProfileStore {
-	private cached: CopilotProfile | null | undefined;
-	private readonly changeEmitter = new vscode.EventEmitter<void>();
-	readonly onDidChange = this.changeEmitter.event;
+  private cached: CopilotProfile | null | undefined;
+  private readonly changeEmitter = new vscode.EventEmitter<void>();
+  readonly onDidChange = this.changeEmitter.event;
 
-	constructor(private readonly secrets: vscode.SecretStorage) {
-		// Cross-window sync: another window writing the secret should refresh
-		// this window's cache and picker.
-		this.disposable = secrets.onDidChange((e) => {
-			if (e.key === SECRET_KEY) {
-				debug('profile', 'the stored secret changed (this or another window); cache dropped');
-				this.cached = undefined;
-				this.changeEmitter.fire();
-			}
-		});
-	}
+  constructor(private readonly secrets: vscode.SecretStorage) {
+    // Cross-window sync: another window writing the secret should refresh
+    // this window's cache and picker.
+    this.disposable = secrets.onDidChange((e) => {
+      if (e.key === SECRET_KEY) {
+        debug("profile", "the stored secret changed (this or another window); cache dropped");
+        this.cached = undefined;
+        this.changeEmitter.fire();
+      }
+    });
+  }
 
-	private readonly disposable: vscode.Disposable;
+  private readonly disposable: vscode.Disposable;
 
-	async get(): Promise<CopilotProfile | null> {
-		if (this.cached !== undefined) return this.cached;
-		const raw = await this.secrets.get(SECRET_KEY);
-		if (!raw) {
-			this.cached = null;
-			return null;
-		}
-		try {
-			this.cached = JSON.parse(raw) as CopilotProfile;
-		} catch {
-			this.cached = null;
-		}
-		return this.cached;
-	}
+  async get(): Promise<CopilotProfile | null> {
+    if (this.cached !== undefined) return this.cached;
+    const raw = await this.secrets.get(SECRET_KEY);
+    if (!raw) {
+      this.cached = null;
+      return null;
+    }
+    try {
+      this.cached = JSON.parse(raw) as CopilotProfile;
+    } catch {
+      this.cached = null;
+    }
+    return this.cached;
+  }
 
-	async has(): Promise<boolean> {
-		return (await this.get()) !== null;
-	}
+  async has(): Promise<boolean> {
+    return (await this.get()) !== null;
+  }
 
-	/** Parse and store a pasted profile/token. Returns the normalized profile. */
-	async setFromPaste(pasted: string): Promise<CopilotProfile> {
-		return this.set(parsePastedProfile(pasted));
-	}
+  /** Parse and store a pasted profile/token. Returns the normalized profile. */
+  async setFromPaste(pasted: string): Promise<CopilotProfile> {
+    return this.set(parsePastedProfile(pasted));
+  }
 
-	/** Store an already parsed profile (see {@link parsePastedProfile}). */
-	async set(profile: CopilotProfile): Promise<CopilotProfile> {
-		await this.secrets.store(SECRET_KEY, JSON.stringify(profile));
-		debug('profile', 'profile stored in SecretStorage', () => describeProfile(profile));
-		this.cached = profile;
-		this.changeEmitter.fire();
-		return profile;
-	}
+  /** Store an already parsed profile (see {@link parsePastedProfile}). */
+  async set(profile: CopilotProfile): Promise<CopilotProfile> {
+    await this.secrets.store(SECRET_KEY, JSON.stringify(profile));
+    debug("profile", "profile stored in SecretStorage", () => describeProfile(profile));
+    this.cached = profile;
+    this.changeEmitter.fire();
+    return profile;
+  }
 
-	async clear(): Promise<void> {
-		await this.secrets.delete(SECRET_KEY);
-		debug('profile', 'profile deleted from SecretStorage');
-		this.cached = null;
-		this.changeEmitter.fire();
-	}
+  async clear(): Promise<void> {
+    await this.secrets.delete(SECRET_KEY);
+    debug("profile", "profile deleted from SecretStorage");
+    this.cached = null;
+    this.changeEmitter.fire();
+  }
 
-	dispose(): void {
-		this.disposable.dispose();
-		this.changeEmitter.dispose();
-	}
+  dispose(): void {
+    this.disposable.dispose();
+    this.changeEmitter.dispose();
+  }
 }

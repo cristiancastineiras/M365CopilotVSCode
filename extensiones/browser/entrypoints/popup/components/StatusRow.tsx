@@ -1,4 +1,4 @@
-export type Tone = 'ok' | 'warn' | 'bad' | 'neutral';
+export type Tone = "ok" | "warn" | "bad" | "neutral";
 
 interface StatusRowProps {
   label: string;

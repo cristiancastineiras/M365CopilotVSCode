@@ -1,6 +1,10 @@
-import { BRIDGE_MESSAGE_MARKER, COPILOT_CONTENT_MATCHES, signOutRequestId } from '@m365copilot/core';
-import { registerHandlers, sendMessage } from '@/utils/messaging';
-import { logger } from '@/utils/logger';
+import {
+  BRIDGE_MESSAGE_MARKER,
+  COPILOT_CONTENT_MATCHES,
+  signOutRequestId,
+} from "@m365copilot/core";
+import { registerHandlers, sendMessage } from "@/utils/messaging";
+import { logger } from "@/utils/logger";
 
 /**
  * Puente entre el interceptor (mundo MAIN) y el background.
@@ -21,12 +25,12 @@ export default defineContentScript({
   // perfil capturado ahí no llega a ningún sitio.
   matches: [...COPILOT_CONTENT_MATCHES],
   allFrames: true,
-  runAt: 'document_start',
+  runAt: "document_start",
   main() {
-    logger.info('M365 Copilot bridge (ISOLATED) loaded on:', window.location.href);
+    logger.info("M365 Copilot bridge (ISOLATED) loaded on:", window.location.href);
 
     /** Manda una petición al interceptor (mundo MAIN). */
-    function askInterceptor(kind: 'RESCAN_REQUEST' | 'REQUEST_PROFILE'): void {
+    function askInterceptor(kind: "RESCAN_REQUEST" | "REQUEST_PROFILE"): void {
       try {
         window.postMessage({ [BRIDGE_MESSAGE_MARKER]: true, kind }, location.origin);
       } catch (err) {
@@ -34,7 +38,7 @@ export default defineContentScript({
       }
     }
 
-    window.addEventListener('message', (event: MessageEvent) => {
+    window.addEventListener("message", (event: MessageEvent) => {
       // Sólo aceptamos mensajes de esta misma ventana/origen.
       if (event.source !== window) return;
       if (event.origin !== location.origin) return;
@@ -42,9 +46,9 @@ export default defineContentScript({
       const data = event.data;
       if (!data || data[BRIDGE_MESSAGE_MARKER] !== true) return;
 
-      if (data.kind === 'PROFILE_UPDATED' && data.payload) {
-        sendMessage('PROFILE_UPDATED', data.payload).catch((err) => {
-          logger.error('Error reenviando perfil al background:', err);
+      if (data.kind === "PROFILE_UPDATED" && data.payload) {
+        sendMessage("PROFILE_UPDATED", data.payload).catch((err) => {
+          logger.error("Error reenviando perfil al background:", err);
         });
       }
     });
@@ -52,16 +56,16 @@ export default defineContentScript({
     // El background pide re-escanear cuando el token está a punto de caducar.
     registerHandlers({
       RESCAN_TOKEN: () => {
-        logger.info('Re-escaneo pedido por el background');
-        askInterceptor('RESCAN_REQUEST');
-        return { status: 'ok' as const };
+        logger.info("Re-escaneo pedido por el background");
+        askInterceptor("RESCAN_REQUEST");
+        return { status: "ok" as const };
       },
     });
 
     // Los dos content scripts arrancan en `document_start` y el orden entre
     // mundos no está garantizado: pedir el perfil al cargar evita depender de
     // que el interceptor publique justo cuando este listener ya existe.
-    askInterceptor('REQUEST_PROFILE');
+    askInterceptor("REQUEST_PROFILE");
 
     // Cuando VS Code pide cerrar la sesión abre esta web con el marcador en la
     // URL (`?m365copilot-signout=<id>`). Llegar por aquí es lo que hace que el
@@ -73,11 +77,11 @@ export default defineContentScript({
     // puede enlazar cualquiera.
     const signOutId = signOutRequestId(location.href);
     if (signOutId) {
-      logger.info('VS Code pide cerrar la sesión de Microsoft desde esta pestaña');
-      sendMessage('HARD_RESET', { requestId: signOutId }).catch((err) => {
+      logger.info("VS Code pide cerrar la sesión de Microsoft desde esta pestaña");
+      sendMessage("HARD_RESET", { requestId: signOutId }).catch((err) => {
         // Lo normal es acabar aquí: el cierre de sesión navega esta misma
         // pestaña, así que el puerto muere antes de que llegue la respuesta.
-        logger.debug('Sin respuesta al cierre de sesión (la pestaña ya navegó):', err);
+        logger.debug("Sin respuesta al cierre de sesión (la pestaña ya navegó):", err);
       });
     }
   },

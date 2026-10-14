@@ -13,6 +13,7 @@ pnpm changeset
 ```
 
 Esto te guiará por un proceso interactivo donde:
+
 - Seleccionas qué tipo de cambio es (major, minor, patch)
 - Describes el cambio
 
@@ -27,6 +28,7 @@ pnpm version
 ```
 
 Esto:
+
 - Actualiza la versión en `package.json`
 - Actualiza o crea `CHANGELOG.md`
 - Elimina los archivos de changeset consumidos

@@ -1,14 +1,14 @@
-import * as vscode from 'vscode';
-import { streamCopilotTurn, CopilotClientError } from './client';
-import { cleanCompletion, reuseForExtendedPrefix } from './completionText';
-import { debug, log } from './logger';
-import { findModel } from './models';
-import { isTokenUsable } from './profile';
-import type { ProfileStore } from './secrets';
-import { formatMoment, t } from './i18n';
-import { accountThrottledUntil } from './throttle';
+import * as vscode from "vscode";
+import { streamCopilotTurn, CopilotClientError } from "./client";
+import { cleanCompletion, reuseForExtendedPrefix } from "./completionText";
+import { debug, log } from "./logger";
+import { findModel } from "./models";
+import { isTokenUsable } from "./profile";
+import type { ProfileStore } from "./secrets";
+import { formatMoment, t } from "./i18n";
+import { accountThrottledUntil } from "./throttle";
 
-const CONFIG_SECTION = 'm365copilot.inlineCompletions';
+const CONFIG_SECTION = "m365copilot.inlineCompletions";
 
 /** Context bounds. Ghost text needs to be fast far more than it needs to be
  * well-informed, and every extra character is latency on a backend that opens
@@ -23,13 +23,13 @@ const OVERLAP_LOOKAHEAD = 200;
  * panes, read-only diff sides and our own preview documents.
  */
 const SKIPPED_SCHEMES: ReadonlySet<string> = new Set([
-	'output',
-	'git',
-	'gitfs',
-	'vscode-scm',
-	'debug',
-	'm365copilot-edit-preview',
-	'vscode-chat-code-block',
+  "output",
+  "git",
+  "gitfs",
+  "vscode-scm",
+  "debug",
+  "m365copilot-edit-preview",
+  "vscode-chat-code-block",
 ]);
 
 const CACHE_MAX_ENTRIES = 40;
@@ -37,40 +37,40 @@ const CACHE_MAX_ENTRIES = 40;
 const CACHE_KEY_CHARS = 400;
 
 interface CacheEntry {
-	readonly prefix: string;
-	readonly completion: string;
+  readonly prefix: string;
+  readonly completion: string;
 }
 
 interface Settings {
-	readonly enabled: boolean;
-	readonly manualOnly: boolean;
-	readonly debounceMs: number;
-	readonly maxLines: number;
-	readonly timeoutMs: number;
-	readonly modelId: string;
-	readonly disabledLanguages: ReadonlySet<string>;
+  readonly enabled: boolean;
+  readonly manualOnly: boolean;
+  readonly debounceMs: number;
+  readonly maxLines: number;
+  readonly timeoutMs: number;
+  readonly modelId: string;
+  readonly disabledLanguages: ReadonlySet<string>;
 }
 
 function readSettings(): Settings {
-	const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-	return {
-		enabled: config.get<boolean>('enabled', true),
-		manualOnly: config.get<string>('triggerMode', 'automatic') === 'manual',
-		debounceMs: clamp(config.get<number>('debounceMs', 500), 0, 5000),
-		maxLines: clamp(config.get<number>('maxLines', 6), 1, 30),
-		timeoutMs: clamp(config.get<number>('timeoutMs', 6000), 1000, 30_000),
-		modelId: config.get<string>('model', 'm365-copilot-auto'),
-		disabledLanguages: new Set(
-			(config.get<unknown[]>('disabledLanguages', ['scminput', 'plaintext']) ?? []).filter(
-				(value): value is string => typeof value === 'string',
-			),
-		),
-	};
+  const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+  return {
+    enabled: config.get<boolean>("enabled", true),
+    manualOnly: config.get<string>("triggerMode", "automatic") === "manual",
+    debounceMs: clamp(config.get<number>("debounceMs", 500), 0, 5000),
+    maxLines: clamp(config.get<number>("maxLines", 6), 1, 30),
+    timeoutMs: clamp(config.get<number>("timeoutMs", 6000), 1000, 30_000),
+    modelId: config.get<string>("model", "m365-copilot-auto"),
+    disabledLanguages: new Set(
+      (config.get<unknown[]>("disabledLanguages", ["scminput", "plaintext"]) ?? []).filter(
+        (value): value is string => typeof value === "string",
+      ),
+    ),
+  };
 }
 
 function clamp(value: number, min: number, max: number): number {
-	if (typeof value !== 'number' || Number.isNaN(value)) return min;
-	return Math.min(max, Math.max(min, value));
+  if (typeof value !== "number" || Number.isNaN(value)) return min;
+  return Math.min(max, Math.max(min, value));
 }
 
 /**
@@ -88,249 +88,265 @@ function clamp(value: number, min: number, max: number): number {
  */
 /** Whatever shows that a suggestion is on its way (the status bar hub). */
 export interface CompletionBusySink {
-	setBusy(busy: boolean): void;
+  setBusy(busy: boolean): void;
 }
 
 export class M365InlineCompletionProvider implements vscode.InlineCompletionItemProvider {
-	private readonly cache = new Map<string, CacheEntry>();
-	private inFlight: AbortController | undefined;
+  private readonly cache = new Map<string, CacheEntry>();
+  private inFlight: AbortController | undefined;
 
-	constructor(
-		private readonly store: ProfileStore,
-		private readonly status: CompletionBusySink,
-	) {}
+  constructor(
+    private readonly store: ProfileStore,
+    private readonly status: CompletionBusySink,
+  ) {}
 
-	async provideInlineCompletionItems(
-		document: vscode.TextDocument,
-		position: vscode.Position,
-		context: vscode.InlineCompletionContext,
-		token: vscode.CancellationToken,
-	): Promise<vscode.InlineCompletionItem[] | undefined> {
-		const settings = readSettings();
-		if (!settings.enabled) return undefined;
-		const invokedByHand = context.triggerKind === vscode.InlineCompletionTriggerKind.Invoke;
-		if (settings.manualOnly && !invokedByHand) return undefined;
-		if (SKIPPED_SCHEMES.has(document.uri.scheme)) return undefined;
-		// A language turned off by hand still answers an explicit Alt+\ request.
-		if (settings.disabledLanguages.has(document.languageId) && !invokedByHand) return undefined;
+  async provideInlineCompletionItems(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    context: vscode.InlineCompletionContext,
+    token: vscode.CancellationToken,
+  ): Promise<vscode.InlineCompletionItem[] | undefined> {
+    const settings = readSettings();
+    if (!settings.enabled) return undefined;
+    const invokedByHand = context.triggerKind === vscode.InlineCompletionTriggerKind.Invoke;
+    if (settings.manualOnly && !invokedByHand) return undefined;
+    if (SKIPPED_SCHEMES.has(document.uri.scheme)) return undefined;
+    // A language turned off by hand still answers an explicit Alt+\ request.
+    if (settings.disabledLanguages.has(document.languageId) && !invokedByHand) return undefined;
 
-		const prefix = textBefore(document, position);
-		const suffix = textAfter(document, position);
-		if (!prefix.trim()) return undefined;
+    const prefix = textBefore(document, position);
+    const suffix = textAfter(document, position);
+    if (!prefix.trim()) return undefined;
 
-		// M365 is limiting the account: every suggestion is a request and would
-		// only extend it, so wait it out (an answer to anything else clears it).
-		const throttledUntil = accountThrottledUntil();
-		if (throttledUntil !== undefined) {
-			debug('complete', 'skipped: the account is throttled', { until: new Date(throttledUntil).toISOString() });
-			if (invokedByHand) {
-				log(t('log.completionThrottled', formatMoment(throttledUntil)));
-				void vscode.window.setStatusBarMessage(t('completions.throttled', formatMoment(throttledUntil)), 5000);
-			}
-			return undefined;
-		}
+    // M365 is limiting the account: every suggestion is a request and would
+    // only extend it, so wait it out (an answer to anything else clears it).
+    const throttledUntil = accountThrottledUntil();
+    if (throttledUntil !== undefined) {
+      debug("complete", "skipped: the account is throttled", {
+        until: new Date(throttledUntil).toISOString(),
+      });
+      if (invokedByHand) {
+        log(t("log.completionThrottled", formatMoment(throttledUntil)));
+        void vscode.window.setStatusBarMessage(
+          t("completions.throttled", formatMoment(throttledUntil)),
+          5000,
+        );
+      }
+      return undefined;
+    }
 
-		// A cache hit costs nothing and is the difference between ghost text
-		// that sticks and ghost text that blinks in and out while you type.
-		const cached = this.fromCache(document, prefix);
-		if (cached) {
-			debug('complete', `served from cache (${cached.length} chars)`, { file: document.uri.toString(), line: position.line + 1 });
-			return [toItem(cached, position)];
-		}
+    // A cache hit costs nothing and is the difference between ghost text
+    // that sticks and ghost text that blinks in and out while you type.
+    const cached = this.fromCache(document, prefix);
+    if (cached) {
+      debug("complete", `served from cache (${cached.length} chars)`, {
+        file: document.uri.toString(),
+        line: position.line + 1,
+      });
+      return [toItem(cached, position)];
+    }
 
-		const profile = await this.store.get();
-		if (!profile || !isTokenUsable(profile)) {
-			debug('complete', 'skipped: no usable token');
-			return undefined;
-		}
+    const profile = await this.store.get();
+    if (!profile || !isTokenUsable(profile)) {
+      debug("complete", "skipped: no usable token");
+      return undefined;
+    }
 
-		if (!invokedByHand && settings.debounceMs > 0) {
-			await delay(settings.debounceMs, token);
-			if (token.isCancellationRequested) return undefined;
-			// The pause may have been long enough for a neighbouring request to
-			// answer; re-check before spending another round trip.
-			const afterWait = this.fromCache(document, prefix);
-			if (afterWait) return [toItem(afterWait, position)];
-		}
+    if (!invokedByHand && settings.debounceMs > 0) {
+      await delay(settings.debounceMs, token);
+      if (token.isCancellationRequested) return undefined;
+      // The pause may have been long enough for a neighbouring request to
+      // answer; re-check before spending another round trip.
+      const afterWait = this.fromCache(document, prefix);
+      if (afterWait) return [toItem(afterWait, position)];
+    }
 
-		// Only the newest request matters — drop whatever is still in flight.
-		this.inFlight?.abort();
-		const controller = new AbortController();
-		this.inFlight = controller;
-		token.onCancellationRequested(() => controller.abort());
+    // Only the newest request matters — drop whatever is still in flight.
+    this.inFlight?.abort();
+    const controller = new AbortController();
+    this.inFlight = controller;
+    token.onCancellationRequested(() => controller.abort());
 
-		const started = Date.now();
-		this.status.setBusy(true);
-		debug('complete', 'requesting a completion', () => ({
-			file: document.uri.toString(),
-			language: document.languageId,
-			position: `${position.line + 1}:${position.character + 1}`,
-			prefixChars: prefix.length,
-			suffixChars: suffix.length,
-			invokedByHand,
-			model: settings.modelId,
-			timeoutMs: settings.timeoutMs,
-			maxLines: settings.maxLines,
-		}));
-		try {
-			const raw = await this.requestCompletion(profile, document, prefix, suffix, settings, controller);
-			if (raw === undefined || token.isCancellationRequested) return undefined;
+    const started = Date.now();
+    this.status.setBusy(true);
+    debug("complete", "requesting a completion", () => ({
+      file: document.uri.toString(),
+      language: document.languageId,
+      position: `${position.line + 1}:${position.character + 1}`,
+      prefixChars: prefix.length,
+      suffixChars: suffix.length,
+      invokedByHand,
+      model: settings.modelId,
+      timeoutMs: settings.timeoutMs,
+      maxLines: settings.maxLines,
+    }));
+    try {
+      const raw = await this.requestCompletion(
+        profile,
+        document,
+        prefix,
+        suffix,
+        settings,
+        controller,
+      );
+      if (raw === undefined || token.isCancellationRequested) return undefined;
 
-			const linePrefix = document.lineAt(position.line).text.slice(0, position.character);
-			const completion = cleanCompletion(raw, {
-				linePrefix,
-				suffix: suffix.slice(0, OVERLAP_LOOKAHEAD),
-				maxLines: settings.maxLines,
-				languageId: document.languageId,
-			});
-			log(t('log.completion', Date.now() - started, raw.length, completion.length));
-			debug('complete', 'completion received', () => ({ raw, cleaned: completion }));
-			if (!completion) return undefined;
+      const linePrefix = document.lineAt(position.line).text.slice(0, position.character);
+      const completion = cleanCompletion(raw, {
+        linePrefix,
+        suffix: suffix.slice(0, OVERLAP_LOOKAHEAD),
+        maxLines: settings.maxLines,
+        languageId: document.languageId,
+      });
+      log(t("log.completion", Date.now() - started, raw.length, completion.length));
+      debug("complete", "completion received", () => ({ raw, cleaned: completion }));
+      if (!completion) return undefined;
 
-			this.remember(document, prefix, completion);
-			return [toItem(completion, position)];
-		} catch (error) {
-			if (error instanceof CopilotClientError && error.message === '__CANCELLED__') return undefined;
-			log(t('log.completionFailed', error instanceof Error ? error.message : String(error)));
-			debug('complete', 'completion failed', error);
-			return undefined;
-		} finally {
-			if (this.inFlight === controller) this.inFlight = undefined;
-			this.status.setBusy(false);
-		}
-	}
+      this.remember(document, prefix, completion);
+      return [toItem(completion, position)];
+    } catch (error) {
+      if (error instanceof CopilotClientError && error.message === "__CANCELLED__")
+        return undefined;
+      log(t("log.completionFailed", error instanceof Error ? error.message : String(error)));
+      debug("complete", "completion failed", error);
+      return undefined;
+    } finally {
+      if (this.inFlight === controller) this.inFlight = undefined;
+      this.status.setBusy(false);
+    }
+  }
 
-	/** Returns the raw model answer, or undefined when nothing usable arrived. */
-	private async requestCompletion(
-		profile: NonNullable<Awaited<ReturnType<ProfileStore['get']>>>,
-		document: vscode.TextDocument,
-		prefix: string,
-		suffix: string,
-		settings: Settings,
-		controller: AbortController,
-	): Promise<string | undefined> {
-		const prompt = buildCompletionPrompt(document, prefix, suffix, settings.maxLines);
-		let accumulated = '';
-		let stoppedEarly = false;
+  /** Returns the raw model answer, or undefined when nothing usable arrived. */
+  private async requestCompletion(
+    profile: NonNullable<Awaited<ReturnType<ProfileStore["get"]>>>,
+    document: vscode.TextDocument,
+    prefix: string,
+    suffix: string,
+    settings: Settings,
+    controller: AbortController,
+  ): Promise<string | undefined> {
+    const prompt = buildCompletionPrompt(document, prefix, suffix, settings.maxLines);
+    let accumulated = "";
+    let stoppedEarly = false;
 
-		const timer = setTimeout(() => controller.abort(), settings.timeoutMs);
-		try {
-			await streamCopilotTurn({
-				profile,
-				prompt,
-				tone: findModel(settings.modelId)?.tone ?? null,
-				signal: controller.signal,
-				callbacks: {
-					onText: (delta) => {
-						accumulated += delta;
-						// Stop as soon as there is plainly enough: the tail of a chat
-						// answer is prose we would throw away anyway, and waiting for
-						// it is pure latency.
-						if (hasEnough(accumulated, settings.maxLines)) {
-							stoppedEarly = true;
-							controller.abort();
-						}
-					},
-				},
-			});
-		} catch (error) {
-			const cancelled = error instanceof CopilotClientError && error.message === '__CANCELLED__';
-			// Our own early abort (and a timeout that still produced text) are
-			// successes; anything else is a real failure.
-			if (!cancelled || (!stoppedEarly && !accumulated.trim())) throw error;
-		} finally {
-			clearTimeout(timer);
-		}
+    const timer = setTimeout(() => controller.abort(), settings.timeoutMs);
+    try {
+      await streamCopilotTurn({
+        profile,
+        prompt,
+        tone: findModel(settings.modelId)?.tone ?? null,
+        signal: controller.signal,
+        callbacks: {
+          onText: (delta) => {
+            accumulated += delta;
+            // Stop as soon as there is plainly enough: the tail of a chat
+            // answer is prose we would throw away anyway, and waiting for
+            // it is pure latency.
+            if (hasEnough(accumulated, settings.maxLines)) {
+              stoppedEarly = true;
+              controller.abort();
+            }
+          },
+        },
+      });
+    } catch (error) {
+      const cancelled = error instanceof CopilotClientError && error.message === "__CANCELLED__";
+      // Our own early abort (and a timeout that still produced text) are
+      // successes; anything else is a real failure.
+      if (!cancelled || (!stoppedEarly && !accumulated.trim())) throw error;
+    } finally {
+      clearTimeout(timer);
+    }
 
-		return accumulated.trim() ? accumulated : undefined;
-	}
+    return accumulated.trim() ? accumulated : undefined;
+  }
 
-	private cacheKey(document: vscode.TextDocument, prefix: string): string {
-		return `${document.uri.toString()}::${prefix.slice(-CACHE_KEY_CHARS)}`;
-	}
+  private cacheKey(document: vscode.TextDocument, prefix: string): string {
+    return `${document.uri.toString()}::${prefix.slice(-CACHE_KEY_CHARS)}`;
+  }
 
-	/** Exact hit, or a still-valid suggestion the user is typing along with. */
-	private fromCache(document: vscode.TextDocument, prefix: string): string | undefined {
-		const uri = document.uri.toString();
-		for (const [key, entry] of [...this.cache].reverse()) {
-			if (!key.startsWith(`${uri}::`)) continue;
-			const reusable = reuseForExtendedPrefix(entry.prefix, entry.completion, prefix);
-			if (reusable) return reusable;
-		}
-		return undefined;
-	}
+  /** Exact hit, or a still-valid suggestion the user is typing along with. */
+  private fromCache(document: vscode.TextDocument, prefix: string): string | undefined {
+    const uri = document.uri.toString();
+    for (const [key, entry] of [...this.cache].reverse()) {
+      if (!key.startsWith(`${uri}::`)) continue;
+      const reusable = reuseForExtendedPrefix(entry.prefix, entry.completion, prefix);
+      if (reusable) return reusable;
+    }
+    return undefined;
+  }
 
-	private remember(document: vscode.TextDocument, prefix: string, completion: string): void {
-		const key = this.cacheKey(document, prefix);
-		this.cache.delete(key);
-		this.cache.set(key, { prefix, completion });
-		while (this.cache.size > CACHE_MAX_ENTRIES) {
-			const oldest = this.cache.keys().next();
-			if (oldest.done) break;
-			this.cache.delete(oldest.value);
-		}
-	}
+  private remember(document: vscode.TextDocument, prefix: string, completion: string): void {
+    const key = this.cacheKey(document, prefix);
+    this.cache.delete(key);
+    this.cache.set(key, { prefix, completion });
+    while (this.cache.size > CACHE_MAX_ENTRIES) {
+      const oldest = this.cache.keys().next();
+      if (oldest.done) break;
+      this.cache.delete(oldest.value);
+    }
+  }
 
-	clearCache(): void {
-		this.cache.clear();
-	}
+  clearCache(): void {
+    this.cache.clear();
+  }
 }
 
 /** Enough lines to fill the suggestion, or a closed fence — whichever first. */
 function hasEnough(text: string, maxLines: number): boolean {
-	if (text.length > 4000) return true;
-	const body = text.replace(/^[\s\S]*?```[A-Za-z0-9_+-]*\r?\n/, '');
-	if (/\r?\n[ \t]*```/.test(body)) return true;
-	return body.split('\n').length > maxLines + 1;
+  if (text.length > 4000) return true;
+  const body = text.replace(/^[\s\S]*?```[A-Za-z0-9_+-]*\r?\n/, "");
+  if (/\r?\n[ \t]*```/.test(body)) return true;
+  return body.split("\n").length > maxLines + 1;
 }
 
 function buildCompletionPrompt(
-	document: vscode.TextDocument,
-	prefix: string,
-	suffix: string,
-	maxLines: number,
+  document: vscode.TextDocument,
+  prefix: string,
+  suffix: string,
+  maxLines: number,
 ): string {
-	const relativePath = vscode.workspace.asRelativePath(document.uri, false).replace(/\\/g, '/');
-	return [
-		t('completion.prompt.role'),
-		t('completion.prompt.continue', document.languageId),
-		t('completion.prompt.rules'),
-		t('completion.prompt.rule.only'),
-		t('completion.prompt.rule.noRepeat'),
-		t('completion.prompt.rule.noFences'),
-		t('completion.prompt.rule.maxLines', maxLines),
-		t('completion.prompt.file', relativePath),
-		t('completion.prompt.codeStart'),
-		`${prefix}⟦CURSOR⟧${suffix}`,
-		t('completion.prompt.codeEnd'),
-	].join('\n');
+  const relativePath = vscode.workspace.asRelativePath(document.uri, false).replace(/\\/g, "/");
+  return [
+    t("completion.prompt.role"),
+    t("completion.prompt.continue", document.languageId),
+    t("completion.prompt.rules"),
+    t("completion.prompt.rule.only"),
+    t("completion.prompt.rule.noRepeat"),
+    t("completion.prompt.rule.noFences"),
+    t("completion.prompt.rule.maxLines", maxLines),
+    t("completion.prompt.file", relativePath),
+    t("completion.prompt.codeStart"),
+    `${prefix}⟦CURSOR⟧${suffix}`,
+    t("completion.prompt.codeEnd"),
+  ].join("\n");
 }
 
 function textBefore(document: vscode.TextDocument, position: vscode.Position): string {
-	const text = document.getText(new vscode.Range(new vscode.Position(0, 0), position));
-	return text.length > MAX_PREFIX_CHARS ? text.slice(-MAX_PREFIX_CHARS) : text;
+  const text = document.getText(new vscode.Range(new vscode.Position(0, 0), position));
+  return text.length > MAX_PREFIX_CHARS ? text.slice(-MAX_PREFIX_CHARS) : text;
 }
 
 function textAfter(document: vscode.TextDocument, position: vscode.Position): string {
-	const lastLine = document.lineCount - 1;
-	const end = new vscode.Position(lastLine, document.lineAt(lastLine).text.length);
-	const text = document.getText(new vscode.Range(position, end));
-	return text.length > MAX_SUFFIX_CHARS ? text.slice(0, MAX_SUFFIX_CHARS) : text;
+  const lastLine = document.lineCount - 1;
+  const end = new vscode.Position(lastLine, document.lineAt(lastLine).text.length);
+  const text = document.getText(new vscode.Range(position, end));
+  return text.length > MAX_SUFFIX_CHARS ? text.slice(0, MAX_SUFFIX_CHARS) : text;
 }
 
 function toItem(text: string, position: vscode.Position): vscode.InlineCompletionItem {
-	return new vscode.InlineCompletionItem(text, new vscode.Range(position, position));
+  return new vscode.InlineCompletionItem(text, new vscode.Range(position, position));
 }
 
 function delay(ms: number, token: vscode.CancellationToken): Promise<void> {
-	return new Promise((resolve) => {
-		const timer = setTimeout(() => {
-			listener.dispose();
-			resolve();
-		}, ms);
-		const listener = token.onCancellationRequested(() => {
-			clearTimeout(timer);
-			resolve();
-		});
-	});
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      listener.dispose();
+      resolve();
+    }, ms);
+    const listener = token.onCancellationRequested(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
 }

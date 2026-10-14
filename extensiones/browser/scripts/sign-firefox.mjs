@@ -18,24 +18,24 @@
  * AMO firma cada versión una sola vez: hay que subir `version` antes de
  * volver a firmar.
  */
-import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { spawnSync } from "node:child_process";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const pkgDir = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const releaseDir = resolve(pkgDir, '../../releases/firefox');
-const { name, version } = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'));
-const sourceDir = join(releaseDir, 'firefox-mv2');
+const pkgDir = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const releaseDir = resolve(pkgDir, "../../releases/firefox");
+const { name, version } = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
+const sourceDir = join(releaseDir, "firefox-mv2");
 const sourcesZip = join(releaseDir, `${name}-${version}-sources.zip`);
-const signedName = 'm365-copilot-vscode-extension-firefox.xpi';
+const signedName = "m365-copilot-vscode-extension-firefox.xpi";
 
 if (!process.env.WEB_EXT_API_KEY || !process.env.WEB_EXT_API_SECRET) {
-  console.error('Faltan WEB_EXT_API_KEY / WEB_EXT_API_SECRET (credenciales de la API de AMO).');
+  console.error("Faltan WEB_EXT_API_KEY / WEB_EXT_API_SECRET (credenciales de la API de AMO).");
   process.exit(1);
 }
-for (const required of [join(sourceDir, 'manifest.json'), sourcesZip]) {
+for (const required of [join(sourceDir, "manifest.json"), sourcesZip]) {
   if (!existsSync(required)) {
     console.error(`No existe ${required}: ejecuta antes \`pnpm zip:firefox\`.`);
     process.exit(1);
@@ -44,29 +44,36 @@ for (const required of [join(sourceDir, 'manifest.json'), sourcesZip]) {
 
 // web-ext nombra el .xpi con el nombre de la extensión: se firma en una
 // carpeta temporal y se copia con un nombre estable, como hace rename-zip.mjs.
-const artifactsDir = mkdtempSync(join(tmpdir(), 'm365-amo-'));
+const artifactsDir = mkdtempSync(join(tmpdir(), "m365-amo-"));
 const webExtArgs = [
-  'dlx', 'web-ext@8', 'sign',
-  '--channel', 'unlisted',
-  '--source-dir', sourceDir,
-  '--artifacts-dir', artifactsDir,
-  '--upload-source-code', sourcesZip,
-  '--no-config-discovery',
+  "dlx",
+  "web-ext@8",
+  "sign",
+  "--channel",
+  "unlisted",
+  "--source-dir",
+  sourceDir,
+  "--artifacts-dir",
+  artifactsDir,
+  "--upload-source-code",
+  sourcesZip,
+  "--no-config-discovery",
 ];
 // Lanzado con `pnpm sign:firefox`, npm_execpath es el propio pnpm (JS): se
 // ejecuta con este mismo node y sin shell, así las rutas con espacios no se
 // parten en Windows (pnpm.cmd sólo arranca con `shell: true`).
 const pnpmJs = process.env.npm_execpath;
-const result = pnpmJs?.endsWith('js')
-  ? spawnSync(process.execPath, [pnpmJs, ...webExtArgs], { stdio: 'inherit' })
-  : spawnSync('pnpm', webExtArgs, { stdio: 'inherit', shell: process.platform === 'win32' });
+const result = pnpmJs?.endsWith("js")
+  ? spawnSync(process.execPath, [pnpmJs, ...webExtArgs], { stdio: "inherit" })
+  : spawnSync("pnpm", webExtArgs, { stdio: "inherit", shell: process.platform === "win32" });
 
 let exitCode = 0;
-const xpi = result.status === 0 ? readdirSync(artifactsDir).find((f) => f.endsWith('.xpi')) : undefined;
+const xpi =
+  result.status === 0 ? readdirSync(artifactsDir).find((f) => f.endsWith(".xpi")) : undefined;
 if (result.status !== 0) {
   exitCode = result.status ?? 1;
 } else if (!xpi) {
-  console.error('web-ext terminó sin dejar ningún .xpi firmado.');
+  console.error("web-ext terminó sin dejar ningún .xpi firmado.");
   exitCode = 1;
 } else {
   // Copia, no rename: en CI el tmpdir puede estar en otro sistema de archivos (EXDEV).
