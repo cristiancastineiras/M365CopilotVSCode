@@ -505,6 +505,17 @@ function describeUpgradeFailure(status: number, statusMessage: string, token: st
  * per turn (mirroring the web app), replay the captured invocation frame with
  * the user's prompt and chosen `tone`, then stream the reply.
  */
+/** Conversation and routing affinity shared by the turns of one agent loop. */
+export interface CopilotConversation {
+	conversationId: string;
+	sessionKey: string;
+	isStartOfSession: boolean;
+}
+
+export function createCopilotConversation(): CopilotConversation {
+	return { conversationId: randomUUID(), sessionKey: randomUUID(), isStartOfSession: true };
+}
+
 export async function streamCopilotTurn(options: {
 	profile: CopilotProfile;
 	prompt: string;
@@ -520,7 +531,9 @@ export async function streamCopilotTurn(options: {
 	 * never sets it.
 	 */
 	endpointBase?: string;
-		/** See {@link TurnMode}. */
+	/** Omit for an independent turn; agent loops keep this object across steps. */
+	conversation?: CopilotConversation;
+	/** See {@link TurnMode}. */
 	mode?: TurnMode;
 	/** Images to attach (uploaded first, like the web app does with a pasted one). */
 	images?: readonly TurnImage[];
@@ -540,10 +553,10 @@ export async function streamCopilotTurn(options: {
 	const wireTone = selector?.tone ?? null;
 	const scenario = scenarioFor(profile, selector?.paid ?? false);
 
-	// One conversation id per turn, shared between the URL and the invocation
-	// arguments — BizChat rejects the request as `InvalidRequest` when the URL's
-	// `ConversationId` and the message's `conversationId` disagree.
-	const conversationId = randomUUID();
+	// The URL and invocation must agree; routing affinity must also survive
+	// reconnects so subsequent turns reach the same regional conversation.
+	const conversation = options.conversation ?? createCopilotConversation();
+	const { conversationId, sessionKey, isStartOfSession } = conversation;
 	const base = options.endpointBase ?? testEndpointBase ?? `${DEFAULT_ENDPOINT_HOST}${DEFAULT_ENDPOINT_PATH}`;
 	const url = buildEndpoint(profile, conversationId, base, mode, scenario);
 	const invocationId = '0';
@@ -599,6 +612,7 @@ export async function streamCopilotTurn(options: {
 		headers: {
 			Origin: profile.origin,
 			'User-Agent': profile.userAgent,
+			'X-RoutingParameter-SessionKey': sessionKey,
 		},
 		// Sydney refuses connections without a browser-like handshake; ws lets
 		// us set the headers Node's native WebSocket cannot.
@@ -606,7 +620,11 @@ export async function streamCopilotTurn(options: {
 	});
 	debug(scope, 'WebSocket created, upgrading', () => ({
 		url: redactUrl(url),
-		requestHeaders: { Origin: profile.origin, 'User-Agent': profile.userAgent },
+		requestHeaders: {
+			Origin: profile.origin,
+			'User-Agent': profile.userAgent,
+			'X-RoutingParameter-SessionKey': sessionKey,
+		},
 		followRedirects: true,
 	}));
 
@@ -916,7 +934,7 @@ export async function streamCopilotTurn(options: {
 						return;
 					}
 					log(t('log.sendingInvocation'));
-					sendInvocation(send, profile, prompt, wireTone, invocationType, invocationId, conversationId, log, mode, scope, annotations);
+					sendInvocation(send, profile, prompt, wireTone, invocationType, invocationId, conversationId, log, mode, scope, annotations, isStartOfSession);
 					bumpIdle();
 					// The `{}` ack frame carries no chat data; done with it.
 					continue;
@@ -1218,6 +1236,7 @@ function sendInvocation(
 	mode: TurnMode,
 	scope: string,
 	annotations: readonly Record<string, unknown>[],
+	isStartOfSession = true,
 ): void {
 	// A web turn replays the web app's own invocation when the browser side
 	// captured one; with a token pasted by hand, the lean one plus web search.
@@ -1225,6 +1244,8 @@ function sendInvocation(
 		mode === 'web'
 			? buildWebInvocationArgs(profile.invocationTemplate ?? syntheticWebTemplate(), prompt, tone, conversationId, annotations)
 			: buildInvocationArgs(prompt, tone, conversationId, annotations);
+
+	args.isStartOfSession = isStartOfSession;
 
 	const chatFrame = {
 		arguments: [args],
@@ -1415,6 +1436,7 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 export async function streamCopilotTurnWithRetry(
 	options: Parameters<typeof streamCopilotTurn>[0] & { retryDelayMs?: number },
 ): Promise<void> {
+	const conversation = options.conversation ?? createCopilotConversation();
 	let emittedAny = false;
 	const log = options.log ?? (() => {});
 	const callbacks: StreamCallbacks = {
@@ -1426,14 +1448,14 @@ export async function streamCopilotTurnWithRetry(
 	};
 
 	try {
-		await streamCopilotTurn({ ...options, callbacks });
+		await streamCopilotTurn({ ...options, conversation, callbacks });
 	} catch (error) {
 		if (emittedAny || options.signal.aborted || !isRetryableClientError(error)) throw error;
 		log(t('log.retrying', error instanceof Error ? error.message : String(error)));
 		debug('ws', `retrying the turn once in ${options.retryDelayMs ?? 1200} ms (nothing had been shown yet)`, error);
 		await delay(options.retryDelayMs ?? 1200, options.signal);
 		if (options.signal.aborted) throw error;
-		await streamCopilotTurn({ ...options, callbacks });
+		await streamCopilotTurn({ ...options, conversation, callbacks });
 	}
 }
 

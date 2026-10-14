@@ -6,7 +6,7 @@
  * ejecución real de herramientas (`vscode.lm.invokeTool`) se inyecta desde
  * fuera como `executeTool`.
  */
-import { streamCopilotTurnWithRetry, type TurnImage } from './client';
+import { createCopilotConversation, streamCopilotTurnWithRetry, type TurnImage } from './client';
 import { looksLikeRemoteSandbox, ProseHold, toolFreeProblem, type ToolFreeProblem } from './giveUp';
 import type { CopilotProfile } from './profile';
 import {
@@ -103,7 +103,7 @@ export interface ToolLoopParams {
 	readonly maxWallClockMs?: number;
 	/** Workspace de una sola carpeta: el catálogo omite `workspaceFolder`. */
 	readonly singleRoot?: boolean;
-	/** Imágenes que el usuario adjuntó: van en cada paso (cada paso es una conversación nueva). */
+	/** Imágenes que el usuario adjuntó: se envían al iniciar la conversación. */
 	readonly images?: readonly TurnImage[];
 	/** Una imagen que no se pudo adjuntar (el bucle sigue sin ella). */
 	readonly onImageSkipped?: (reason: string) => void;
@@ -180,6 +180,8 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
 		singleRoot: params.singleRoot,
 	});
 	const steps: LoopStep[] = [];
+	// One conversation per loop, never shared between concurrent sub-agents.
+	const conversation = createCopilotConversation();
 	let lastResultText = '';
 	const startedAt = Date.now();
 	const toolsOffered = catalog.callable.size > 0;
@@ -225,19 +227,27 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
 		try {
 			await streamCopilotTurnWithRetry({
 				profile,
-				prompt: buildLoopPrompt(framing, catalog, steps) + forcedNote,
+				prompt: conversation.isStartOfSession
+					? buildLoopPrompt(framing, catalog, steps) + forcedNote
+					: [
+							compactBlocks(renderSteps(steps.slice(-1))),
+							buildToolProtocolReminder(catalog, false),
+							forcedNote,
+						].filter(Boolean).join('\n\n'),
+				conversation,
 				tone,
 				signal,
 				stopSignal: finishTurn.signal,
 				endpointBase,
 				log,
-				images: params.images,
+				images: conversation.isStartOfSession ? params.images : undefined,
 				callbacks: {
 					onText: (delta) => decoder.push(delta),
 					onRemoteWork: () => (remoteWork = true),
 					onImageSkipped: params.onImageSkipped,
 				},
 			});
+			conversation.isStartOfSession = false;
 			decoder.finish();
 		} catch (error) {
 			held.flush();

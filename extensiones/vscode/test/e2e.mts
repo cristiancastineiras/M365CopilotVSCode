@@ -1001,7 +1001,11 @@ function start401Server(): Promise<{ port: number; close: () => void; attempts: 
 /** HTTP server that rejects only the FIRST WS upgrade with a 429, then serves
  * every later attempt normally through the mock BizChat protocol — proves
  * {@link streamCopilotTurnWithRetry} recovers from one transient failure. */
-function start429ThenOkServer(ring: Ring): Promise<{ port: number; close: () => void; attempts: () => number }> {
+function start429ThenOkServer(
+	ring: Ring,
+	onUpgrade?: (sessionKey: string | string[] | undefined) => void,
+	onChat?: (args: Record<string, unknown>) => void,
+): Promise<{ port: number; close: () => void; attempts: () => number }> {
 	return new Promise((resolve) => {
 		let attempts = 0;
 		const wss = new WebSocketServer({ noServer: true });
@@ -1016,7 +1020,10 @@ function start429ThenOkServer(ring: Ring): Promise<{ port: number; close: () => 
 						socket.send('{}' + RS);
 						continue;
 					}
-					if (frame.target === 'chat') setTimeout(() => streamReply(socket, ring), 5);
+					if (frame.target === 'chat') {
+						onChat?.(frame.arguments[0] as Record<string, unknown>);
+						setTimeout(() => streamReply(socket, ring), 5);
+					}
 				}
 			});
 		});
@@ -1027,6 +1034,7 @@ function start429ThenOkServer(ring: Ring): Promise<{ port: number; close: () => 
 		});
 		server.on('upgrade', (req, socket, head) => {
 			attempts += 1;
+			onUpgrade?.(req.headers['x-routingparameter-sessionkey']);
 			if (attempts === 1) {
 				socket.write('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
 				socket.destroy();
@@ -1043,19 +1051,52 @@ function start429ThenOkServer(ring: Ring): Promise<{ port: number; close: () => 
 }
 
 async function test429Retry() {
-	const server = await start429ThenOkServer('snapshot');
-	let text = '';
-	await streamCopilotTurnWithRetry({
-		profile: makeProfile(server.port),
-		endpointBase: mockBase(server.port),
-		prompt: 'PROMPT',
-		tone: null,
-		signal: new AbortController().signal,
-		callbacks: { onText: (d) => (text += d) },
-	});
-	assert.equal(text, 'Hola, mundo');
-	assert.equal(server.attempts(), 2, 'esperaba un primer intento rechazado (429) y un reintento que sí conecta');
-	server.close();
+	for (const conversation of [
+		undefined,
+		{
+			conversationId: 'retry-conversation',
+			sessionKey: 'retry-session-key',
+			isStartOfSession: false,
+		},
+	]) {
+		const sessionKeys: (string | string[] | undefined)[] = [];
+		const invocations: Record<string, unknown>[] = [];
+		const server = await start429ThenOkServer(
+			'snapshot',
+			(key) => sessionKeys.push(key),
+			(args) => invocations.push(args),
+		);
+		let text = '';
+		try {
+			await streamCopilotTurnWithRetry({
+				profile: makeProfile(server.port),
+				endpointBase: mockBase(server.port),
+				prompt: 'PROMPT',
+				conversation,
+				retryDelayMs: 0,
+				tone: null,
+				signal: new AbortController().signal,
+				callbacks: { onText: (d) => (text += d) },
+			});
+			assert.equal(text, 'Hola, mundo');
+			assert.equal(server.attempts(), 2, 'esperaba un primer intento rechazado (429) y un reintento que sí conecta');
+			assert.equal(sessionKeys.length, 2);
+			assert.equal(typeof sessionKeys[0], 'string');
+			assert.ok(sessionKeys[0]);
+			assert.equal(sessionKeys[0], sessionKeys[1], 'el reintento conserva la afinidad');
+			assert.equal(invocations.length, 1);
+			assert.equal(typeof invocations[0]!.conversationId, 'string');
+			assert.ok(invocations[0]!.conversationId);
+			assert.equal(invocations[0]!.isStartOfSession, conversation?.isStartOfSession ?? true);
+			if (conversation) {
+				assert.equal(sessionKeys[0], conversation.sessionKey);
+				assert.equal(invocations[0]!.conversationId, conversation.conversationId);
+				assert.equal(conversation.isStartOfSession, false, 'el reintento no reinicia la conversación');
+			}
+		} finally {
+			server.close();
+		}
+	}
 	console.log('  ✓ streamCopilotTurnWithRetry reintenta una vez tras un 429 y recupera el turno');
 }
 
@@ -1221,6 +1262,7 @@ async function testConcurrencyLimiter() {
 function startScriptedServer(
 	getReply: (connectionIndex: number) => string,
 	onChatFrame?: (frame: { arguments: [{ message: Record<string, unknown> }] }) => void,
+	onConnection?: (sessionKey: string | string[] | undefined) => void,
 ): Promise<{ port: number; close: () => void }> {
 	return new Promise((resolve) => {
 		let connectionIndex = 0;
@@ -1229,7 +1271,8 @@ function startScriptedServer(
 			const port = typeof addr === 'object' && addr ? addr.port : 0;
 			resolve({ port, close: () => wss.close() });
 		});
-		wss.on('connection', (socket) => {
+		wss.on('connection', (socket, request) => {
+			onConnection?.(request.headers['x-routingparameter-sessionkey']);
 			const index = connectionIndex++;
 			let handshaken = false;
 			socket.on('message', (data) => {
@@ -1283,6 +1326,58 @@ async function testSubagentLoop() {
 	assert.match(result.summary, /Resumen: encontré 2 coincidencias/);
 	assert.deepEqual(calls, [{ name: M365_TOOL_NAMES.searchText, input: { query: 'foo' } }]);
 	console.log('  ✓ runSubagentTask ejecuta un paso de herramienta, reinyecta el resultado y devuelve el resumen final');
+}
+
+async function testSubagentConversationIsolation() {
+	const invocations: Record<string, unknown>[][] = [[], []];
+	const sessionKeys: (string | string[] | undefined)[][] = [[], []];
+	const servers: { port: number; close: () => void }[] = [];
+	try {
+		for (let agent = 0; agent < 2; agent++) {
+			servers.push(await startScriptedServer(
+				(index) => index === 0
+					? `<m365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</m365_tool_call>`
+					: `Resumen del agente ${agent}.`,
+				(frame) => invocations[agent]!.push(frame.arguments[0] as unknown as Record<string, unknown>),
+				(sessionKey) => sessionKeys[agent]!.push(sessionKey),
+			));
+		}
+		const results = await Promise.all(servers.map((server, agent) => runSubagentTask({
+			label: `agente ${agent}`,
+			task: `Busca foo para el agente ${agent}.`,
+			profile: makeProfile(server.port),
+			tone: null,
+			maxSteps: 3,
+			signal: new AbortController().signal,
+			offeredTools: [{ name: M365_TOOL_NAMES.searchText }],
+			endpointBase: mockBase(server.port),
+			executeTool: async () => `resultado del agente ${agent}`,
+		})));
+		for (let agent = 0; agent < 2; agent++) {
+			assert.equal(results[agent]!.ok, true);
+			assert.equal(results[agent]!.steps, 2);
+			assert.equal(results[agent]!.summary, `Resumen del agente ${agent}.`);
+			const turns = invocations[agent]!;
+			const keys = sessionKeys[agent]!;
+			assert.equal(turns.length, 2);
+			assert.ok(turns[0]!.conversationId);
+			assert.equal(turns[0]!.conversationId, turns[1]!.conversationId);
+			assert.equal(turns[0]!.isStartOfSession, true);
+			assert.equal(turns[1]!.isStartOfSession, false);
+			assert.equal(keys.length, 2);
+			assert.equal(typeof keys[0], 'string');
+			assert.ok(keys[0]);
+			assert.equal(keys[0], keys[1]);
+			const nextPrompt = String((turns[1]!.message as Record<string, unknown>).text);
+			assert.ok(nextPrompt.includes(`resultado del agente ${agent}`));
+			assert.ok(!nextPrompt.includes(`resultado del agente ${1 - agent}`));
+		}
+		assert.notEqual(invocations[0]![0]!.conversationId, invocations[1]![0]!.conversationId);
+		assert.notEqual(sessionKeys[0]![0], sessionKeys[1]![0]);
+	} finally {
+		for (const server of servers) server.close();
+	}
+	console.log('  ✓ los subagentes concurrentes mantienen conversaciones y afinidades independientes');
 }
 
 async function testSubagentLoopStepLimit() {
@@ -2474,8 +2569,12 @@ async function testToolLoopForcedRetry() {
 	assert.equal(server.connections.length, 3);
 	assert.equal(prose.join(''), 'Está en a.ts.', 'la rendición nunca llega al usuario');
 	assert.ok(promptOf(server.connections[1]).endsWith(t('protocol.force.giveUp')), 'el reintento lleva la nota al final');
+	assert.ok(!promptOf(server.connections[1]).includes('Busca foo.'), 'el reintento continúa la conversación sin repetir la tarea');
+	assert.ok(!promptOf(server.connections[1]).includes('a.ts:1: foo'), 'no se envía un resultado antes de ejecutar la herramienta');
 	assert.ok(!promptOf(server.connections[0]).includes(t('protocol.force.giveUp')));
 	assert.ok(!promptOf(server.connections[2]).includes(t('protocol.force.giveUp')), 'la nota se quita en cuanto llama a una herramienta');
+	assert.match(promptOf(server.connections[2]), /a\.ts:1: foo/, 'el turno siguiente recibe el resultado de la herramienta');
+	assert.ok(!promptOf(server.connections[2]).includes('Busca foo.'), 'el turno siguiente no repite la tarea inicial');
 
 	// Works in its own sandbox, twice: one retry only, then the answer with a clear warning.
 	const sandbox = await startProtocolServer((send) => {
@@ -3228,10 +3327,14 @@ async function testAutoCommitGit() {
 // ---- runToolLoop (shared by sub-agents and @m365) ---------------------------
 
 async function testToolLoopStreamsProse() {
-	const server = await startScriptedServer((index) =>
-		index === 0
+	const invocations: Record<string, unknown>[] = [];
+	const sessionKeys: (string | string[] | undefined)[] = [];
+	const server = await startScriptedServer(
+		(index) => index === 0
 			? `Voy a buscar.\n<m365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</m365_tool_call>`
 			: 'Está en a.ts.',
+		(frame) => invocations.push(frame.arguments[0] as unknown as Record<string, unknown>),
+		(sessionKey) => sessionKeys.push(sessionKey),
 	);
 	const prose: string[] = [];
 	const starts: number[] = [];
@@ -3258,6 +3361,21 @@ async function testToolLoopStreamsProse() {
 	assert.equal(result.summary, 'Está en a.ts.');
 	assert.deepEqual(starts, [1, 2]);
 	assert.deepEqual(toolNames, [M365_TOOL_NAMES.searchText]);
+	assert.equal(invocations.length, 2);
+	assert.ok(invocations[0]!.conversationId);
+	assert.equal(invocations[0]!.conversationId, invocations[1]!.conversationId);
+	assert.equal(invocations[0]!.isStartOfSession, true);
+	assert.equal(invocations[1]!.isStartOfSession, false);
+	assert.equal(sessionKeys.length, 2);
+	assert.equal(typeof sessionKeys[0], 'string');
+	assert.ok(sessionKeys[0]);
+	assert.equal(sessionKeys[0], sessionKeys[1]);
+	const firstPrompt = String((invocations[0]!.message as Record<string, unknown>).text);
+	const nextPrompt = String((invocations[1]!.message as Record<string, unknown>).text);
+	assert.match(firstPrompt, /Busca foo\./);
+	assert.match(nextPrompt, /a\.ts:1: foo/);
+	assert.ok(!nextPrompt.includes('Busca foo.'));
+	assert.ok(nextPrompt.length < firstPrompt.length);
 	// The preamble of the tool-call step streams too; the marker never does.
 	assert.equal(prose.join(''), 'Voy a buscar.\nEstá en a.ts.');
 	console.log('  ✓ runToolLoop retransmite la prosa en vivo (nunca el marcador) e informa de cada paso');
@@ -4479,6 +4597,7 @@ async function main() {
 	console.log('subagents.ts');
 	await testConcurrencyLimiter();
 	await testSubagentLoop();
+	await testSubagentConversationIsolation();
 	await testSubagentLoopStepLimit();
 	await testSubagentLoopWallClock();
 	testClipClosesDanglingFence();
