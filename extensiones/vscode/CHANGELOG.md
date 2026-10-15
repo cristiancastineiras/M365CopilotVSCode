@@ -1,5 +1,140 @@
 # m365-copilot-vscode
 
+## 3.0.3
+
+### Patch Changes
+
+- 33e656b: **Mejores mensajes de commit, tanto en el botón ✨ de Source Control como en el autocommit.**
+
+  - **Convenciones del repositorio:** el modelo ve los últimos 30 subjects (sin
+    merges) y los ámbitos que usan con cuántas veces, para reutilizarlos en vez
+    de inventar otros. El botón de Source Control antes no veía nada del
+    historial.
+  - **Instrucciones más precisas:** cómo elegir el tipo y el ámbito, un subject
+    concreto (nunca «actualizar archivos»), un cuerpo que explica el porqué y el
+    cambio de comportamiento, `!` + `BREAKING CHANGE:` para los cambios
+    incompatibles, y nada inventado que el diff no muestre. Si todos los commits
+    recientes están en otro idioma, el mensaje sigue ese idioma.
+  - **El cambio entero a la vista:** cada archivo con sus líneas añadidas y
+    quitadas; con diffs grandes el presupuesto se reparte entre archivos en vez
+    de cortar los últimos, y los lockfiles y archivos generados se quedan en su
+    recuento. Sin nada en stage, el botón ahora ve el contenido de los archivos
+    nuevos, no sólo su nombre.
+  - **Pulido automático:** `Feat:` → `feat:`, alias como `feature`/`bugfix`,
+    sin punto final, cuerpo reflujado a 72 columnas y sin firmas ni coautores de
+    asistentes. Si el mensaje sigue sin cumplir Conventional Commits, el botón se
+    lo devuelve al modelo una vez con el motivo.
+  - **Ticket de la rama:** `feature/ABC-123-…` o `fix/42-…` añaden
+    `Refs: ABC-123` / `Refs: #42` al final del mensaje.
+  - Los ámbitos con letras no ASCII (`fix(configuración): …`) ya son válidos.
+
+- 7021e46: **Chats temporales, un _stop_ de verdad y avisos claros cuando M365 Copilot limita o rechaza un turno.**
+
+  - **Chats temporales:** cada turno (cada paso del agente, cada sugerencia de
+    autocompletado) es una conversación propia, y cada una podía quedar en el
+    historial de Copilot de la web. Ahora salen como chat temporal
+    (`disableMemory=1`): funcionan igual y no dejan nada en ese historial. El
+    ajuste nuevo `m365copilot.history.save` los guarda como antes.
+  - **Parar de verdad:** al cancelar, la extensión manda la misma trama _stop_
+    que el botón de parar de la web, en vez de cerrar el socket y dejar al modelo
+    escribiendo; cierra en cuanto el servicio la confirma, o a los 2 s.
+  - **El turno acaba con la llamada a herramienta:** en el chat, en `@m365` y en
+    los sub-agentes, el turno termina en cuanto la llamada está completa, sin
+    esperar a lo que el modelo escriba detrás (a menudo resultados inventados,
+    durante minutos).
+  - **Throttling:** `Throttled` / `PerUserThrottled` ya no se reintenta (solo lo
+    alargaba). El error lo explica, y el autocompletado, el autocommit (salvo
+    _Comprobar ahora_) y _Comprobar modelos_ esperan hasta 75 min después del
+    último turno limitado, con ⌚ en la barra de estado y un aviso al empezar.
+    Cualquier respuesta levanta la pausa.
+  - **Cuota y licencia:** el acceso prioritario agotado (`OutOfCredits`, o su
+    texto enlatado) dice cuándo se renueva (medianoche UTC; el semanal, el lunes)
+    y marca el modelo hasta entonces, en vez de 12 h. Una licencia no válida
+    (`InvalidCopilotLicense`) lo dice sin marcar ningún modelo. Ninguno de los dos
+    se reintenta.
+  - **`Disengaged`:** la invocación declara ese tipo de mensaje (el servicio solo
+    manda los declarados), y cuando M365 Copilot rehúsa responder llega como
+    error, nunca como texto que una edición en línea pudiera insertar.
+  - **Modelos:** el catálogo en línea (`models.json`) añade GPT-6.1 Sol
+    (`Gpt_61_Sol_Reasoning`) y GPT 6.0 Sol (`Gpt_6_Sol_Reasoning`), y vuelve a
+    ofrecer GPT 5.6 Quick response (`Gpt_5_6_Chat`).
+
+- **Estilos de trabajo configurables en el prompt: Ponytail, agent-skills y Graphify activados por defecto.**
+
+  - **Tres ajustes nuevos** (`m365copilot.skills.ponytail`,
+    `m365copilot.skills.agentSkills`, `m365copilot.skills.graphify`), activados
+    por defecto, para decidir qué estilos de trabajo recibe M365 Copilot en cada
+    petición del chat, del modo agente y de `@m365`.
+  - **Ponytail:** el cambio más pequeño que resuelve la tarea entera, reutilizar
+    antes de escribir, sin abstracciones que nadie pidió, y una línea final con lo
+    que no se hizo y los riesgos.
+  - **agent-skills:** explicitar supuestos, rebatir malos enfoques, ceñirse al
+    alcance, especificación → plan → rebanadas finas verificadas, y verificar con
+    pruebas antes de dar una tarea por hecha.
+  - **Graphify:** sólo se añade cuando el workspace ya tiene
+    `graphify-out/graph.json`; indica usar el grafo (`GRAPH_REPORT.md`,
+    `graphify query`/`path`/`explain`) para preguntas de arquitectura en vez de
+    buscar archivo por archivo.
+  - Como son resúmenes cortos en los catálogos de idioma (en/es), las skills
+    completas no caben en un turno de BizChat: cada petición crece sólo unos
+    pocos KB.
+
+- 268cb86: **El agente ya no pierde la tarea y los prompts van más comprimidos.**
+
+  - **Petición fijada:** en modo agente, cada resultado de herramienta (hasta
+    12 KB) se comía el presupuesto del historial (48 KB) y, tras unos 4 pasos, la
+    petición del usuario era lo primero que se descartaba. Ahora se queda siempre,
+    marcada como «petición actual»; los dos últimos resultados van enteros, los
+    anteriores se recortan a su principio y uno repetido tal cual más adelante se
+    queda en una línea que remite a él. Los mensajes que sólo traen resultados se
+    etiquetan como tales, no como si los hubiera escrito el usuario. En una sesión
+    de 12 lecturas de 10 KB: antes 48 KB, sin la petición y con 5 de 12 pasos
+    visibles; ahora 40 KB, con la petición y los 12 pasos.
+  - **Lo mismo en `@m365` y los sub-agentes:** sus resultados antiguos se recortan
+    en vez de que se caigan los primeros pasos.
+  - **Entorno en el prompt:** sistema y shell (Windows PowerShell 5.1 avisa de que
+    no hay `&&`), la raíz absoluta del workspace (las herramientas nativas piden
+    rutas absolutas y el modelo no la conocía) y la fecha.
+  - **Catálogo de herramientas más ligero y sin contradicciones:** una
+    herramienta duplicada de una nativa va en una línea con su firma; las reglas y
+    el ejemplo de `m365_apply_edits` sólo salen si es la herramienta de edición
+    preferida; los ejemplos nunca enseñan la duplicada; `workspaceFolder` se omite
+    en workspaces de una carpeta. En modo agente: de ~15,5 a ~12,5 mil caracteres.
+  - **Seguimientos cortos** («ahora el otro»): el índice del proyecto se busca
+    también con la petición anterior.
+
+- 0303dba: **Modo debug profundo: una consola que traza todo lo que la extensión recibe, envía y hace, y un registro exportable a `.txt`.**
+
+  - **Un ajuste y un botón:** `m365copilot.debug.deep` (con enlaces en su
+    descripción a _Mostrar consola_, _Exportar registro_ y _Limpiar registro_),
+    una entrada en el menú rápido del elemento **M365** y el comando _Alternar
+    modo debug profundo_. Al activarlo se abre la consola «M365 Copilot» y el
+    elemento de la barra de estado lleva un 🐞 para que no se olvide encendido.
+  - **Lo que recibe:** cada petición al servidor local (método, URL, comprobación
+    de origen, cabeceras, cuerpo y respuesta) y cada trama que BizChat devuelve
+    (tipo, tamaño, tiempo desde el inicio del turno, contenido completo).
+  - **Lo que envía y adónde:** endpoint, cabeceras, upgrade y handshake de la
+    conexión, el prompt exacto como texto legible, la descarga del catálogo de
+    modelos, cada proceso `git` y comando de shell (carpeta, código de salida,
+    salida, tiempo), los temporizadores que cortan un turno y los reintentos.
+  - **Lo que hace:** cada petición de chat de VS Code (mensajes, herramientas
+    ofrecidas, modo elegido), las herramientas con su entrada y su resultado, los
+    comandos, las ediciones propuestas y su Keep/Undo, el contexto del índice, el
+    autocompletado, el autocommit, el estado del token y cada cambio de ajustes,
+    precedido de una foto del entorno (versiones, sistema, workspace, ajustes y
+    perfil sin el token).
+  - **Exportar a `.txt`:** _Exportar registro (.txt)_ guarda lo que hay en un
+    búfer circular (últimas ~40 000 entradas, ~8 MB) con una cabecera y la hora UTC
+    de cada entrada; _Limpiar registro_ lo vacía para reproducir un problema desde
+    cero. Funciona también con el modo apagado (guarda el registro normal).
+  - **Seguro de compartir, con matices:** los tokens, los JWT, las cabeceras
+    `Authorization`, las cookies y los `access_token=` se ocultan siempre, en la
+    consola y en el archivo. Los prompts, las respuestas y las rutas no: el aviso
+    al exportar lo dice.
+  - **Sin coste cuando está apagado:** `debug()` es una comprobación booleana y
+    los datos se construyen sólo si el modo está encendido.
+  - @m365copilot/core@3.0.3
+
 ## 3.0.2
 
 ### Patch Changes

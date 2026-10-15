@@ -1,5 +1,11 @@
 # m365-copilot-vscode-extension
 
+## 3.0.3
+
+### Patch Changes
+
+- @m365copilot/core@3.0.3
+
 ## 3.0.2
 
 ### Patch Changes
