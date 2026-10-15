@@ -1,8 +1,11 @@
 import * as vscode from "vscode";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { relativePathForUri } from "../tools/common";
 import { severityLabel } from "../tools/diagnosticsFormat";
 import { localDate, renderEnvironment } from "./environment";
 import type { PromptCodeContext } from "./participantPrompts";
+import { renderSkills } from "./skills";
 
 /** System, shell, absolute workspace root(s) and date, for the prompt (see environment.ts). */
 export function currentEnvironment(): string {
@@ -13,6 +16,21 @@ export function currentEnvironment(): string {
       .filter((folder) => folder.uri.scheme === "file")
       .map((folder) => ({ name: folder.name, path: folder.uri.fsPath })),
     date: localDate(),
+  });
+}
+
+/** The enabled working styles (`m365copilot.skills.*`) for the prompt (see skills.ts). */
+export function currentSkills(): string {
+  const config = vscode.workspace.getConfiguration("m365copilot.skills");
+  const hasGraph = (vscode.workspace.workspaceFolders ?? []).some(
+    (folder) =>
+      folder.uri.scheme === "file" &&
+      existsSync(join(folder.uri.fsPath, "graphify-out", "graph.json")),
+  );
+  return renderSkills({
+    ponytail: config.get<boolean>("ponytail", true),
+    agentSkills: config.get<boolean>("agentSkills", true),
+    graphify: hasGraph && config.get<boolean>("graphify", true),
   });
 }
 

@@ -19,6 +19,7 @@ import {
   codeContextFromLocation,
   captureCodeContext,
   currentEnvironment,
+  currentSkills,
   currentTextEditor,
   type CodeContext,
 } from "./editorContext";
@@ -173,6 +174,7 @@ async function handleRequest(
       attachedPaths,
       projectContext,
       environment: currentEnvironment(),
+      skills: currentSkills(),
     }) + (images.length > 0 ? `\n\n${t("prompt.imagesAttached", images.length)}` : "");
   const wanted = new Set(toolsForCommand(command));
   const offeredTools = vscode.lm.tools.filter((tool) => wanted.has(tool.name));

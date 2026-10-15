@@ -62,6 +62,8 @@ export interface ParticipantPromptInput {
   readonly projectContext?: string;
   /** System, shell, workspace root and date (environment.ts). */
   readonly environment?: string;
+  /** Enabled working styles (skills.ts). */
+  readonly skills?: string;
 }
 
 const TASK_KEYS: Readonly<Record<ParticipantCommand | "ask", MessageKey>> = {
@@ -114,6 +116,7 @@ export function buildParticipantFraming(input: ParticipantPromptInput): string {
     t(TASK_KEYS[input.command ?? "ask"]),
   ];
 
+  if (input.skills) sections.push(input.skills);
   if (input.environment) sections.push(input.environment);
   const history = renderHistory(input.history ?? []);
   if (history) sections.push(`${t("participant.prompt.history")}\n${history}`);

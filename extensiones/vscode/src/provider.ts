@@ -12,7 +12,7 @@ import {
 } from "./client";
 import { debug, log } from "./logger";
 
-import { currentEnvironment } from "./editorContext";
+import { currentEnvironment, currentSkills } from "./editorContext";
 import { MarkdownStreamFormatter } from "./markdown";
 import { flattenMessages, imagesOf, recentUserTexts } from "./messages";
 import { looksLikeRemoteSandbox, ProseHold, toolFreeProblem } from "./giveUp";
@@ -153,6 +153,7 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
       catalog,
       toolsRequired,
       environment: currentEnvironment(),
+      skills: currentSkills(),
       projectContext,
       attachedImages: new Set(images),
     });

@@ -115,6 +115,7 @@ import {
   type TranscriptMessage,
 } from "../src/transcript.ts";
 import { describeShell, localDate, renderEnvironment } from "../src/environment.ts";
+import { renderSkills } from "../src/skills.ts";
 import { ConcurrencyLimiter, clip, runSubagentTask, runToolLoop } from "../src/subagentCore.ts";
 import { replaceTextOnce } from "../tools/replaceText.ts";
 import {
@@ -873,6 +874,16 @@ function testTranscript() {
   console.log(
     "  ✓ transcript: petición fijada, resultados antiguos recortados y repetidos resumidos, y búsqueda con la petición anterior",
   );
+}
+
+function testSkills() {
+  setLocale("en");
+  assert.equal(renderSkills({ ponytail: false, agentSkills: false, graphify: false }), "");
+  const all = renderSkills({ ponytail: true, agentSkills: true, graphify: true });
+  assert.match(all, /^WORKING STYLE[\s\S]*ENGINEERING DISCIPLINE[\s\S]*graphify query/);
+  assert.doesNotMatch(renderSkills({ ponytail: true, agentSkills: false, graphify: false }), /DISCIPLINE|graphify/);
+  setLocale("es");
+  console.log("  ✓ skills: Ponytail, agent-skills y Graphify se añaden al prompt sólo si están activados");
 }
 
 function testEnvironment() {
@@ -5955,6 +5966,7 @@ async function main() {
   console.log("transcript.ts / environment.ts");
   testTranscript();
   testEnvironment();
+  testSkills();
   console.log("commitMessage.ts");
   testCommitMessageValidation();
   console.log("client.ts");

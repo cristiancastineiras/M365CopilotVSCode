@@ -26,6 +26,8 @@ export interface FlattenOptions {
   readonly toolsRequired?: boolean;
   /** Sistema, shell, raíz del workspace y fecha (environment.ts). */
   readonly environment?: string;
+  /** Estilos de trabajo activados (skills.ts). */
+  readonly skills?: string;
   /** Contexto del proyecto recuperado del índice local (projectIndex.ts), si lo hay. */
   readonly projectContext?: string;
   /** Las imágenes que van adjuntas al turno ({@link imagesOf}): el transcript las anuncia como tales. */
@@ -113,6 +115,7 @@ export function flattenMessages(
   return [
     t("prompt.tone"),
     t("prompt.markdown"),
+    options.skills ?? "",
     catalog ? buildToolProtocolInstructions(catalog) : "",
     options.environment ?? "",
     options.projectContext ?? "",

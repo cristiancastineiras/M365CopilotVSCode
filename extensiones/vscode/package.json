@@ -685,6 +685,21 @@
           "maximum": 40000,
           "markdownDescription": "%config.context.maxChars%"
         },
+        "m365copilot.skills.ponytail": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.skills.ponytail%"
+        },
+        "m365copilot.skills.agentSkills": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.skills.agentSkills%"
+        },
+        "m365copilot.skills.graphify": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "%config.skills.graphify%"
+        },
         "m365copilot.web.enabled": {
           "type": "boolean",
           "default": true,
