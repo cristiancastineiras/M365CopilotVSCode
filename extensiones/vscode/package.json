@@ -36,7 +36,7 @@
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
     "@resvg/resvg-js": "^2.6.2",
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "@types/vscode": "^1.104.0",
     "@types/ws": "^8.18.2",
     "@vscode/vsce": "^4.0.0",
