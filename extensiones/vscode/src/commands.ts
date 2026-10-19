@@ -13,19 +13,18 @@ import {
   parsePastedProfile,
   ProfileParseError,
   type CopilotProfile,
-} from "./profile";
-import type { ProfileStore } from "./secrets";
-import type { WorkspaceEditManager } from "../tools/writeFile";
-import { unavailabilityText, type CopilotModel, type ModelRegistry } from "./models";
-import {
   CopilotClientError,
   CopilotModelUnavailableError,
   CopilotQuotaExhaustedError,
   isAccountLevelError,
   streamCopilotTurn,
-} from "./client";
-import { accountThrottledUntil } from "./throttle";
-import { isDeepDebug, log } from "./logger";
+  accountThrottledUntil,
+  isDeepDebug,
+  log,
+} from "@m365copilot/core/bizchat";
+import type { ProfileStore } from "./secrets";
+import type { WorkspaceEditManager } from "../tools/writeFile";
+import { unavailabilityText, type CopilotModel, type ModelRegistry } from "./models";
 import type { IndexStatus } from "./projectIndex";
 import {
   formatMoment,

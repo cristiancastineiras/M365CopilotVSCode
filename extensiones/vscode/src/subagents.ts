@@ -22,7 +22,12 @@ import { registerTracedTool, traceInvokeTool } from "./debugMode";
 import { boundedInteger, errorMessage } from "../tools/common";
 import { currentEnvironment } from "./editorContext";
 import { findModel } from "./models";
-import { isTokenUsable } from "./profile";
+import {
+  isTokenUsable,
+  M365_TOOL_NAMES,
+  M365_WORKSPACE_TOOL_NAMES,
+  type OfferedTool,
+} from "@m365copilot/core/bizchat";
 import type { ProfileStore } from "./secrets";
 import {
   ConcurrencyLimiter,
@@ -31,7 +36,6 @@ import {
   type SubagentStepInfo,
   type SubagentTaskResult,
 } from "./subagentCore";
-import { M365_TOOL_NAMES, M365_WORKSPACE_TOOL_NAMES, type OfferedTool } from "./toolProtocol";
 import { t } from "./i18n";
 
 const MAX_TASKS = 6;

@@ -40,12 +40,11 @@ import {
   retrievalQuery,
 } from "./rag/text";
 import { toolResult } from "./agentTools";
-import { M365_TOOL_NAMES } from "./toolProtocol";
+import { M365_TOOL_NAMES, debug } from "@m365copilot/core/bizchat";
 import { execGit } from "../tools/git";
 import { buildExcludeGlob } from "../tools/excludes";
 import { boundedInteger, errorMessage } from "../tools/common";
 import { t } from "./i18n";
-import { debug } from "./logger";
 
 const START_DELAY_MS = 3_000;
 const BATCH_SIZE = 24;

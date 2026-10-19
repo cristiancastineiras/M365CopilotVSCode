@@ -25,8 +25,8 @@ import {
   renderLogText,
   setDeepDebug,
   showLog,
-} from "./logger";
-import { describeProfile } from "./profile";
+  describeProfile,
+} from "@m365copilot/core/bizchat";
 import type { ProfileStore } from "./secrets";
 import { getLocale, t } from "./i18n";
 

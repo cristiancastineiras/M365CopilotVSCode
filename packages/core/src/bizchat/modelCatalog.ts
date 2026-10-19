@@ -14,8 +14,8 @@
  *
  * Kept free of the `vscode` import so the merge rules can be tested directly.
  */
-import { TONE_PATTERN } from "@m365copilot/core";
-import type { MessageKey } from "./i18n";
+import { TONE_PATTERN } from "../capture";
+import type { CoreMessageKey } from "./i18n";
 
 export type ModelSource = "builtin" | "catalog" | "observed" | "custom";
 
@@ -31,7 +31,7 @@ export interface CatalogModel {
   readonly tone: string | null;
   readonly source: ModelSource;
   /** Built-ins describe themselves through the i18n catalog… */
-  readonly detailKey?: MessageKey;
+  readonly detailKey?: CoreMessageKey;
   /** …the rest through per-language text from models.json (or nothing). */
   readonly detail?: Readonly<{ en?: string; es?: string }>;
 }

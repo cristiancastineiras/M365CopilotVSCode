@@ -36,9 +36,8 @@ import {
   type ParticipantCommand,
   type PromptTerminalRun,
 } from "./participantPrompts";
-import { isTokenUsable } from "./profile";
+import { isTokenUsable, MAX_TURN_IMAGES, type TurnImage, debug } from "@m365copilot/core/bizchat";
 import type { ProfileStore } from "./secrets";
-import { MAX_TURN_IMAGES, type TurnImage } from "./client";
 import { MAX_TASK_WALL_CLOCK_MS, runToolLoop } from "./subagentCore";
 import { retrievalText } from "./transcript";
 import { toolResultToText } from "./subagents";
@@ -47,7 +46,6 @@ import type { TerminalHistory } from "./terminalHistory";
 import type { ContextOptions } from "./projectIndex";
 import { boundedInteger, errorMessage, relativePathForUri } from "../tools/common";
 import { t, type MessageKey } from "./i18n";
-import { debug } from "./logger";
 import { traceInvokeTool } from "./debugMode";
 
 export const PARTICIPANT_ID = "m365copilot.m365";

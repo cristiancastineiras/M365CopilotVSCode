@@ -30,9 +30,8 @@ import * as vscode from "vscode";
 import { M365_CHAT_URL, SIGN_OUT_URLS, signOutUrl, type SignOutReport } from "@m365copilot/core";
 import type { ProfileStore } from "./secrets";
 import type { TokenAutoRefreshServer } from "./tokenServer";
-import { isTokenUsable, type CopilotProfile } from "./profile";
+import { isTokenUsable, type CopilotProfile, log } from "@m365copilot/core/bizchat";
 import { announceProfile } from "./commands";
-import { log } from "./logger";
 import { t } from "./i18n";
 
 /**

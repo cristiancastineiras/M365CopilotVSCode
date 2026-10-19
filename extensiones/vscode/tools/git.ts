@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import * as vscode from "vscode";
 import { t } from "../src/i18n";
-import { debug } from "../src/logger";
+import { debug } from "@m365copilot/core/bizchat";
 import { ensureNotCancelled, resolveWorkspacePath } from "./common";
 import { buildGitArgs, normalizeGitAction, type GitAction } from "./gitArgs";
 

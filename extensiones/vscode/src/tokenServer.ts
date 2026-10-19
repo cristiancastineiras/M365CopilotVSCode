@@ -8,9 +8,8 @@ import {
   TOKEN_SERVER_PORT,
   type SignOutReport,
 } from "@m365copilot/core";
-import type { CopilotProfile } from "./profile";
+import { type CopilotProfile, debug, isDeepDebug, log } from "@m365copilot/core/bizchat";
 import type { ProfileStore } from "./secrets";
-import { debug, isDeepDebug, log } from "./logger";
 import { t } from "./i18n";
 
 // Orígenes desde los que el userscript puede llegar a correr (mismo conjunto

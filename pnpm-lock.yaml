@@ -99,7 +99,20 @@ importers:
         version: 7.0.2
 
   packages/core:
+    dependencies:
+      ws:
+        specifier: ^8.22.0
+        version: 8.22.0
     devDependencies:
+      '@types/node':
+        specifier: ^26.6.4
+        version: 26.6.5
+      '@types/ws':
+        specifier: ^8.18.2
+        version: 8.18.2
+      oxlint:
+        specifier: ^1.87.0
+        version: 1.88.0
       typescript:
         specifier: ^7.0.2
         version: 7.0.2

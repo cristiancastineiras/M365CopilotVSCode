@@ -1,12 +1,16 @@
 import * as vscode from "vscode";
-import { streamCopilotTurn, CopilotClientError } from "./client";
+import {
+  streamCopilotTurn,
+  CopilotClientError,
+  debug,
+  log,
+  isTokenUsable,
+  accountThrottledUntil,
+} from "@m365copilot/core/bizchat";
 import { cleanCompletion, reuseForExtendedPrefix } from "./completionText";
-import { debug, log } from "./logger";
 import { findModel } from "./models";
-import { isTokenUsable } from "./profile";
 import type { ProfileStore } from "./secrets";
 import { formatMoment, t } from "./i18n";
-import { accountThrottledUntil } from "./throttle";
 
 const CONFIG_SECTION = "m365copilot.inlineCompletions";
 

@@ -19,7 +19,7 @@ import {
   type RunCommandInput,
 } from "../tools/terminal";
 import { errorMessage } from "../tools/common";
-import { M365_TOOL_NAMES } from "./toolProtocol";
+import { M365_TOOL_NAMES } from "@m365copilot/core/bizchat";
 import { t } from "./i18n";
 
 export function registerM365WorkspaceTools(manager: WorkspaceEditManager): vscode.Disposable[] {

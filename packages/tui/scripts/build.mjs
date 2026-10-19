@@ -37,12 +37,14 @@ export async function buildTui() {
       hash: false,
       logLevel: "warn",
       tsconfig: join(ROOT, "tsconfig.json"),
-      // `ws` and the core contracts travel inside the bundle; the optional
-      // native speedups of `ws` stay external (it requires them in a try/catch),
-      // and so does @opentui/core: its renderer is a native (Zig) addon shipped
-      // per platform, resolved from node_modules at runtime.
+      // `ws` and the core contracts travel inside the bundle (the regexp covers
+      // core's subpaths too, e.g. `@m365copilot/core/bizchat` — the bare name
+      // would leave them as a runtime import); the optional native speedups of
+      // `ws` stay external (it requires them in a try/catch), and so does
+      // @opentui/core: its renderer is a native (Zig) addon shipped per
+      // platform, resolved from node_modules at runtime.
       deps: {
-        alwaysBundle: ["ws", "@m365copilot/core"],
+        alwaysBundle: ["ws", /^@m365copilot\/core(?:\/|$)/],
         neverBundle: ["@opentui/core", "bufferutil", "utf-8-validate"],
       },
       define: { "process.env.M365_TUI_VERSION": JSON.stringify(version) },

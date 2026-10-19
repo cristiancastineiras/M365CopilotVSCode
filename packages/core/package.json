@@ -2,7 +2,7 @@
   "name": "@m365copilot/core",
   "version": "3.0.3",
   "private": true,
-  "description": "Lógica y contratos compartidos por las extensiones de VS Code y de navegador: tipos del perfil, decodificación de JWT, clasificación de token y constantes del servidor local.",
+  "description": "Lógica y contratos compartidos por los clientes de M365 Copilot. La raíz (tipos del perfil, JWT, clasificación de token, constantes del servidor local) es segura para el navegador; `@m365copilot/core/bizchat` es la capa de protocolo BizChat (cliente, protocolo de herramientas, catálogo de modelos, i18n) para Node.",
   "files": [
     "dist"
   ],
@@ -16,14 +16,26 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./bizchat": {
+      "types": "./dist/bizchat/index.d.ts",
+      "import": "./dist/bizchat/index.js",
+      "default": "./dist/bizchat/index.js"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint src"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
   },
   "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/ws": "^8.18.2",
+    "oxlint": "^1.87.0",
     "typescript": "^7.0.2"
   }
 }

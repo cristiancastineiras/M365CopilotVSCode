@@ -9,8 +9,14 @@ import {
   isAccountLevelError,
   type TurnMode,
   type WebSource,
-} from "./client";
-import { debug, log } from "./logger";
+  debug,
+  log,
+  isTokenUsable,
+  minutesUntilExpiry,
+  buildToolCatalog,
+  ToolCallDecoder,
+  type DuplicatePolicy,
+} from "@m365copilot/core/bizchat";
 
 import { currentEnvironment, currentSkills } from "./editorContext";
 import { MarkdownStreamFormatter } from "./markdown";
@@ -20,8 +26,6 @@ import { retrievalText } from "./transcript";
 import { webSearchEnabled } from "./webSearch";
 import { sourcesMarkdown } from "./webSearchPrompt";
 import { allModels, findModel, modelRegistry, toChatInformation, type TokenState } from "./models";
-import { isTokenUsable, minutesUntilExpiry } from "./profile";
-import { buildToolCatalog, ToolCallDecoder, type DuplicatePolicy } from "./toolProtocol";
 import type { ProfileStore } from "./secrets";
 import { t } from "./i18n";
 

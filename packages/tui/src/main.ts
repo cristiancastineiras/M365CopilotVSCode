@@ -2,9 +2,10 @@
  * m365-copilot-tui — the terminal chat: BizChat over the terminal, and nothing
  * else.
  *
- * Everything it needs lives here — client, profile, i18n, modelCatalog,
- * logger — with no `vscode` import anywhere; scripts/build.mjs bundles it into
- * one file that only needs Node to run.
+ * The BizChat client, tool protocol, model catalog, profile parsing and logger
+ * are `@m365copilot/core/bizchat` — shared with the VS Code extension, with no
+ * `vscode` import anywhere; scripts/build.mjs bundles it all, core included,
+ * into one file that only needs Node to run.
  *
  * Ways in: the token the browser extension or the userscript pushes to the
  * local receiver (localhost:51827 — only one process can own the port),
@@ -28,7 +29,22 @@ import {
   type AccountTier,
   type CopilotConversation,
   type TurnImage,
-} from "./client";
+  initLogger,
+  log as writeLog,
+  setDeepDebug,
+  BUILTIN_MODELS,
+  mergeModels,
+  normalizeSelector,
+  PAID_SUFFIX,
+  prettyTone,
+  accountOf,
+  foreignAudience,
+  isTokenUsable,
+  looksLikeProfile,
+  minutesUntilExpiry,
+  parsePastedProfile,
+  type CopilotProfile,
+} from "@m365copilot/core/bizchat";
 import {
   formatMoment,
   resolveLocale,
@@ -37,23 +53,6 @@ import {
   type LanguageSetting,
   type MessageKey,
 } from "./i18n";
-import { initLogger, log as writeLog, setDeepDebug } from "./logger";
-import {
-  BUILTIN_MODELS,
-  mergeModels,
-  normalizeSelector,
-  PAID_SUFFIX,
-  prettyTone,
-} from "./modelCatalog";
-import {
-  accountOf,
-  foreignAudience,
-  isTokenUsable,
-  looksLikeProfile,
-  minutesUntilExpiry,
-  parsePastedProfile,
-  type CopilotProfile,
-} from "./profile";
 import {
   defaultConfigDir,
   TokenReceiver,

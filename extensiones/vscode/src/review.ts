@@ -12,11 +12,14 @@
  */
 import * as vscode from "vscode";
 import { registerTracedCommand } from "./debugMode";
-import { streamCopilotTurnWithRetry, CopilotClientError } from "./client";
+import {
+  streamCopilotTurnWithRetry,
+  CopilotClientError,
+  type CopilotProfile,
+} from "@m365copilot/core/bizchat";
 import { requireUsableProfile } from "./commands";
 import { captureCodeContext, currentTextEditor } from "./editorContext";
 import { editorTone } from "./models";
-import type { CopilotProfile } from "./profile";
 import {
   buildReviewPrompt,
   lastLineOf,

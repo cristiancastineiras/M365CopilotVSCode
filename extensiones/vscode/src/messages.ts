@@ -3,9 +3,9 @@ import {
   buildToolProtocolInstructions,
   buildToolProtocolReminder,
   type ToolCatalog,
-} from "./toolProtocol";
+  MAX_TURN_IMAGES,
+} from "@m365copilot/core/bizchat";
 import { renderTranscript, type TranscriptMessage, type TranscriptPart } from "./transcript";
-import { MAX_TURN_IMAGES } from "./client";
 import { t } from "./i18n";
 
 /*

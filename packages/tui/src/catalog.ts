@@ -9,8 +9,12 @@
  */
 import * as fs from "node:fs";
 import { join } from "node:path";
-import { debug, log as writeLog } from "./logger";
-import { parseModelCatalog, type ModelEntry } from "./modelCatalog";
+import {
+  debug,
+  log as writeLog,
+  parseModelCatalog,
+  type ModelEntry,
+} from "@m365copilot/core/bizchat";
 
 /** models.json in the project's repository — edit it there to add or retire a model for everyone. */
 export const MODEL_CATALOG_URL =

@@ -5,12 +5,16 @@
  * (and therefore English answers) instead of the Spanish ones this extension
  * started with.
  *
- * Deliberately does NOT import `vscode` (same pattern as toolCatalog.ts): the
- * vscode-free modules (client, tool protocol, sub-agent loop, git/commit
- * helpers) use it too, and test/e2e.mts exercises them without a VS Code
- * host. The extension resolves the locale at activation — the
- * `m365copilot.language` setting, falling back to VS Code's display
- * language — and calls {@link setLocale}.
+ * The engine, and the messages of the BizChat layer (client errors, tool
+ * protocol, tool hints…), live in `@m365copilot/core/bizchat`; this module
+ * registers the extension's own catalogs on top of it. There is one current
+ * locale for the whole process, so the layer follows {@link setLocale} too.
+ *
+ * Deliberately does NOT import `vscode` (same pattern as the BizChat layer):
+ * the vscode-free modules (sub-agent loop, git/commit helpers) use it too, and
+ * test/e2e.mts exercises them without a VS Code host. The extension resolves
+ * the locale at activation — the `m365copilot.language` setting, falling back
+ * to VS Code's display language — and calls {@link setLocale}.
  *
  * Manifest strings (command titles, setting descriptions, walkthrough…) live
  * in package.nls.json / package.nls.es.json instead: VS Code resolves those
@@ -20,19 +24,30 @@
  * missing or misspelled key is a compile error, and the Spanish catalog is
  * checked against the English one key by key (see locales/es.ts).
  */
+import {
+  coreMessageKeys,
+  getLocale as getCoreLocale,
+  placeholdersOf as corePlaceholdersOf,
+  registerCatalogs,
+  setLocale as setCoreLocale,
+  translate,
+  translateIn,
+  type CoreMessageKey,
+} from "@m365copilot/core/bizchat";
 import { en } from "./locales/en";
 import { es } from "./locales/es";
 
+export { bizChatLocale, formatMoment } from "@m365copilot/core/bizchat";
+
 export type Locale = "en" | "es";
-export type MessageKey = keyof typeof en;
+/** The extension's own keys plus the BizChat layer's. */
+export type MessageKey = keyof typeof en | CoreMessageKey;
 /** Value of the `m365copilot.language` setting. */
 export type LanguageSetting = "auto" | Locale;
 
 export const LOCALES: readonly Locale[] = ["en", "es"];
 
-const CATALOGS: Readonly<Record<Locale, Readonly<Record<MessageKey, string>>>> = { en, es };
-
-let current: Locale = "en";
+registerCatalogs({ en, es });
 
 /**
  * `auto` (or anything unrecognised) follows VS Code's display language: any
@@ -45,11 +60,11 @@ export function resolveLocale(setting: unknown, displayLanguage: string | undefi
 }
 
 export function setLocale(locale: Locale): void {
-  current = locale;
+  setCoreLocale(locale);
 }
 
 export function getLocale(): Locale {
-  return current;
+  return getCoreLocale() === "es" ? "es" : "en";
 }
 
 /**
@@ -58,7 +73,7 @@ export function getLocale(): Locale {
  * makes a forgotten argument visible instead of silently printing "undefined".
  */
 export function t(key: MessageKey, ...args: readonly (string | number)[]): string {
-  return format(CATALOGS[current][key] ?? en[key] ?? key, args);
+  return translate(key, args);
 }
 
 /** Same as {@link t}, for an explicit locale (tests, and the catalog parity check). */
@@ -67,45 +82,15 @@ export function tIn(
   key: MessageKey,
   ...args: readonly (string | number)[]
 ): string {
-  return format(CATALOGS[locale][key] ?? en[key] ?? key, args);
+  return translateIn(locale, key, args);
 }
 
-/** `message.locale` BizChat expects for the current language. */
-export function bizChatLocale(): string {
-  return current === "es" ? "es-ES" : "en-US";
-}
-
-/**
- * A moment as the user reads it, in their time zone and language: just the
- * time when it falls today ("15:40"), with the day otherwise ("Monday 20 Oct,
- * 02:00") — for "paused until…" and "resets at…".
- */
-export function formatMoment(epochMs: number, now = Date.now()): string {
-  const when = new Date(epochMs);
-  const sameDay = when.toDateString() === new Date(now).toDateString();
-  return when.toLocaleString(bizChatLocale(), {
-    ...(sameDay ? {} : { weekday: "long", day: "numeric", month: "short" }),
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-/** Every key of the reference (English) catalog — used by the parity test. */
+/** Every key of the reference (English) catalogs — used by the parity test. */
 export function messageKeys(): MessageKey[] {
-  return Object.keys(en) as MessageKey[];
+  return [...coreMessageKeys(), ...(Object.keys(en) as (keyof typeof en)[])];
 }
 
 /** Placeholder indices used by a message (`{0}`, `{2}` → [0, 2]), sorted. */
 export function placeholdersOf(locale: Locale, key: MessageKey): number[] {
-  const found = new Set<number>();
-  for (const match of CATALOGS[locale][key].matchAll(/\{(\d+)\}/g)) found.add(Number(match[1]));
-  return [...found].sort((a, b) => a - b);
-}
-
-function format(template: string, args: readonly (string | number)[]): string {
-  if (args.length === 0) return template;
-  return template.replace(/\{(\d+)\}/g, (placeholder, index: string) => {
-    const value = args[Number(index)];
-    return value === undefined ? placeholder : String(value);
-  });
+  return corePlaceholdersOf(locale, key);
 }

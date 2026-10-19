@@ -7,8 +7,8 @@
  * `endpoint` e `invocationTemplate` se conservan por compatibilidad y como
  * diagnóstico, pero client.ts ya NO los usa para construir peticiones: sólo
  * `accessToken` (y sus claims) importan. Los tipos y utilidades compartidas
- * viven en `@m365copilot/core`; aquí sólo queda el parseo de lo pegado, que
- * es específico de VS Code.
+ * viven en la raíz de `@m365copilot/core`; aquí sólo queda el parseo de lo
+ * pegado, que es específico de los clientes de BizChat.
  */
 import {
   decodeJwtPayload,
@@ -21,11 +21,11 @@ import {
   TONE_PATTERN,
   type CopilotProfile,
   type TokenClaims,
-} from "@m365copilot/core";
+} from "../index";
 import { t } from "./i18n";
 
-export type { CopilotProfile, TokenClaims } from "@m365copilot/core";
-export { decodeJwtPayload, isTokenUsable, minutesUntilExpiry } from "@m365copilot/core";
+export type { CopilotProfile, TokenClaims } from "../index";
+export { decodeJwtPayload, isTokenUsable, minutesUntilExpiry } from "../index";
 
 const DEFAULT_ORIGIN = "https://m365.cloud.microsoft";
 const DEFAULT_UA =

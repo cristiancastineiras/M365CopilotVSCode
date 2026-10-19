@@ -12,15 +12,19 @@
  */
 import * as vscode from "vscode";
 import { registerTracedTool } from "./debugMode";
-import { streamCopilotTurnWithRetry, CopilotClientError, type WebSource } from "./client";
-import { isTokenUsable } from "./profile";
+import {
+  streamCopilotTurnWithRetry,
+  CopilotClientError,
+  type WebSource,
+  isTokenUsable,
+  M365_TOOL_NAMES,
+  debug,
+} from "@m365copilot/core/bizchat";
 import type { ProfileStore } from "./secrets";
 import { buildWebSearchPrompt, formatWebResult } from "./webSearchPrompt";
 import { toolResult } from "./agentTools";
-import { M365_TOOL_NAMES } from "./toolProtocol";
 import { CancelledError } from "../tools/common";
 import { t } from "./i18n";
-import { debug } from "./logger";
 
 export interface WebSearchInput {
   readonly query?: unknown;

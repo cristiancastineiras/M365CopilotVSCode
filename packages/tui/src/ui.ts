@@ -32,7 +32,7 @@ import {
   type StyleDefinitionInput,
 } from "@opentui/core";
 import { t } from "./i18n";
-import { looksLikeProfile } from "./profile";
+import { looksLikeProfile } from "@m365copilot/core/bizchat";
 
 /** Near-black background, warm peach accent, muted greys for everything else. */
 const THEME = {

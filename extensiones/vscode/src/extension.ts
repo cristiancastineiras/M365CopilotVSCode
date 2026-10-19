@@ -10,9 +10,18 @@ import { M365CopilotProvider } from "./provider";
 import { ProfileStore } from "./secrets";
 import { TokenAutoRefreshServer } from "./tokenServer";
 import { WorkspaceEditManager } from "../tools/writeFile";
-import { minutesUntilExpiry } from "./profile";
+import {
+  minutesUntilExpiry,
+  debug,
+  initLogger,
+  log,
+  showLog,
+  type LogSink,
+  setTemporaryChat,
+  setTestEndpointBase,
+  onThrottleChange,
+} from "@m365copilot/core/bizchat";
 import { installModelRegistry } from "./models";
-import { debug, initLogger, log, showLog, type LogSink } from "./logger";
 import { clearDebugLog, DebugSession, exportDebugLog, toggleDeepDebug } from "./debugMode";
 import { formatMoment, getLocale, resolveLocale, setLocale, t } from "./i18n";
 import { M365StatusBar } from "./statusBar";
@@ -26,8 +35,6 @@ import { TerminalHistory } from "./terminalHistory";
 import { M365AuthenticationProvider } from "./account";
 import { registerReview, ReviewComments } from "./review";
 import { migrateFromLegacy } from "./migration";
-import { setTemporaryChat, setTestEndpointBase } from "./client";
-import { onThrottleChange } from "./throttle";
 import { signOutAndSignIn } from "./signOut";
 import { ProjectIndexService } from "./projectIndex";
 import { registerWebSearchTool } from "./webSearch";

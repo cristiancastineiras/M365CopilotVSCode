@@ -28,7 +28,7 @@ import {
   TOKEN_SERVER_PORT,
   type CopilotProfile,
 } from "@m365copilot/core";
-import { parsePastedProfile } from "./profile";
+import { parsePastedProfile } from "@m365copilot/core/bizchat";
 import type { LanguageSetting } from "./i18n";
 
 /** Where the token and the settings live when `--config-dir` does not say otherwise. */

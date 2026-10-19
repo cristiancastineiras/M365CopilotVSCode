@@ -1,9 +1,13 @@
 import * as vscode from "vscode";
-import { isTokenUsable, minutesUntilExpiry, type CopilotProfile } from "./profile";
+import {
+  isTokenUsable,
+  minutesUntilExpiry,
+  type CopilotProfile,
+  accountThrottledUntil,
+} from "@m365copilot/core/bizchat";
 import type { CompletionBusySink } from "./completions";
 import type { ProfileStore } from "./secrets";
 import { formatMoment, t } from "./i18n";
-import { accountThrottledUntil } from "./throttle";
 
 const COMPLETIONS_SECTION = "m365copilot.inlineCompletions";
 /** Below this many minutes left, the item shows a countdown instead of the plain icon. */

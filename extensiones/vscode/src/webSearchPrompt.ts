@@ -5,7 +5,7 @@
  *
  * Kept free of the `vscode` import so the tests can check both.
  */
-import type { WebSource } from "./client";
+import type { WebSource } from "@m365copilot/core/bizchat";
 import { t } from "./i18n";
 
 const MAX_ANSWER_CHARS = 8_000;

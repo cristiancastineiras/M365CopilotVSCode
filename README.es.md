@@ -41,9 +41,13 @@ disponible en **inglés y español**.
 │   └── vscode/      Extensión de VS Code. Levanta el servidor local, guarda el
 │                    perfil y expone Copilot en el chat y en el editor.
 ├── packages/
-│   └── core/        @m365copilot/core — lógica y CONTRATOS compartidos:
-│                    tipos del perfil, decodificación de JWT, clasificación de
-│                    token y las constantes del servidor local (puerto/ruta).
+│   ├── core/        @m365copilot/core — lógica y CONTRATOS compartidos. La
+│   │                raíz (tipos del perfil, decodificación de JWT, clasificación
+│   │                de token, constantes del servidor local) es segura para el
+│   │                navegador; `/bizchat` es la capa de protocolo para Node —
+│   │                cliente BizChat, protocolo de herramientas, catálogo de
+│   │                modelos, i18n— sobre la que se construye cada cliente.
+│   └── tui/         Chat en el terminal. Cliente de `@m365copilot/core/bizchat`.
 ├── turbo.json       Pipeline de tareas (build/dev/typecheck/test…).
 ├── tsconfig.base.json  Opciones de TypeScript comunes.
 └── pnpm-workspace.yaml

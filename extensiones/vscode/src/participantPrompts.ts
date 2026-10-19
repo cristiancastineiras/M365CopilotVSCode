@@ -5,7 +5,7 @@
  * check exactly what the model receives for each slash command.
  */
 import { t, type MessageKey } from "./i18n";
-import { M365_TOOL_NAMES, M365_WORKSPACE_TOOL_NAMES } from "./toolCatalog";
+import { M365_TOOL_NAMES, M365_WORKSPACE_TOOL_NAMES } from "@m365copilot/core/bizchat";
 
 export const PARTICIPANT_COMMANDS = ["explain", "fix", "doc", "tests", "terminal"] as const;
 export type ParticipantCommand = (typeof PARTICIPANT_COMMANDS)[number];

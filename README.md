@@ -40,9 +40,12 @@ inline completions — and keep its token in sync. Everything is available in
 │   └── vscode/      VS Code extension. Runs the local server, stores the
 │                    profile and exposes Copilot in the chat and the editor.
 ├── packages/
-│   └── core/        @m365copilot/core — shared logic and CONTRACTS: profile
-│                    types, JWT decoding, token classification and the local
-│                    server constants (port/path).
+│   ├── core/        @m365copilot/core — shared logic and CONTRACTS. The root
+│   │                (profile types, JWT decoding, token classification, local
+│   │                server constants) is browser-safe; `/bizchat` is the Node
+│   │                protocol layer — BizChat client, tool protocol, model
+│   │                catalog, i18n — that every client is built on.
+│   └── tui/         Terminal chat. A client of `@m365copilot/core/bizchat`.
 ├── turbo.json       Task pipeline (build/dev/typecheck/test…).
 ├── tsconfig.base.json  Common TypeScript options.
 └── pnpm-workspace.yaml

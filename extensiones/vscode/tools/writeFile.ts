@@ -18,7 +18,7 @@ import {
   type Hunk,
 } from "./lineDiff";
 import { t } from "../src/i18n";
-import { debug } from "../src/logger";
+import { debug } from "@m365copilot/core/bizchat";
 
 const PREVIEW_SCHEME = "m365copilot-edit-preview";
 const MAX_EDIT_COUNT = 20;

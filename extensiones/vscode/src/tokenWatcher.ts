@@ -1,9 +1,8 @@
 import * as vscode from "vscode";
 import { M365_CHAT_URL } from "@m365copilot/core";
-import { isTokenUsable, minutesUntilExpiry } from "./profile";
+import { isTokenUsable, minutesUntilExpiry, debug } from "@m365copilot/core/bizchat";
 import type { ProfileStore } from "./secrets";
 import { t } from "./i18n";
-import { debug } from "./logger";
 
 const TICK_MS = 30_000;
 /**

@@ -6,10 +6,11 @@
  * ejecución real de herramientas (`vscode.lm.invokeTool`) se inyecta desde
  * fuera como `executeTool`.
  */
-import { createCopilotConversation, streamCopilotTurnWithRetry, type TurnImage } from "./client";
-import { looksLikeRemoteSandbox, ProseHold, toolFreeProblem, type ToolFreeProblem } from "./giveUp";
-import type { CopilotProfile } from "./profile";
 import {
+  createCopilotConversation,
+  streamCopilotTurnWithRetry,
+  type TurnImage,
+  type CopilotProfile,
   buildToolCatalog,
   buildToolProtocolInstructions,
   buildToolProtocolReminder,
@@ -17,7 +18,8 @@ import {
   type DecodedToolCall,
   type OfferedTool,
   type ToolCatalog,
-} from "./toolProtocol";
+} from "@m365copilot/core/bizchat";
+import { looksLikeRemoteSandbox, ProseHold, toolFreeProblem, type ToolFreeProblem } from "./giveUp";
 import { condenseToolResult, toolResultBudgets } from "./transcript";
 import { t } from "./i18n";
 

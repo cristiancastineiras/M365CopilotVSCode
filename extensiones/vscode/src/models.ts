@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
-import { onModelOutcome, type AccountTier } from "./client";
-import { formatMoment, getLocale, t } from "./i18n";
 import {
+  onModelOutcome,
+  type AccountTier,
   BUILTIN_MODELS,
   isPaidSelector,
   mergeModels,
@@ -10,9 +10,10 @@ import {
   unannounced,
   type CatalogModel,
   type ModelEntry,
-} from "./modelCatalog";
+  debug,
+} from "@m365copilot/core/bizchat";
+import { formatMoment, getLocale, t } from "./i18n";
 import type { ProfileStore } from "./secrets";
-import { debug } from "./logger";
 
 /**
  * M365 Copilot / BizChat selects a model through the `tone` field of the chat

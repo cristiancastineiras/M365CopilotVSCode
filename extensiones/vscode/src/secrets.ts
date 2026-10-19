@@ -1,6 +1,10 @@
 import * as vscode from "vscode";
-import { describeProfile, parsePastedProfile, type CopilotProfile } from "./profile";
-import { debug } from "./logger";
+import {
+  describeProfile,
+  parsePastedProfile,
+  type CopilotProfile,
+  debug,
+} from "@m365copilot/core/bizchat";
 
 const SECRET_KEY = "m365copilot.profile.v1";
 

@@ -18,7 +18,10 @@ export default defineConfig({
   deps: {
     // `@m365copilot/core` es un paquete del workspace (no publicado), así que
     // debe quedar embebido en el bundle final en vez de quedar como `require`.
-    alwaysBundle: ["ws", "@m365copilot/core"],
+    // La expresión cubre también sus subrutas (`@m365copilot/core/bizchat`):
+    // el nombre a secas no las alcanza y el bundle saldría con un `require`
+    // que en el .vsix no se puede resolver.
+    alwaysBundle: ["ws", /^@m365copilot\/core(?:\/|$)/],
     neverBundle: ["vscode", "bufferutil", "utf-8-validate"],
   },
   dts: false,

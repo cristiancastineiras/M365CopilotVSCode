@@ -37,15 +37,55 @@ import {
   setTemporaryChat,
   sourcesOf,
   type TurnMode,
-} from "../src/client.ts";
-import {
   accountThrottledUntil,
   noteServed,
   noteThrottled,
   onThrottleChange,
   THROTTLE_HOLD_MS,
   type ThrottleChange,
-} from "../src/throttle.ts";
+  accountOf,
+  foreignAudience,
+  looksLikeProfile,
+  parsePastedProfile,
+  M365_TOOL_NAMES,
+  NEAR_OUTPUT_LIMIT_CHARS,
+  OUTPUT_LIMIT_CHARS,
+  ToolCallDecoder,
+  buildToolCatalog,
+  buildToolProtocolInstructions,
+  buildToolProtocolReminder,
+  type OfferedTool,
+  type ToolCatalog,
+  BUILTIN_MODELS,
+  PAID_ONLY_TONES,
+  isPaidSelector,
+  mergeModels,
+  modelIdForTone,
+  normalizeSelector,
+  parseToneSelector,
+  parseCustomModels,
+  parseModelCatalog,
+  prettyTone,
+  unannounced,
+  describeProfile,
+  type CopilotProfile,
+  clearLog,
+  debug,
+  formatDebugData,
+  initLogger,
+  isDeepDebug,
+  log,
+  logEntryCount,
+  redactSecrets,
+  registerCatalogs,
+  renderLogText,
+  setDeepDebug,
+  translate,
+  translateIn,
+  setLocale as setCoreLocale,
+} from "@m365copilot/core/bizchat";
+import { en as appEn } from "../src/locales/en.ts";
+import { es as appEs } from "../src/locales/es.ts";
 import { buildWebSearchPrompt, formatWebResult, sourcesMarkdown } from "../src/webSearchPrompt.ts";
 import {
   cognates,
@@ -74,12 +114,6 @@ import {
 
 import { MarkdownStreamFormatter } from "../src/markdown.ts";
 import {
-  accountOf,
-  foreignAudience,
-  looksLikeProfile,
-  parsePastedProfile,
-} from "../src/profile.ts";
-import {
   LEGACY_EXTENSION_ID,
   legacySettingKey,
   migrateLegacyValue,
@@ -97,17 +131,6 @@ import {
   MAX_FINDINGS,
 } from "../src/reviewPrompt.ts";
 import { buildInlineEditPrompt, extractEditedCode, reindent } from "../src/inlineEditPrompt.ts";
-import {
-  M365_TOOL_NAMES,
-  NEAR_OUTPUT_LIMIT_CHARS,
-  OUTPUT_LIMIT_CHARS,
-  ToolCallDecoder,
-  buildToolCatalog,
-  buildToolProtocolInstructions,
-  buildToolProtocolReminder,
-  type OfferedTool,
-  type ToolCatalog,
-} from "../src/toolProtocol.ts";
 import {
   renderTranscript,
   retrievalText,
@@ -185,19 +208,6 @@ import {
 } from "../src/participantPrompts.ts";
 import { readFileSync } from "node:fs";
 import {
-  BUILTIN_MODELS,
-  PAID_ONLY_TONES,
-  isPaidSelector,
-  mergeModels,
-  modelIdForTone,
-  normalizeSelector,
-  parseToneSelector,
-  parseCustomModels,
-  parseModelCatalog,
-  prettyTone,
-  unannounced,
-} from "../src/modelCatalog.ts";
-import {
   acceptHunk,
   diffLines,
   revertHunkEdit,
@@ -205,19 +215,6 @@ import {
   type Hunk,
   type LineEdit,
 } from "../tools/lineDiff.ts";
-import { describeProfile, type CopilotProfile } from "../src/profile.ts";
-import {
-  clearLog,
-  debug,
-  formatDebugData,
-  initLogger,
-  isDeepDebug,
-  log,
-  logEntryCount,
-  redactSecrets,
-  renderLogText,
-  setDeepDebug,
-} from "../src/logger.ts";
 
 const RS = String.fromCharCode(0x1e);
 const b64url = (o: unknown) =>
@@ -3409,6 +3406,51 @@ function testI18nCatalogs() {
   console.log("  ✓ catálogos en/es completos, con los mismos marcadores, y resolución del idioma");
 }
 
+/**
+ * The BizChat layer's messages with the app's catalogs on top (core's i18n
+ * engine): an app key, an app override of a layer key, a layer key the app
+ * never mentions, a partial locale falling back to English, an unknown key.
+ */
+function testI18nLayers() {
+  try {
+    registerCatalogs({
+      en: {
+        "layers.appOnly": "app says {0}",
+        "layers.englishOnly": "only in English",
+        "client.error.401": "overridden by the app",
+      },
+      es: { "layers.appOnly": "la app dice {0}" },
+      zh: {},
+    });
+
+    setCoreLocale("en");
+    assert.equal(translate("layers.appOnly", ["hi"]), "app says hi");
+    assert.equal(translate("client.error.401"), "overridden by the app", "the app wins");
+    assert.notEqual(translate("client.error.idle"), "client.error.idle", "a layer key still resolves");
+    assert.equal(translate("nobody.defines.this"), "nobody.defines.this", "unknown: the key itself");
+
+    // The app overrode the layer's English only: Spanish keeps the layer's own Spanish text.
+    setCoreLocale("es");
+    assert.equal(translate("layers.appOnly", ["hola"]), "la app dice hola");
+    assert.match(translate("client.error.401"), /rechaz/);
+    assert.equal(translate("layers.englishOnly"), "only in English", "missing in es: English");
+
+    // A partial locale (Chinese): what it has, then English, key by key.
+    setCoreLocale("zh");
+    assert.match(translate("client.error.idle"), /[一-鿿]/, "the layer's Chinese");
+    assert.equal(
+      translate("protocol.important"),
+      translateIn("en", "protocol.important"),
+      "the layer has no Chinese for the model prompts: English",
+    );
+    assert.equal(translate("layers.englishOnly"), "only in English");
+  } finally {
+    registerCatalogs({ en: appEn, es: appEs });
+    setCoreLocale("es");
+  }
+  console.log("  ✓ i18n por capas: la app sobre la capa BizChat, con caída a inglés clave a clave");
+}
+
 /** Every `%key%` of package.json exists in both package.nls files, and they have the same keys. */
 function testManifestLocalization() {
   const manifest = readFileSync(new URL("../package.json", import.meta.url), "utf8");
@@ -5959,6 +6001,7 @@ async function main() {
   setLocale("es");
   console.log("i18n");
   testI18nCatalogs();
+  testI18nLayers();
   testManifestLocalization();
   testPromptsFollowLocale();
   console.log("profile.ts");

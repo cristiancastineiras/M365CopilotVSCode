@@ -14,7 +14,7 @@
  */
 import * as vscode from "vscode";
 import { registerTracedCommand } from "./debugMode";
-import { streamCopilotTurnWithRetry } from "./client";
+import { streamCopilotTurnWithRetry } from "@m365copilot/core/bizchat";
 import { requireUsableProfile } from "./commands";
 import { editorTone } from "./models";
 import type { ProfileStore } from "./secrets";

@@ -41,17 +41,22 @@ import {
   type AutoCommitDecision,
   type AutoCommitGroup,
 } from "./autoCommitPrompt";
-import { streamCopilotTurnWithRetry } from "./client";
-import { debug, showLog, truncate } from "./logger";
+import {
+  streamCopilotTurnWithRetry,
+  debug,
+  showLog,
+  truncate,
+  isTokenUsable,
+  type CopilotProfile,
+  accountThrottledUntil,
+} from "@m365copilot/core/bizchat";
 import { editorTone } from "./models";
-import { isTokenUsable, type CopilotProfile } from "./profile";
 import type { ProfileStore } from "./secrets";
 import { ticketFromBranch } from "../tools/commitContext";
 import { execGit } from "../tools/git";
 import { getGitApi, type GitApi, type GitRepository } from "../tools/gitExtension";
 import { errorMessage } from "../tools/common";
 import { formatMoment, t } from "./i18n";
-import { accountThrottledUntil } from "./throttle";
 
 const SECTION = "m365copilot.autoCommit";
 /** In workspaceState: turning it on in one project must not start committing in every other one. */

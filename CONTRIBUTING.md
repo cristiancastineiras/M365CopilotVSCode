@@ -29,7 +29,10 @@ pnpm test
 
 - `extensiones/vscode`: extensión de Visual Studio Code.
 - `extensiones/browser`: extensión para navegadores.
-- `packages/core`: funcionalidad compartida.
+- `packages/core`: funcionalidad compartida. `@m365copilot/core/bizchat` es la capa
+  de protocolo BizChat (cliente, protocolo de herramientas, catálogo de modelos, i18n)
+  de la que dependen la extensión de VS Code y la TUI: un cambio ahí se hace una sola vez.
+- `packages/tui`: chat en el terminal.
 - `.changeset`: cambios destinados a publicación.
 
 ## Flujo de trabajo

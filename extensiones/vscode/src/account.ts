@@ -12,7 +12,7 @@
  * asking for it goes through VS Code's own consent dialog first.
  */
 import * as vscode from "vscode";
-import { accountOf, isTokenUsable, type CopilotProfile } from "./profile";
+import { accountOf, isTokenUsable, type CopilotProfile } from "@m365copilot/core/bizchat";
 import type { ProfileStore } from "./secrets";
 import { announceProfile, openM365, promptForProfile } from "./commands";
 import { waitForUsableProfile } from "./signOut";

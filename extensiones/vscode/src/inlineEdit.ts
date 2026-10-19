@@ -10,7 +10,7 @@
  */
 import * as vscode from "vscode";
 import { registerTracedCommand } from "./debugMode";
-import { streamCopilotTurnWithRetry, CopilotClientError } from "./client";
+import { streamCopilotTurnWithRetry, CopilotClientError } from "@m365copilot/core/bizchat";
 import { requireUsableProfile } from "./commands";
 import { captureCodeContext, currentTextEditor, type CodeContext } from "./editorContext";
 import { buildInlineEditPrompt, extractEditedCode } from "./inlineEditPrompt";
