@@ -20,8 +20,8 @@
   },
   "dependencies": {
     "@m365copilot/core": "workspace:*",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "wxt": "^0.21.4"
   },
   "devDependencies": {
