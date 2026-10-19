@@ -121,6 +121,11 @@ The participant shows which code it used as a reference, streams its answer,
 reports each tool step, offers a **Review pending changes** button after
 editing, and suggests follow-ups (`/doc`, `/tests`…).
 
+Each request can make up to **30 tool calls** (read, search, edit, run…); change
+that with `m365copilot.chat.maxToolCalls` (`0` = no limit; a request still stops
+after 8 minutes). If it is cut short, the chat says so and offers a **Continue**
+button. `/explain` and `/terminal` keep their own shorter limits (4 and 6).
+
 ### Context menu, lightbulb and editor title
 
 - **Right-click → M365 Copilot**: _Edit code…_, _Explain code_, _Ask about this

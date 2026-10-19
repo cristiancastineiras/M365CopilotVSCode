@@ -875,9 +875,11 @@ export const es: Record<keyof typeof en, string> = {
   "participant.progress.thinking": "Consultando a M365 Copilot…",
   "participant.progress.tool": "Ejecutando {0}…",
   "participant.stepLimit":
-    "_(Me detuve tras {0} llamadas a herramientas sin una respuesta final — pídeme que continúe si hace falta.)_",
+    "_(Me detuve tras {0} llamadas a herramientas sin una respuesta final — pulsa Continuar abajo, o sube `m365copilot.chat.maxToolCalls` (0 = sin límite).)_",
   "participant.timeLimit": "_(Me detuve: la petición superó los {0} min.)_",
   "participant.error": "M365 Copilot falló: {0}",
+  "participant.followup.continue": "Continuar",
+  "participant.followup.continue.prompt": "Continúa donde lo dejaste.",
   "participant.followup.explain": "Explica este código",
   "participant.followup.fix": "Corrige los problemas",
   "participant.followup.doc": "Documenta este código",

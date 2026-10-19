@@ -124,6 +124,12 @@ El participante muestra qué código usó como referencia, transmite la respuest
 en vivo, informa de cada paso de herramienta, ofrece un botón **Revisar cambios
 pendientes** tras editar y sugiere continuaciones (`/doc`, `/tests`…).
 
+Cada petición puede hacer hasta **30 llamadas a herramientas** (leer, buscar,
+editar, ejecutar…) y el límite se cambia con `m365copilot.chat.maxToolCalls`
+(`0` = sin límite; la petición se detiene igualmente a los 8 minutos). Si se
+corta, el chat avisa y ofrece un botón **Continuar**. `/explain` y `/terminal`
+conservan límites propios más cortos (4 y 6).
+
 ### Menú contextual, bombilla y barra de título
 
 - **Clic derecho → M365 Copilot**: _Editar código…_, _Explicar código_,

@@ -29,6 +29,7 @@ import { findModel } from "./models";
 import {
   asParticipantCommand,
   buildParticipantFraming,
+  DEFAULT_MAX_TOOL_CALLS,
   maxStepsForCommand,
   toolsForCommand,
   type HistoryTurn,
@@ -44,7 +45,7 @@ import { toolResultToText } from "./subagents";
 import type { WorkspaceEditManager } from "../tools/writeFile";
 import type { TerminalHistory } from "./terminalHistory";
 import type { ContextOptions } from "./projectIndex";
-import { errorMessage, relativePathForUri } from "../tools/common";
+import { boundedInteger, errorMessage, relativePathForUri } from "../tools/common";
 import { t, type MessageKey } from "./i18n";
 import { debug } from "./logger";
 import { traceInvokeTool } from "./debugMode";
@@ -68,6 +69,8 @@ interface ParticipantDeps {
 
 interface ParticipantResultMetadata {
   readonly command?: ParticipantCommand;
+  /** The request was cut short (tool-call or time limit): offer to continue it. */
+  readonly unfinished?: boolean;
 }
 
 export function registerChatParticipant(deps: ParticipantDeps): vscode.Disposable {
@@ -198,7 +201,15 @@ async function handleRequest(
       framing,
       profile,
       tone,
-      maxSteps: maxStepsForCommand(command),
+      maxSteps: maxStepsForCommand(
+        command,
+        boundedInteger(
+          vscode.workspace.getConfiguration("m365copilot.chat").get<number>("maxToolCalls"),
+          DEFAULT_MAX_TOOL_CALLS,
+          0,
+          200,
+        ),
+      ),
       signal: controller.signal,
       offeredTools,
       singleRoot: (vscode.workspace.workspaceFolders?.length ?? 0) <= 1,
@@ -240,16 +251,19 @@ async function handleRequest(
       summary: result.summary,
     }));
 
+    let unfinished = false;
     switch (result.outcome) {
       case "error":
         return { metadata, errorDetails: { message: t("participant.error", result.summary) } };
       case "stepLimit":
         stream.markdown(`\n\n${t("participant.stepLimit", result.steps)}`);
+        unfinished = true;
         break;
       case "timeLimit":
         stream.markdown(
           `\n\n${t("participant.timeLimit", Math.round(MAX_TASK_WALL_CLOCK_MS / 60_000))}`,
         );
+        unfinished = true;
         break;
       default:
         break;
@@ -260,7 +274,7 @@ async function handleRequest(
         title: t("participant.button.review"),
       });
     }
-    return { metadata };
+    return { metadata: unfinished ? { ...metadata, unfinished } : metadata };
   } finally {
     cancel.dispose();
   }
@@ -331,9 +345,20 @@ function historyOf(context: vscode.ChatContext): HistoryTurn[] {
 }
 
 function followupsFor(result: vscode.ChatResult): vscode.ChatFollowup[] {
-  const command = (result.metadata as ParticipantResultMetadata | undefined)?.command;
-  if (result.errorDetails || !command) return [];
-  return FOLLOWUPS[command].map((followup) => ({
+  if (result.errorDetails) return [];
+  const metadata = result.metadata as ParticipantResultMetadata | undefined;
+  // A request cut short by a limit: the one thing worth offering is to go on.
+  if (metadata?.unfinished) {
+    return [
+      {
+        prompt: t("participant.followup.continue.prompt"),
+        label: t("participant.followup.continue"),
+        command: metadata.command,
+      },
+    ];
+  }
+  if (!metadata?.command) return [];
+  return FOLLOWUPS[metadata.command].map((followup) => ({
     prompt: t(FOLLOWUP_LABELS[followup]),
     command: followup,
   }));

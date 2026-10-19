@@ -11,6 +11,7 @@
 [![Stars](https://img.shields.io/github/stars/cristiancastineiras/M365CopilotVSCode?label=stars&logo=github&color=e3b341&style=flat)](https://github.com/cristiancastineiras/M365CopilotVSCode/stargazers)
 [![Issues](https://img.shields.io/github/issues/cristiancastineiras/M365CopilotVSCode?label=issues&logo=github)](https://github.com/cristiancastineiras/M365CopilotVSCode/issues)
 [![License: AGPL-3.0](https://img.shields.io/github/license/cristiancastineiras/M365CopilotVSCode?label=license&color=blue)](LICENSE)
+[![Architecture diagram](https://gitdiagram.com/diagram-badge.svg)](https://gitdiagram.com/cristiancastineiras/m365copilotvscode?utm_source=readme&utm_medium=badge)
 
 **English** · [Español](README.es.md)
 

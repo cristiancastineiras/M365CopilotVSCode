@@ -854,9 +854,11 @@ export const en = {
   "participant.progress.thinking": "Asking M365 Copilot…",
   "participant.progress.tool": "Running {0}…",
   "participant.stepLimit":
-    "_(Stopped after {0} tool calls without a final answer — ask me to continue if needed.)_",
+    "_(Stopped after {0} tool calls without a final answer — choose Continue below, or raise `m365copilot.chat.maxToolCalls` (0 = no limit).)_",
   "participant.timeLimit": "_(Stopped: the request took more than {0} min.)_",
   "participant.error": "M365 Copilot failed: {0}",
+  "participant.followup.continue": "Continue",
+  "participant.followup.continue.prompt": "Continue where you left off.",
   "participant.followup.explain": "Explain this code",
   "participant.followup.fix": "Fix the problems",
   "participant.followup.doc": "Document this code",

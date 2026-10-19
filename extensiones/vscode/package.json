@@ -743,6 +743,13 @@
           },
           "markdownDescription": "%config.models.custom%"
         },
+        "m365copilot.chat.maxToolCalls": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 0,
+          "maximum": 200,
+          "markdownDescription": "%config.chat.maxToolCalls%"
+        },
         "m365copilot.subagents.enabled": {
           "type": "boolean",
           "default": true,

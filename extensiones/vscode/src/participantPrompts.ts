@@ -97,11 +97,21 @@ export function toolsForCommand(command: ParticipantCommand | undefined): readon
   return M365_WORKSPACE_TOOL_NAMES;
 }
 
-/** Tool-call budget per request: an explanation rarely needs more than a couple of reads. */
-export function maxStepsForCommand(command: ParticipantCommand | undefined): number {
+/** `m365copilot.chat.maxToolCalls` when it is not set (or is not a whole number). */
+export const DEFAULT_MAX_TOOL_CALLS = 30;
+
+/**
+ * Tool-call budget per request: an explanation rarely needs more than a couple
+ * of reads, so `/explain` and `/terminal` keep a short one. The rest get the
+ * user's `maxToolCalls`; 0 means no limit (the loop's time ceiling still stops it).
+ */
+export function maxStepsForCommand(
+  command: ParticipantCommand | undefined,
+  maxToolCalls: number = DEFAULT_MAX_TOOL_CALLS,
+): number {
   if (command === "explain") return 4;
   if (command === "terminal") return 6;
-  return 10;
+  return maxToolCalls === 0 ? Number.POSITIVE_INFINITY : maxToolCalls;
 }
 
 const MAX_HISTORY_TURNS = 6;

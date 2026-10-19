@@ -178,6 +178,7 @@ import { join } from "node:path";
 import {
   asParticipantCommand,
   buildParticipantFraming,
+  DEFAULT_MAX_TOOL_CALLS,
   fenceFor,
   maxStepsForCommand,
   toolsForCommand,
@@ -3475,6 +3476,14 @@ function testParticipantPrompts() {
   assert.ok(toolsForCommand("fix").includes(M365_TOOL_NAMES.applyWorkspaceEdits));
   assert.ok(!toolsForCommand(undefined).includes(M365_TOOL_NAMES.spawnAgents));
   assert.ok(maxStepsForCommand("explain") < maxStepsForCommand("fix"));
+  // The user's `maxToolCalls` sets the budget of everything but /explain and /terminal;
+  // 0 lifts it (the loop's time ceiling still applies).
+  assert.equal(maxStepsForCommand(undefined), DEFAULT_MAX_TOOL_CALLS);
+  assert.equal(maxStepsForCommand(undefined, 12), 12);
+  assert.equal(maxStepsForCommand("fix", 60), 60);
+  assert.equal(maxStepsForCommand("tests", 0), Number.POSITIVE_INFINITY);
+  assert.equal(maxStepsForCommand("explain", 60), 4);
+  assert.equal(maxStepsForCommand("terminal", 0), 6);
 
   // A fence always outlasts any backtick run inside the code.
   assert.equal(fenceFor("const a = 1;"), "```");
