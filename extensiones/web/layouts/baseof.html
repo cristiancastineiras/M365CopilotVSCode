@@ -12,5 +12,6 @@
 </main>
 {{ partial "footer.html" . }}
 {{ with resources.Get "js/main.js" | minify | fingerprint }}<script src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" defer></script>{{ end }}
+{{ with site.Params.goatcounter }}<script data-goatcounter="https://{{ . }}.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>{{ end }}
 </body>
 </html>

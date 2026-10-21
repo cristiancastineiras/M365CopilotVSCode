@@ -28,8 +28,8 @@
           {{- end }}
           {{- end }}
         </div>
-        <a class="icon-link" href="https://github.com/{{ site.Params.repo }}" rel="noopener" aria-label="{{ i18n "github" }}">{{ partial "icon.html" "github" }}</a>
-        {{ with site.GetPage "/download" }}<a class="btn btn-primary btn-sm" href="{{ .RelPermalink }}">{{ i18n "nav_download" }}</a>{{ end }}
+        <a class="icon-link" href="https://github.com/{{ site.Params.repo }}" rel="noopener" data-goatcounter-click="nav-github" aria-label="{{ i18n "github" }}">{{ partial "icon.html" "github" }}</a>
+        {{ with site.GetPage "/download" }}<a class="btn btn-primary btn-sm" href="{{ .RelPermalink }}" data-goatcounter-click="nav-download">{{ i18n "nav_download" }}</a>{{ end }}
       </div>
     </nav>
   </div>

@@ -11,8 +11,8 @@
       <h1>{{ $p.hero.title }}</h1>
       <p class="lead">{{ $p.hero.lead | markdownify }}</p>
       <div class="actions">
-        <a class="btn btn-primary btn-lg" href="{{ $market }}" rel="noopener">{{ partial "icon.html" "download" }}{{ i18n "btn_marketplace" }}</a>
-        <a class="btn btn-secondary btn-lg" href="{{ $repo }}/releases/latest" data-ext="vsix" rel="noopener">{{ partial "icon.html" "github" }}{{ i18n "btn_releases" }}</a>
+        <a class="btn btn-primary btn-lg" href="{{ $market }}" rel="noopener" data-goatcounter-click="hero-marketplace">{{ partial "icon.html" "download" }}{{ i18n "btn_marketplace" }}</a>
+        <a class="btn btn-secondary btn-lg" href="{{ $repo }}/releases/latest" data-ext="vsix" rel="noopener" data-goatcounter-click="hero-releases">{{ partial "icon.html" "github" }}{{ i18n "btn_releases" }}</a>
       </div>
       <p class="note">{{ $p.hero.note }}</p>
     </div>
@@ -127,7 +127,7 @@
     <h2>{{ $p.star.title }}</h2>
     <p class="lead">{{ $p.star.text }}</p>
     <div class="actions center-actions">
-      <a class="btn-star" href="{{ $repo }}" rel="noopener">{{ partial "icon.html" "star" }}<span>{{ $p.star.button }}</span><span class="star-count" data-stars hidden></span></a>
+      <a class="btn-star" href="{{ $repo }}" rel="noopener" data-goatcounter-click="star-github">{{ partial "icon.html" "star" }}<span>{{ $p.star.button }}</span><span class="star-count" data-stars hidden></span></a>
     </div>
     <p class="note">{{ $p.star.note }}</p>
   </div>
@@ -143,8 +143,8 @@
     <h2>{{ $p.cta.title }}</h2>
     <p class="lead">{{ $p.cta.text }}</p>
     <div class="actions center-actions">
-      <a class="btn btn-primary btn-lg" href="{{ $market }}" rel="noopener">{{ partial "icon.html" "download" }}{{ i18n "btn_marketplace" }}</a>
-      {{ with site.GetPage "/download" }}<a class="btn btn-secondary btn-lg" href="{{ .RelPermalink }}">{{ i18n "nav_download" }}</a>{{ end }}
+      <a class="btn btn-primary btn-lg" href="{{ $market }}" rel="noopener" data-goatcounter-click="cta-marketplace">{{ partial "icon.html" "download" }}{{ i18n "btn_marketplace" }}</a>
+      {{ with site.GetPage "/download" }}<a class="btn btn-secondary btn-lg" href="{{ .RelPermalink }}" data-goatcounter-click="cta-download-page">{{ i18n "nav_download" }}</a>{{ end }}
     </div>
   </div>
 </section>
