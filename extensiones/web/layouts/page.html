@@ -1,0 +1,22 @@
+{{ define "main" }}
+<div class="wrap doc">
+  <nav class="crumbs" aria-label="breadcrumb">
+    <a href="{{ site.Home.RelPermalink }}">{{ i18n "breadcrumb_home" }}</a><span aria-hidden="true">/</span><span>{{ .Title }}</span>
+  </nav>
+  <header class="doc-head">
+    <h1>{{ .Params.heading | default .Title }}</h1>
+    {{ with .Description }}<p class="lead">{{ . }}</p>{{ end }}
+  </header>
+  <div class="doc-body">
+    {{- with .TableOfContents }}
+    <aside class="toc" aria-label="{{ i18n "on_this_page" }}">
+      <p class="toc-title">{{ i18n "on_this_page" }}</p>
+      {{ . }}
+    </aside>
+    {{- end }}
+    <article class="prose">
+      {{ .Content }}
+    </article>
+  </div>
+</div>
+{{ end }}

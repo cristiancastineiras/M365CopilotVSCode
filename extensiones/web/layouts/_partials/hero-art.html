@@ -1,0 +1,9 @@
+{{- /* Ilustración M365 → VS Code de la extensión (assets/connection-art.svg, generada desde packages/core).
+       El estado lo manda data-state; main.js lo recorre. Sin JS (o con movimiento reducido) queda «conectado». */ -}}
+{{- with resources.Get "connection-art.svg" }}
+<div class="hero-art" data-art data-state="connected">
+  {{ replace .Content "@@TITLE@@" (i18n "art_alt") | safeHTML }}
+  <p class="art-caption" role="status" aria-live="polite" data-caption
+     data-waiting="{{ i18n "art_waiting" }}" data-captured="{{ i18n "art_captured" }}" data-connected="{{ i18n "art_connected" }}">{{ i18n "art_connected" }}</p>
+</div>
+{{- end }}

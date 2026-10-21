@@ -87,3 +87,7 @@ Desktop.ini
 
 
 /m365-copilot-proxy/
+# Web (Hugo): salida compilada y caché de recursos
+extensiones/web/public/
+extensiones/web/resources/
+extensiones/web/.hugo_build.lock

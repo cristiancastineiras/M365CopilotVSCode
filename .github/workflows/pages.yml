@@ -1,0 +1,88 @@
+name: Pages
+
+# Compila la web (extensiones/web, Hugo) y la publica en GitHub Pages cuando cambia algo de ella en
+# `main`. En PRs sólo comprueba que compila. Los enlaces de descarga no necesitan republicar la web:
+# apuntan a releases/latest y su JavaScript pide la versión actual a la API de GitHub.
+#
+# Una sola vez, en el repositorio: Settings → Pages → Build and deployment → Source: «GitHub Actions».
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "extensiones/web/**"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "extensiones/web/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Un despliegue a la vez; uno en curso se termina en vez de cancelarse a medias.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # Hugo «extended»: hace falta para convertir las capturas a WebP.
+  HUGO_VERSION: 0.168.0
+
+jobs:
+  build:
+    name: Compilar la web
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Instalar Hugo
+        run: |
+          base="https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}"
+          file="hugo_extended_${HUGO_VERSION}_linux-amd64.tar.gz"
+          curl -fsSLO "${base}/${file}"
+          curl -fsSLO "${base}/hugo_${HUGO_VERSION}_checksums.txt"
+          grep " ${file}\$" "hugo_${HUGO_VERSION}_checksums.txt" | sha256sum -c -
+          sudo tar -xzf "${file}" -C /usr/local/bin hugo
+          hugo version
+
+      # Da la URL real de Pages (con el subpath del repositorio o el dominio propio). Los PRs no
+      # despliegan, así que no la piden: Pages puede no estar activado en un fork.
+      - name: Configurar Pages
+        id: pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v6
+
+      - name: Compilar
+        working-directory: extensiones/web
+        env:
+          BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          args=(--gc --minify --destination "${GITHUB_WORKSPACE}/_site")
+          if [ -n "${BASE_URL}" ]; then args+=(--baseURL "${BASE_URL}/"); fi
+          hugo "${args[@]}"
+
+      - name: Subir el artefacto
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    name: Desplegar en GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Desplegar
+        id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,0 +1,27 @@
+{{ define "main" }}
+<div class="wrap doc">
+  <nav class="crumbs" aria-label="breadcrumb">
+    <a href="{{ site.Home.RelPermalink }}">{{ i18n "breadcrumb_home" }}</a><span aria-hidden="true">/</span><span>{{ .Title }}</span>
+  </nav>
+  <header class="doc-head">
+    <h1>{{ .Params.heading | default .Title }}</h1>
+    {{ with .Description }}<p class="lead">{{ . }}</p>{{ end }}
+  </header>
+
+  {{ partial "downloads.html" . }}
+
+  <section class="req">
+    <h2>{{ i18n "dl_requirements_title" }}</h2>
+    <ul class="checks">
+      <li>{{ partial "icon.html" "check" }}{{ i18n "dl_req_vscode" }}</li>
+      <li>{{ partial "icon.html" "check" }}{{ i18n "dl_req_account" }}</li>
+      <li>{{ partial "icon.html" "check" }}{{ i18n "dl_req_browser" }}</li>
+    </ul>
+  </section>
+
+  <article class="prose">
+    {{ .Content }}
+  </article>
+  <p><a class="link-arrow" href="{{ with site.GetPage "/guide" }}{{ .RelPermalink }}{{ end }}">{{ i18n "btn_guide" }} {{ partial "icon.html" "arrow" }}</a></p>
+</div>
+{{ end }}

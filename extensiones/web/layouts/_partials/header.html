@@ -1,0 +1,36 @@
+{{- $home := site.Home.RelPermalink }}
+<header class="site-header">
+  <div class="wrap bar">
+    <a class="brand" href="{{ $home }}" aria-label="{{ site.Title }}">
+      <img src="{{ "logo.svg" | relURL }}" width="30" height="30" alt="">
+      <span class="brand-name">M365 Copilot</span><span class="brand-sub">for VS Code</span>
+    </a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" hidden>
+      <span class="when-closed">{{ partial "icon.html" "menu" }}</span><span class="when-open">{{ partial "icon.html" "close" }}</span>
+      <span class="sr">{{ i18n "nav_menu" }}</span>
+    </button>
+    <nav id="site-nav" class="nav" aria-label="{{ i18n "nav_main" }}">
+      <ul>
+        <li><a href="{{ $home }}#how">{{ i18n "nav_how" }}</a></li>
+        <li><a href="{{ $home }}#features">{{ i18n "nav_features" }}</a></li>
+        {{ with site.GetPage "/guide" }}<li><a href="{{ .RelPermalink }}">{{ i18n "nav_guide" }}</a></li>{{ end }}
+        <li><a href="{{ $home }}#faq">{{ i18n "nav_faq" }}</a></li>
+      </ul>
+      <div class="nav-end">
+        <div class="lang" role="group" aria-label="{{ i18n "nav_language" }}">
+          {{- if .AllTranslations }}
+          {{- range .AllTranslations }}
+          <a href="{{ .RelPermalink }}" hreflang="{{ .Language.Locale }}" lang="{{ .Language.Locale }}"{{ if eq .Language.Lang site.Language.Lang }} aria-current="true"{{ end }}>{{ upper .Language.Lang }}</a>
+          {{- end }}
+          {{- else }}
+          {{- range hugo.Sites }}
+          <a href="{{ .Home.RelPermalink }}" hreflang="{{ .Language.Locale }}" lang="{{ .Language.Locale }}"{{ if eq .Language.Lang site.Language.Lang }} aria-current="true"{{ end }}>{{ upper .Language.Lang }}</a>
+          {{- end }}
+          {{- end }}
+        </div>
+        <a class="icon-link" href="https://github.com/{{ site.Params.repo }}" rel="noopener" aria-label="{{ i18n "github" }}">{{ partial "icon.html" "github" }}</a>
+        {{ with site.GetPage "/download" }}<a class="btn btn-primary btn-sm" href="{{ .RelPermalink }}">{{ i18n "nav_download" }}</a>{{ end }}
+      </div>
+    </nav>
+  </div>
+</header>

@@ -6,5 +6,5 @@
   "singleQuote": false,
   "trailingComma": "all",
   "endOfLine": "lf",
-  "ignorePatterns": ["dist/**", "node_modules/**", "pnpm-lock.yaml"]
+  "ignorePatterns": ["dist/**", "node_modules/**", "pnpm-lock.yaml", "extensiones/web/**"]
 }

@@ -1,0 +1,56 @@
+{{- /* Datos estructurados (JSON-LD): portada = app + web + FAQ; resto = migas de pan (+ artículo en la guía). */ -}}
+{{- $repoURL := printf "https://github.com/%s" site.Params.repo }}
+{{- $og := printf "img/og-%s.png" site.Language.Lang | absURL }}
+{{- $author := dict "@type" "Person" "name" "cristiancastineiras" "url" "https://github.com/cristiancastineiras" }}
+{{- $graph := slice }}
+{{- if .IsHome }}
+  {{- $graph = $graph | append (dict
+    "@type" "SoftwareApplication"
+    "@id" (printf "%s#app" .Permalink)
+    "name" site.Title
+    "description" .Description
+    "url" .Permalink
+    "image" $og
+    "applicationCategory" "DeveloperApplication"
+    "operatingSystem" "Windows, macOS, Linux"
+    "softwareRequirements" "Visual Studio Code 1.104 or later; a Microsoft 365 account with a Copilot licence"
+    "inLanguage" (slice "en" "es")
+    "isAccessibleForFree" true
+    "offers" (dict "@type" "Offer" "price" "0" "priceCurrency" "USD")
+    "downloadUrl" (printf "%s/releases/latest" $repoURL)
+    "installUrl" (printf "https://marketplace.visualstudio.com/items?itemName=%s" site.Params.marketplaceId)
+    "sameAs" (slice $repoURL)
+    "author" $author) }}
+  {{- $graph = $graph | append (dict
+    "@type" "WebSite"
+    "name" site.Title
+    "url" .Permalink
+    "inLanguage" site.Language.Locale) }}
+  {{- with .Params.faq }}
+    {{- $qs := slice }}
+    {{- range .items }}
+      {{- $qs = $qs | append (dict "@type" "Question" "name" .q "acceptedAnswer" (dict "@type" "Answer" "text" (.a | plainify))) }}
+    {{- end }}
+    {{- $graph = $graph | append (dict "@type" "FAQPage" "mainEntity" $qs) }}
+  {{- end }}
+{{- else if ne .Kind "404" }}
+  {{- $graph = $graph | append (dict
+    "@type" "BreadcrumbList"
+    "itemListElement" (slice
+      (dict "@type" "ListItem" "position" 1 "name" (i18n "breadcrumb_home") "item" site.Home.Permalink)
+      (dict "@type" "ListItem" "position" 2 "name" .Title "item" .Permalink))) }}
+  {{- if eq .Section "guide" }}
+    {{- $graph = $graph | append (dict
+      "@type" "TechArticle"
+      "headline" .Title
+      "description" .Description
+      "url" .Permalink
+      "inLanguage" site.Language.Locale
+      "image" $og
+      "author" $author
+      "about" (dict "@type" "SoftwareApplication" "@id" (printf "%s#app" site.Home.Permalink))) }}
+  {{- end }}
+{{- end }}
+{{- if $graph }}
+<script type="application/ld+json">{{ dict "@context" "https://schema.org" "@graph" $graph | jsonify | safeJS }}</script>
+{{- end }}
