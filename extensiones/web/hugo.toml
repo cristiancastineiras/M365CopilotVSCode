@@ -24,6 +24,11 @@ disableKinds = ["RSS", "taxonomy", "term"]
   repo = "cristiancastineiras/M365CopilotVSCode"
   marketplaceId = "m365-copilot-vscode.m365-copilot-vscode"
   defaultLang = "en"
+  # Analítica sin cookies (https://<nombre>.goatcounter.com). Vacío = sin analítica.
+  goatcounter = "m365copilotvscode"
+  # Verificación de propiedad en buscadores (opcionales): el valor del meta que dan Search Console / Bing.
+  googleVerification = ""
+  bingVerification = ""
 
 [markup.goldmark.renderer]
   unsafe = false

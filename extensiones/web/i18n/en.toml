@@ -96,6 +96,9 @@ other = "Documentation"
 [footer_legal]
 other = "M365 Copilot for VS Code is an independent open source project. It is not affiliated with, endorsed by or sponsored by Microsoft. Microsoft 365 Copilot and Visual Studio Code are trademarks of Microsoft Corporation. Use it in line with Microsoft's terms and policies; the software is provided “as is”, without warranties."
 
+[footer_analytics]
+other = "This site uses <a href=\"https://www.goatcounter.com/\" rel=\"noopener\">GoatCounter</a> for anonymous visit statistics: no cookies and no personal data. The release version and star counters are read from the GitHub API in your browser."
+
 [nf_title]
 other = "Page not found"
 [nf_text]

@@ -30,6 +30,7 @@
       </nav>
     </div>
     <p class="legal">{{ i18n "footer_legal" }}</p>
+    {{ with site.Params.goatcounter }}<p class="legal">{{ i18n "footer_analytics" | safeHTML }}</p>{{ end }}
     <p class="legal">© {{ now.Year }} {{ site.Title }}</p>
   </div>
 </footer>

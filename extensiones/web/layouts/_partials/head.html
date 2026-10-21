@@ -17,6 +17,12 @@
 {{- end }}
 {{- end }}
 {{- end }}
+{{- with site.Params.googleVerification }}
+<meta name="google-site-verification" content="{{ . }}">
+{{- end }}
+{{- with site.Params.bingVerification }}
+<meta name="msvalidate.01" content="{{ . }}">
+{{- end }}
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)">
