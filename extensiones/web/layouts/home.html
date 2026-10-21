@@ -4,6 +4,7 @@
 {{- $market := printf "https://marketplace.visualstudio.com/items?itemName=%s" site.Params.marketplaceId }}
 
 <section class="hero">
+  {{ partial "px-scatter.html" (dict "seed" 7 "count" 74 "w" 80 "h" 56 "prefix" "pxp" "n" 8 "class" "hero-px") }}
   <div class="wrap hero-grid">
     <div class="hero-copy">
       <p class="eyebrow">{{ $p.hero.eyebrow }}</p>
@@ -15,11 +16,16 @@
       </div>
       <p class="note">{{ $p.hero.note }}</p>
     </div>
-    {{ partial "hero-art.html" . }}
+    <div class="hero-visual">
+      {{ partial "hero-art.html" . }}
+      <img class="sprite sprite-m365" src="{{ "pixel/m365.svg" | relURL }}" width="64" height="64" alt="">
+      <img class="sprite sprite-vscode" src="{{ "pixel/vscode.svg" | relURL }}" width="64" height="64" alt="">
+    </div>
   </div>
 </section>
 
 <section class="section alt" id="how">
+  <div class="px-edge" aria-hidden="true"></div>
   <div class="wrap">
     <header class="section-head">
       <h2>{{ $p.how.title }}</h2>
@@ -44,6 +50,7 @@
 </section>
 
 <section class="section" id="shots">
+  <div class="px-edge" aria-hidden="true"></div>
   <div class="wrap">
     <header class="section-head">
       <h2>{{ $p.shots.title }}</h2>
@@ -63,7 +70,9 @@
 </section>
 
 <section class="section alt" id="features">
-  <div class="wrap">
+  <div class="px-edge" aria-hidden="true"></div>
+  <div class="wrap feat-wrap">
+    {{ partial "px-scatter.html" (dict "seed" 31 "count" 34 "w" 30 "h" 14 "prefix" "pxp" "n" 8 "class" "feat-px") }}
     <header class="section-head">
       <h2>{{ $p.features.title }}</h2>
       <p class="lead">{{ $p.features.lead }}</p>
@@ -81,6 +90,7 @@
 </section>
 
 <section class="section" id="download">
+  <div class="px-edge" aria-hidden="true"></div>
   <div class="wrap">
     <header class="section-head">
       <h2>{{ i18n "nav_download" }}</h2>
@@ -92,6 +102,7 @@
 </section>
 
 <section class="section alt" id="faq">
+  <div class="px-edge" aria-hidden="true"></div>
   <div class="wrap narrow">
     <header class="section-head">
       <h2>{{ $p.faq.title }}</h2>
@@ -107,7 +118,27 @@
   </div>
 </section>
 
+<section class="section star" id="star">
+  <div class="px-edge" aria-hidden="true"></div>
+  {{ partial "px-scatter.html" (dict "seed" 53 "count" 34 "w" 36 "h" 20 "prefix" "pxy" "n" 3 "class" "star-px star-px-l") }}
+  {{ partial "px-scatter.html" (dict "seed" 59 "count" 34 "w" 36 "h" 20 "prefix" "pxy" "n" 3 "class" "star-px star-px-r") }}
+  <div class="wrap narrow center star-body">
+    <img class="sprite star-sprite" src="{{ "pixel/star.svg" | relURL }}" width="112" height="112" alt="">
+    <h2>{{ $p.star.title }}</h2>
+    <p class="lead">{{ $p.star.text }}</p>
+    <div class="actions center-actions">
+      <a class="btn-star" href="{{ $repo }}" rel="noopener">{{ partial "icon.html" "star" }}<span>{{ $p.star.button }}</span><span class="star-count" data-stars hidden></span></a>
+    </div>
+    <p class="note">{{ $p.star.note }}</p>
+  </div>
+</section>
+
 <section class="cta">
+  <div class="px-edge" aria-hidden="true"></div>
+  {{ partial "px-scatter.html" (dict "seed" 5 "count" 40 "w" 32 "h" 24 "prefix" "pxl" "n" 3 "class" "cta-px cta-px-l") }}
+  {{ partial "px-scatter.html" (dict "seed" 19 "count" 40 "w" 32 "h" 24 "prefix" "pxl" "n" 3 "class" "cta-px cta-px-r") }}
+  <img class="sprite sprite-cta sprite-cta-l" src="{{ "pixel/m365.svg" | relURL }}" width="96" height="96" alt="">
+  <img class="sprite sprite-cta sprite-cta-r" src="{{ "pixel/vscode.svg" | relURL }}" width="96" height="96" alt="">
   <div class="wrap center">
     <h2>{{ $p.cta.title }}</h2>
     <p class="lead">{{ $p.cta.text }}</p>

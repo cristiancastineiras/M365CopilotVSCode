@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none" role="img" aria-labelledby="title">
+  <title id="title">VS Code (pixel art)</title>
+  <defs>
+    <pattern id="tile-relief" width="2" height="2" patternUnits="userSpaceOnUse">
+      <g transform="scale(.125)">
+        <rect width="12" height="12" x="2" y="2" fill="#000" opacity=".08"/>
+        <rect width="6" height="6" x="2" y="2" fill="#000" opacity=".08"/>
+      </g>
+    </pattern>
+    <linearGradient id="vs-upper" x1="6" y1="6" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1b86c9"/>
+      <stop offset="1" stop-color="#0065a9"/>
+    </linearGradient>
+    <linearGradient id="vs-lower" x1="6" y1="42" x2="30" y2="18" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2d9be0"/>
+      <stop offset="1" stop-color="#007acc"/>
+    </linearGradient>
+    <linearGradient id="vs-bar" x1="36" y1="4" x2="40" y2="44" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5cc0ff"/>
+      <stop offset="0.5" stop-color="#1f9cf0"/>
+      <stop offset="1" stop-color="#0a84d8"/>
+    </linearGradient>
+    <clipPath id="rounded-outline" clipPathUnits="userSpaceOnUse">
+      <path clip-rule="evenodd" d="M35 2L37.2 2Q38 2 38 2.8L38 4L41.2 4Q42 4 42 4.8L42 6L45.2 6Q46 6 46 6.8L46 41.2Q46 42 45.2 42L42 42L42 43.2Q42 44 41.2 44L38 44L38 45.2Q38 46 37.2 46L32.8 46Q32 46 32 45.2L32 44L30.8 44Q30 44 30 43.2L30 42L28.8 42Q28 42 28 41.2L28 40L26.8 40Q26 40 26 39.2L26 38L24.8 38Q24 38 24 37.2L24 36L22.8 36Q22 36 22 35.2L22 34L20.8 34Q20 34 20 33.2L20 32L16.8 32Q16 32 16 31.2L16 30L12 30L12 31.2Q12 32 11.2 32L10 32L10 33.2Q10 34 9.2 34L8 34L8 35.2Q8 36 7.2 36L6.8 36Q6 36 6 35.2L6 34L2.8 34Q2 34 2 33.2L2 30.8Q2 30 2.8 30L4 30L4 28.8Q4 28 4.8 28L6 28L6 26.8Q6 26 6.8 26L8 26L8 22L6.8 22Q6 22 6 21.2L6 20L4.8 20Q4 20 4 19.2L4 18L2.8 18Q2 18 2 17.2L2 14.8Q2 14 2.8 14L6 14L6 12.8Q6 12 6.8 12L7.2 12Q8 12 8 12.8L8 14L9.2 14Q10 14 10 14.8L10 16L11.2 16Q12 16 12 16.8L12 18L16 18L16 16.8Q16 16 16.8 16L20 16L20 14.8Q20 14 20.8 14L22 14L22 12.8Q22 12 22.8 12L24 12L24 10.8Q24 10 24.8 10L26 10L26 8.8Q26 8 26.8 8L28 8L28 6.8Q28 6 28.8 6L30 6L30 4.8Q30 4 30.8 4L32 4L32 2.8Q32 2 32.8 2ZM33 16L32 16L32 17.2Q32 18 31.2 18L28 18L28 19.2Q28 20 27.2 20L26 20L26 21.2Q26 22 25.2 22L24 22L24 26L25.2 26Q26 26 26 26.8L26 28L27.2 28Q28 28 28 28.8L28 30L31.2 30Q32 30 32 30.8L32 32L34 32L34 16Z"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#rounded-outline)">
+    <path d="M32 2h4v2h-4zM30 4h6v2h-6zM28 6h8v2h-8zM26 8h10v2h-10zM24 10h12v2h-12zM22 12h14v2h-14zM20 14h14v2h-14zM16 16h16v2h-16zM14 18h14v2h-14zM14 20h12v2h-12zM12 22h12v2h-12zM8 24h10v2h-10zM6 26h10v2h-10zM4 28h10v2h-10zM2 30h10v2h-10zM2 32h8v2h-8zM6 34h2v2h-2z" fill="url(#vs-upper)"/>
+    <path d="M32 2h4v2h-4zM30 4h6v2h-6zM28 6h8v2h-8zM26 8h10v2h-10zM24 10h12v2h-12zM22 12h14v2h-14zM20 14h14v2h-14zM16 16h16v2h-16zM14 18h14v2h-14zM14 20h12v2h-12zM12 22h12v2h-12zM8 24h10v2h-10zM6 26h10v2h-10zM4 28h10v2h-10zM2 30h10v2h-10zM2 32h8v2h-8zM6 34h2v2h-2z" fill="url(#tile-relief)"/>
+    <path d="M6 12h2v2h-2zM2 14h8v2h-8zM2 16h10v2h-10zM4 18h10v2h-10zM6 20h8v2h-8zM8 22h4v2h-4zM18 24h6v2h-6zM16 26h10v2h-10zM14 28h14v2h-14zM16 30h16v2h-16zM20 32h14v2h-14zM22 34h14v2h-14zM24 36h12v2h-12zM26 38h10v2h-10zM28 40h8v2h-8zM30 42h6v2h-6zM32 44h4v2h-4z" fill="url(#vs-lower)"/>
+    <path d="M6 12h2v2h-2zM2 14h8v2h-8zM2 16h10v2h-10zM4 18h10v2h-10zM6 20h8v2h-8zM8 22h4v2h-4zM18 24h6v2h-6zM16 26h10v2h-10zM14 28h14v2h-14zM16 30h16v2h-16zM20 32h14v2h-14zM22 34h14v2h-14zM24 36h12v2h-12zM26 38h10v2h-10zM28 40h8v2h-8zM30 42h6v2h-6zM32 44h4v2h-4z" fill="url(#tile-relief)"/>
+    <path d="M36 2h2v2h-2zM36 4h6v2h-6zM36 6h10v2h-10zM36 8h10v2h-10zM36 10h10v2h-10zM36 12h10v2h-10zM34 14h12v2h-12zM34 16h12v2h-12zM34 18h12v2h-12zM34 20h12v2h-12zM34 22h12v2h-12zM34 24h12v2h-12zM34 26h12v2h-12zM34 28h12v2h-12zM34 30h12v2h-12zM34 32h12v2h-12zM36 34h10v2h-10zM36 36h10v2h-10zM36 38h10v2h-10zM36 40h10v2h-10zM36 42h6v2h-6zM36 44h2v2h-2z" fill="url(#vs-bar)"/>
+    <path d="M36 2h2v2h-2zM36 4h6v2h-6zM36 6h10v2h-10zM36 8h10v2h-10zM36 10h10v2h-10zM36 12h10v2h-10zM34 14h12v2h-12zM34 16h12v2h-12zM34 18h12v2h-12zM34 20h12v2h-12zM34 22h12v2h-12zM34 24h12v2h-12zM34 26h12v2h-12zM34 28h12v2h-12zM34 30h12v2h-12zM34 32h12v2h-12zM36 34h10v2h-10zM36 36h10v2h-10zM36 38h10v2h-10zM36 40h10v2h-10zM36 42h6v2h-6zM36 44h2v2h-2z" fill="url(#tile-relief)"/>
+  </g>
+</svg>

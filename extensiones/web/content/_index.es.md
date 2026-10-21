@@ -89,6 +89,11 @@ faq:
       a: "Dura aproximadamente una hora. Con la extensión de navegador y una pestaña de Microsoft 365 abierta se renueva solo. Si no, la barra de estado te avisa: abre M365 Copilot y envía un mensaje, o pega un token nuevo."
     - q: "¿Funciona en Visual Studio, el IDE completo?"
       a: "Hoy no. Está hecha para Visual Studio Code, y una versión para Visual Studio necesitaría otro enfoque."
+star:
+  title: "¿Te está gustando? Dale una estrella"
+  text: "Una estrella en GitHub es gratis, tarda dos segundos y ayuda a que otros desarrolladores encuentren el proyecto."
+  button: "Dar una estrella en GitHub"
+  note: "Gracias, de verdad: es lo que mantiene vivo el proyecto."
 cta:
   title: "¿Listo para probarlo?"
   text: "Instala las dos piezas, envía un mensaje en Microsoft 365 Copilot y empieza a chatear."

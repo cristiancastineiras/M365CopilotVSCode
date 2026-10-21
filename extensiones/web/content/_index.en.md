@@ -89,6 +89,11 @@ faq:
       a: "It lasts about an hour. With the browser extension and a Microsoft 365 tab open it renews by itself. Otherwise the status bar tells you: open M365 Copilot and send a message, or paste a new token."
     - q: "Does it work in Visual Studio, the full IDE?"
       a: "Not today. It is built for Visual Studio Code, and a version for Visual Studio would need a different approach."
+star:
+  title: "Enjoying it? Give it a star"
+  text: "A star on GitHub is free, takes two seconds and helps other developers find the project."
+  button: "Star on GitHub"
+  note: "Thank you: it is what keeps the project going."
 cta:
   title: "Ready to try it?"
   text: "Install both pieces, send one message in Microsoft 365 Copilot and start chatting."

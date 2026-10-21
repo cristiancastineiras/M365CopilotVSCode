@@ -1,10 +1,12 @@
 {{- $repo := printf "https://github.com/%s" site.Params.repo }}
 <footer class="site-footer">
+  <div class="px-edge" aria-hidden="true"></div>
+  {{ partial "px-scatter.html" (dict "seed" 23 "count" 26 "w" 34 "h" 10 "prefix" "pxp" "n" 8 "class" "foot-px") }}
   <div class="wrap">
     <div class="foot-grid">
       <div>
         <a class="brand" href="{{ site.Home.RelPermalink }}" aria-label="{{ site.Title }}">
-          <img src="{{ "logo.svg" | relURL }}" width="28" height="28" alt="" loading="lazy">
+          <img src="{{ "pixel/m365.svg" | relURL }}" width="28" height="28" alt="" loading="lazy">
           <span class="brand-name">M365 Copilot</span><span class="brand-sub">for VS Code</span>
         </a>
         <p class="muted">{{ i18n "footer_tagline" }}</p>
