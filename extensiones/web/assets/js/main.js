@@ -86,3 +86,36 @@ if (art && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
   };
   next();
 }
+
+// Contador de estrellas del botón «Dar una estrella». Si la API no responde (sin red, límite de peticiones) el
+// botón sigue siendo un enlace normal al repositorio, sin número.
+const starEls = document.querySelectorAll("[data-stars]");
+if (repo && starEls.length) {
+  const show = (count) => {
+    const text = new Intl.NumberFormat(document.documentElement.lang || "en", { notation: "compact" }).format(count);
+    starEls.forEach((el) => {
+      el.textContent = text;
+      el.hidden = false;
+    });
+  };
+  let cachedStars = null;
+  try {
+    cachedStars = Number(sessionStorage.getItem("m365-stars"));
+  } catch {
+    /* sessionStorage bloqueado */
+  }
+  if (cachedStars) show(cachedStars);
+  else {
+    fetch(`https://api.github.com/repos/${repo}`, { headers: { Accept: "application/vnd.github+json" } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((data) => {
+        try {
+          sessionStorage.setItem("m365-stars", String(data.stargazers_count));
+        } catch {
+          /* ignorar */
+        }
+        show(data.stargazers_count);
+      })
+      .catch(() => {});
+  }
+}

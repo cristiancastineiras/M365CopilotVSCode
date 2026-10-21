@@ -3,6 +3,7 @@
   <nav class="crumbs" aria-label="breadcrumb">
     <a href="{{ site.Home.RelPermalink }}">{{ i18n "breadcrumb_home" }}</a><span aria-hidden="true">/</span><span>{{ .Title }}</span>
   </nav>
+  {{ partial "px-scatter.html" (dict "seed" 41 "count" 30 "w" 36 "h" 12 "prefix" "pxp" "n" 8 "class" "doc-px") }}
   <header class="doc-head">
     <h1>{{ .Params.heading | default .Title }}</h1>
     {{ with .Description }}<p class="lead">{{ . }}</p>{{ end }}

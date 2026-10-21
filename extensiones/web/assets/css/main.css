@@ -314,3 +314,115 @@ code, kbd { font-family: var(--font-mono); font-size: 0.88em; }
 .nf .lead { margin-inline: auto; }
 .prose table { display: block; overflow-x: auto; }
 .narrow-shot { max-width: 340px; }
+
+/* ---------- Estilo píxel ----------
+   Tiles con relieve como los del logo en píxeles (static/pixel/*.svg), esquinas escalonadas, sprites, píxeles
+   sueltos (px-scatter.html) y un borde que se deshace en píxeles entre secciones (static/pixel/edge.svg). */
+:root {
+  --tile: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Crect x='1' y='1' width='6' height='6' fill='%23000' opacity='.08'/%3E%3Crect x='1' y='1' width='3' height='3' fill='%23000' opacity='.08'/%3E%3C/svg%3E");
+  --notch: 4px;
+}
+.steps li::before,
+.feature-icon,
+.chip {
+  border-radius: 0;
+  clip-path: polygon(0 var(--notch), var(--notch) var(--notch), var(--notch) 0, calc(100% - var(--notch)) 0, calc(100% - var(--notch)) var(--notch), 100% var(--notch), 100% calc(100% - var(--notch)), calc(100% - var(--notch)) calc(100% - var(--notch)), calc(100% - var(--notch)) 100%, var(--notch) 100%, var(--notch) calc(100% - var(--notch)), 0 calc(100% - var(--notch)));
+}
+.steps li::before { background: var(--tile), var(--accent); }
+.feature-icon { background: var(--tile), var(--accent-soft); }
+.chip { --notch: 3px; background: var(--tile), var(--accent); }
+.chip.alt { background: var(--tile), var(--bg-alt); }
+
+.px-logo { width: 32px; height: 32px; flex: none; }
+.sprite { display: block; width: 64px; height: 64px; filter: drop-shadow(0 6px 8px rgb(0 0 0 / 0.18)); }
+
+/* Píxeles sueltos */
+.px-scatter { position: absolute; display: block; pointer-events: none; }
+@keyframes px-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+.px-scatter rect:nth-child(5n + 2) { animation: px-blink 3.4s steps(1, end) infinite; }
+.px-scatter rect:nth-child(7n + 4) { animation: px-blink 4.6s steps(1, end) infinite 1.1s; }
+
+.hero { position: relative; overflow-x: clip; }
+.hero-px { right: 0; top: 0; width: min(64%, 860px); height: 100%; opacity: 0.55; -webkit-mask-image: linear-gradient(to left, #000 35%, transparent); mask-image: linear-gradient(to left, #000 35%, transparent); }
+.hero-grid { position: relative; }
+.hero-visual { position: relative; }
+.sprite-m365, .sprite-vscode { position: absolute; z-index: 2; animation: px-bob 3.6s steps(4, end) infinite alternate; }
+.sprite-m365 { left: -26px; top: -32px; }
+.sprite-vscode { right: -22px; bottom: -30px; animation-delay: -1.8s; }
+@keyframes px-bob { from { transform: translateY(0); } to { transform: translateY(-8px); } }
+@media (max-width: 899px) { .hero-px { width: 100%; opacity: 0.35; } .sprite-m365 { left: -10px; } .sprite-vscode { right: -10px; } }
+
+.feat-wrap { position: relative; }
+.feat-px { right: 0; top: -36px; width: 380px; height: 160px; opacity: 0.85; -webkit-mask-image: linear-gradient(to left, #000 30%, transparent); mask-image: linear-gradient(to left, #000 30%, transparent); }
+@media (max-width: 719px) { .feat-px { display: none; } }
+
+.doc { position: relative; }
+.doc-px { right: 20px; top: 24px; width: 400px; height: 150px; opacity: 0.8; -webkit-mask-image: linear-gradient(to left, #000 30%, transparent); mask-image: linear-gradient(to left, #000 30%, transparent); }
+@media (max-width: 899px) { .doc-px { display: none; } }
+
+.cta { overflow-x: clip; }
+.cta-px { top: 0; bottom: 0; width: 34%; height: 100%; opacity: 0.9; }
+.cta-px-l { left: 0; -webkit-mask-image: linear-gradient(to right, #000 25%, transparent); mask-image: linear-gradient(to right, #000 25%, transparent); }
+.cta-px-r { right: 0; -webkit-mask-image: linear-gradient(to left, #000 25%, transparent); mask-image: linear-gradient(to left, #000 25%, transparent); }
+.cta .wrap { position: relative; z-index: 1; }
+.sprite-cta { position: absolute; top: 50%; width: 96px; height: 96px; margin-top: -48px; z-index: 1; animation: px-bob 3.6s steps(4, end) infinite alternate; }
+.sprite-cta-l { left: max(4%, calc(50% - 600px)); }
+.sprite-cta-r { right: max(4%, calc(50% - 600px)); animation-delay: -1.8s; }
+@media (max-width: 1099px) { .sprite-cta { display: none; } }
+
+.site-footer { overflow-x: clip; }
+.site-footer .wrap { position: relative; }
+.foot-px { right: 0; bottom: 0; width: 440px; height: 130px; opacity: 0.6; -webkit-mask-image: linear-gradient(to left, #000 30%, transparent); mask-image: linear-gradient(to left, #000 30%, transparent); }
+
+.nf { position: relative; overflow-x: clip; }
+.nf-px { inset: 0; width: 100%; height: 100%; opacity: 0.5; -webkit-mask-image: radial-gradient(ellipse at center, transparent 25%, #000 80%); mask-image: radial-gradient(ellipse at center, transparent 25%, #000 80%); }
+.nf-body { position: relative; }
+.nf-sprites { display: flex; justify-content: center; gap: 28px; margin-bottom: 28px; }
+.nf-sprites .sprite { width: 96px; height: 96px; animation: px-bob 3.6s steps(4, end) infinite alternate; }
+.nf-sprites .sprite:last-child { animation-delay: -1.8s; }
+
+/* Borde que se deshace en píxeles: la cara superior de cada sección, con el color de su fondo. */
+.section, .cta, .site-footer { position: relative; --sec-bg: var(--bg); }
+.section.alt { --sec-bg: var(--bg-alt); border-block: 0; }
+.cta { --sec-bg: var(--accent); }
+.px-edge {
+  position: absolute; left: 0; right: 0; bottom: 100%; height: 48px; pointer-events: none;
+  background: var(--sec-bg);
+  -webkit-mask: url("../pixel/edge.svg") var(--ex, 0) bottom / auto 48px repeat-x;
+  mask: url("../pixel/edge.svg") var(--ex, 0) bottom / auto 48px repeat-x;
+}
+#how { --ex: -260px; } #shots { --ex: -620px; } #features { --ex: -980px; } #download { --ex: -1240px; } #faq { --ex: -140px; } #star { --ex: -880px; } .cta { --ex: -760px; } .site-footer { --ex: -420px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .px-scatter rect, .sprite, .sprite-cta { animation: none !important; }
+}
+
+/* Los sprites de la llamada final van sobre una placa blanca (el de VS Code se perdería sobre el azul). */
+.sprite-cta { --notch: 8px; box-sizing: content-box; width: 80px; height: 80px; padding: 14px; margin-top: -54px; background: var(--tile), #fff; filter: drop-shadow(0 8px 14px rgb(0 0 0 / 0.22));
+  clip-path: polygon(0 var(--notch), var(--notch) var(--notch), var(--notch) 0, calc(100% - var(--notch)) 0, calc(100% - var(--notch)) var(--notch), 100% var(--notch), 100% calc(100% - var(--notch)), calc(100% - var(--notch)) calc(100% - var(--notch)), calc(100% - var(--notch)) 100%, var(--notch) 100%, var(--notch) calc(100% - var(--notch)), 0 calc(100% - var(--notch))); }
+.hero-px { -webkit-mask-image: linear-gradient(to left, #000 40%, transparent 88%); mask-image: linear-gradient(to left, #000 40%, transparent 88%); }
+@media (max-width: 899px) { .hero-px { display: none; } }
+
+/* ---------- Sección «dale una estrella» ---------- */
+.star { padding-block: clamp(64px, 9vw, 104px); overflow-x: clip; }
+.star-body { position: relative; z-index: 1; }
+.star-body h2 { font-size: clamp(1.75rem, 3.6vw, 2.5rem); }
+.star-body .lead { margin-inline: auto; }
+.star-sprite { width: 112px; height: 112px; margin: 0 auto 22px; animation: px-bob 3.6s steps(4, end) infinite alternate; }
+.star-px { top: 0; bottom: 0; width: 30%; height: 100%; opacity: 0.9; }
+.star-px-l { left: 0; -webkit-mask-image: linear-gradient(to right, #000 20%, transparent); mask-image: linear-gradient(to right, #000 20%, transparent); }
+.star-px-r { right: 0; -webkit-mask-image: linear-gradient(to left, #000 20%, transparent); mask-image: linear-gradient(to left, #000 20%, transparent); }
+@media (max-width: 719px) { .star-px { opacity: 0.55; width: 40%; } }
+.btn-star {
+  --notch: 4px;
+  display: inline-flex; align-items: center; gap: 10px; padding: 14px 22px;
+  font: 700 1.05rem/1.2 var(--font-head); color: #201a00; text-decoration: none;
+  background: var(--tile), #ffc800;
+  clip-path: polygon(0 var(--notch), var(--notch) var(--notch), var(--notch) 0, calc(100% - var(--notch)) 0, calc(100% - var(--notch)) var(--notch), 100% var(--notch), 100% calc(100% - var(--notch)), calc(100% - var(--notch)) calc(100% - var(--notch)), calc(100% - var(--notch)) 100%, var(--notch) 100%, var(--notch) calc(100% - var(--notch)), 0 calc(100% - var(--notch)));
+  transition: transform 0.12s steps(2, end), background-color 0.15s;
+}
+.btn-star:hover { background: var(--tile), #ffd84d; color: #201a00; transform: translateY(-2px); }
+.btn-star:focus-visible { outline: 0; box-shadow: inset 0 0 0 3px #201a00; }
+.btn-star .icon { width: 1.25em; height: 1.25em; fill: currentColor; }
+.star-count { padding: 2px 10px; background: rgb(0 0 0 / 0.13); font-size: 0.9em; }
+@media (prefers-reduced-motion: reduce) { .star-sprite { animation: none !important; } .btn-star { transition: none; } }

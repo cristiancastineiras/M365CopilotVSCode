@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" role="img" aria-labelledby="title">
+  <title id="title">Estrella (pixel art)</title>
+  <defs>
+    <pattern id="tile-relief" width="2" height="2" patternUnits="userSpaceOnUse">
+      <g transform="scale(.125)">
+        <rect width="12" height="12" x="2" y="2" fill="#000" opacity=".08"/>
+        <rect width="6" height="6" x="2" y="2" fill="#000" opacity=".08"/>
+      </g>
+    </pattern>
+    <linearGradient id="star-body" x1="4" y1="4" x2="28" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE27A"/>
+      <stop offset="0.55" stop-color="#FFC800"/>
+      <stop offset="1" stop-color="#FF9F1C"/>
+    </linearGradient>
+    <clipPath id="rounded-outline" clipPathUnits="userSpaceOnUse">
+      <path clip-rule="evenodd" d="M16 2L17.2 2Q18 2 18 2.8L18 6L19.2 6Q20 6 20 6.8L20 10L29.2 10Q30 10 30 10.8L30 13.2Q30 14 29.2 14L28 14L28 15.2Q28 16 27.2 16L26 16L26 20L27.2 20Q28 20 28 20.8L28 24L29.2 24Q30 24 30 24.8L30 29.2Q30 30 29.2 30L26.8 30Q26 30 26 29.2L26 28L22.8 28Q22 28 22 27.2L22 26L20.8 26Q20 26 20 25.2L20 24L18.8 24Q18 24 18 23.2L18 22L14 22L14 23.2Q14 24 13.2 24L12 24L12 25.2Q12 26 11.2 26L10 26L10 27.2Q10 28 9.2 28L6 28L6 29.2Q6 30 5.2 30L2.8 30Q2 30 2 29.2L2 24.8Q2 24 2.8 24L4 24L4 20.8Q4 20 4.8 20L6 20L6 16L4.8 16Q4 16 4 15.2L4 14L2.8 14Q2 14 2 13.2L2 10.8Q2 10 2.8 10L12 10L12 6.8Q12 6 12.8 6L14 6L14 2.8Q14 2 14.8 2Z"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#rounded-outline)">
+    <path d="M14 2h4v2h-4zM14 4h4v2h-4zM12 6h8v2h-8zM12 8h8v2h-8zM2 10h4v2h-4zM8 10h22v2h-22zM2 12h2v2h-2zM6 12h24v2h-24zM4 14h24v2h-24zM6 16h20v2h-20zM6 18h20v2h-20zM4 20h24v2h-24zM4 22h10v2h-10zM18 22h10v2h-10zM2 24h10v2h-10zM20 24h10v2h-10zM2 26h8v2h-8zM22 26h8v2h-8zM2 28h4v2h-4zM26 28h4v2h-4z" fill="url(#star-body)"/>
+    <path d="M6 10h2v2h-2zM4 12h2v2h-2z" fill="#FFF6CF"/>
+    <path d="M14 2h4v2h-4zM14 4h4v2h-4zM12 6h8v2h-8zM12 8h8v2h-8zM2 10h4v2h-4zM8 10h22v2h-22zM2 12h2v2h-2zM6 12h24v2h-24zM4 14h24v2h-24zM6 16h20v2h-20zM6 18h20v2h-20zM4 20h24v2h-24zM4 22h10v2h-10zM18 22h10v2h-10zM2 24h10v2h-10zM20 24h10v2h-10zM2 26h8v2h-8zM22 26h8v2h-8zM2 28h4v2h-4zM26 28h4v2h-4zM6 10h2v2h-2zM4 12h2v2h-2z" fill="url(#tile-relief)"/>
+  </g>
+</svg>

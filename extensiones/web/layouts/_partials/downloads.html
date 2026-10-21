@@ -8,7 +8,7 @@
 {{- $cmd := printf "ext install %s" site.Params.marketplaceId }}
 <div class="dl-grid">
   <article class="card dl-card dl-wide">
-    <div class="dl-head"><span class="chip">1</span>{{ partial "icon.html" "code" }}<h3>{{ i18n "dl_vscode_title" }}</h3></div>
+    <div class="dl-head"><span class="chip">1</span><img class="px-logo" src="{{ "pixel/vscode.svg" | relURL }}" width="32" height="32" alt=""><h3>{{ i18n "dl_vscode_title" }}</h3></div>
     <p>{{ i18n "dl_vscode_text" }}</p>
     <div class="actions">
       <a class="btn btn-primary" href="{{ $market }}" rel="noopener">{{ partial "icon.html" "download" }}{{ i18n "dl_marketplace" }}</a>
@@ -19,7 +19,7 @@
   </article>
 
   <article class="card dl-card">
-    <div class="dl-head"><span class="chip">2</span>{{ partial "icon.html" "browser" }}<h3>{{ i18n "dl_browser_title" }}</h3></div>
+    <div class="dl-head"><span class="chip">2</span><img class="px-logo" src="{{ "pixel/m365.svg" | relURL }}" width="32" height="32" alt=""><h3>{{ i18n "dl_browser_title" }}</h3></div>
     <p>{{ i18n "dl_browser_text" }}</p>
     <div class="actions">
       <a class="btn btn-primary" href="{{ $dl }}/m365-copilot-vscode-extension-chrome.zip" rel="noopener">{{ i18n "dl_chrome" }}</a>

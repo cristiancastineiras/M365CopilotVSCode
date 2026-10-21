@@ -1,0 +1,15 @@
+{{- /* Tiles con relieve para los píxeles sueltos (px-scatter.html): un patrón por color, en unidades de celda.
+       Marca (pxp0–7) y blancos translúcidos para fondos de color (pxl0–2). Va oculto; se referencia por id. */ -}}
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    {{- range $i, $c := slice "#2253CE" "#00AEFF" "#8C48FF" "#F2598A" "#FFB152" "#52B471" "#FFC800" "#007ACC" }}
+    <pattern id="pxp{{ $i }}" width="1" height="1" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="{{ $c }}"/><rect x=".125" y=".125" width=".75" height=".75" fill="#000" opacity=".08"/><rect x=".125" y=".125" width=".375" height=".375" fill="#000" opacity=".08"/></pattern>
+    {{- end }}
+    {{- range $i, $o := slice "0.95" "0.6" "0.32" }}
+    <pattern id="pxl{{ $i }}" width="1" height="1" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="#fff" fill-opacity="{{ $o }}"/><rect x=".125" y=".125" width=".75" height=".75" fill="#000" opacity=".06"/><rect x=".125" y=".125" width=".375" height=".375" fill="#000" opacity=".06"/></pattern>
+    {{- end }}
+    {{- range $i, $c := slice "#FFE27A" "#FFC800" "#FF9F1C" }}
+    <pattern id="pxy{{ $i }}" width="1" height="1" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="{{ $c }}"/><rect x=".125" y=".125" width=".75" height=".75" fill="#000" opacity=".08"/><rect x=".125" y=".125" width=".375" height=".375" fill="#000" opacity=".08"/></pattern>
+    {{- end }}
+  </defs>
+</svg>

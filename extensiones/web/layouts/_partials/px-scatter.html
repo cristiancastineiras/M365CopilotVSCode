@@ -1,0 +1,14 @@
+{{- /* Píxeles sueltos decorativos: tiles de 1×1 (y alguno de 2×2) esparcidos al azar —pero siempre los mismos, por
+       la semilla— en una cuadrícula de w×h celdas. Argumentos: seed, count, w, h, prefix (pxp | pxl), n (colores
+       del prefijo), class. El tamaño real lo pone el CSS. */ -}}
+{{- $w := .w }}{{ $h := .h }}{{ $n := .n }}{{ $prefix := .prefix }}
+{{- $s := .seed }}
+<svg class="px-scatter {{ .class }}" viewBox="0 0 {{ $w }} {{ $h }}" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+{{- range seq .count }}
+  {{- $s = mod (add (mul $s 1103515245) 12345) 2147483648 }}{{ $x := mod (div $s 65536) $w }}
+  {{- $s = mod (add (mul $s 1103515245) 12345) 2147483648 }}{{ $y := mod (div $s 65536) $h }}
+  {{- $s = mod (add (mul $s 1103515245) 12345) 2147483648 }}{{ $c := mod (div $s 65536) $n }}
+  {{- $s = mod (add (mul $s 1103515245) 12345) 2147483648 }}{{ $z := cond (eq (mod (div $s 65536) 5) 0) 2 1 }}
+  <rect x="{{ $x }}" y="{{ $y }}" width="{{ $z }}" height="{{ $z }}" rx=".12" fill="url(#{{ $prefix }}{{ $c }})"/>
+{{- end }}
+</svg>
