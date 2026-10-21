@@ -1,0 +1,20 @@
+{{- /* Captura de assets/img/: WebP a varios anchos (sin ampliar) con width/height para evitar saltos de maquetación.
+       Argumentos: src, alt, sizes (opcional), eager (opcional, para la imagen que se ve al cargar). */ -}}
+{{- $sizes := .sizes | default "(min-width: 900px) 560px, 92vw" }}
+{{- with resources.Get (printf "img/%s" .src) }}
+{{- $img := . }}
+{{- $max := cond (gt $img.Width 1200) 1200 $img.Width }}
+{{- $specs := slice }}
+{{- range slice 480 800 }}{{ if lt . $max }}{{ $specs = $specs | append (printf "%dx webp" .) }}{{ end }}{{ end }}
+{{- $specs = $specs | append (printf "%dx webp" $max) }}
+{{- $set := slice }}
+{{- $last := "" }}
+{{- range $specs }}
+{{- $r := $img.Resize . }}
+{{- $set = $set | append (printf "%s %dw" $r.RelPermalink $r.Width) }}
+{{- $last = $r }}
+{{- end }}
+<img src="{{ $last.RelPermalink }}" srcset="{{ delimit $set ", " }}" sizes="{{ $sizes }}" width="{{ $last.Width }}" height="{{ $last.Height }}" alt="{{ $.alt }}" decoding="async"{{ if $.eager }} fetchpriority="high"{{ else }} loading="lazy"{{ end }}>
+{{- else }}
+{{- errorf "img.html: assets/img/%s not found" .src }}
+{{- end }}

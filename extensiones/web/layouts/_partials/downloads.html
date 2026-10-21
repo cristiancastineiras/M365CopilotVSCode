@@ -1,0 +1,44 @@
+{{- /* Tarjetas de descarga. Los .zip/.user.js de la release tienen nombre fijo → enlace directo a
+       releases/latest/download/. El .vsix lleva la versión en el nombre: empieza apuntando a la release y
+       main.js lo cambia por el archivo exacto (data-ext). */ -}}
+{{- $repo := printf "https://github.com/%s" site.Params.repo }}
+{{- $latest := printf "%s/releases/latest" $repo }}
+{{- $dl := printf "%s/download" $latest }}
+{{- $market := printf "https://marketplace.visualstudio.com/items?itemName=%s" site.Params.marketplaceId }}
+{{- $cmd := printf "ext install %s" site.Params.marketplaceId }}
+<div class="dl-grid">
+  <article class="card dl-card dl-wide">
+    <div class="dl-head"><span class="chip">1</span>{{ partial "icon.html" "code" }}<h3>{{ i18n "dl_vscode_title" }}</h3></div>
+    <p>{{ i18n "dl_vscode_text" }}</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="{{ $market }}" rel="noopener">{{ partial "icon.html" "download" }}{{ i18n "dl_marketplace" }}</a>
+      <a class="btn btn-secondary" href="{{ $latest }}" data-ext="vsix" rel="noopener">{{ partial "icon.html" "download" }}{{ i18n "dl_vsix" }}</a>
+    </div>
+    <p class="cmd-label">{{ i18n "dl_cmd_label" }}</p>
+    <div class="cmd"><code>{{ $cmd }}</code><button type="button" class="copy" data-copy="{{ $cmd }}" data-done="{{ i18n "btn_copied" }}">{{ i18n "btn_copy" }}</button></div>
+  </article>
+
+  <article class="card dl-card">
+    <div class="dl-head"><span class="chip">2</span>{{ partial "icon.html" "browser" }}<h3>{{ i18n "dl_browser_title" }}</h3></div>
+    <p>{{ i18n "dl_browser_text" }}</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="{{ $dl }}/m365-copilot-vscode-extension-chrome.zip" rel="noopener">{{ i18n "dl_chrome" }}</a>
+      <a class="btn btn-primary" href="{{ $dl }}/m365-copilot-vscode-extension-edge.zip" rel="noopener">{{ i18n "dl_edge" }}</a>
+      <a class="btn btn-primary" href="{{ $dl }}/m365-copilot-vscode-extension-firefox.zip" data-ext="xpi" rel="noopener">{{ i18n "dl_firefox" }}</a>
+    </div>
+    <p class="muted small">{{ i18n "dl_browser_hint" }}</p>
+  </article>
+
+  <article class="card dl-card">
+    <div class="dl-head"><span class="chip alt">{{ partial "icon.html" "plus" }}</span>{{ partial "icon.html" "script" }}<h3>{{ i18n "dl_userscript_title" }}</h3></div>
+    <p>{{ i18n "dl_userscript_text" }}</p>
+    <div class="actions">
+      <a class="btn btn-secondary" href="https://raw.githubusercontent.com/{{ site.Params.repo }}/main/extensiones/vscode/m365copilot-token.user.js" rel="noopener">{{ partial "icon.html" "download" }}{{ i18n "dl_userscript" }}</a>
+    </div>
+  </article>
+</div>
+<p class="dl-meta">
+  <span data-release hidden>{{ i18n "dl_latest" }}: <strong data-version></strong> · </span>
+  <a href="{{ $repo }}/releases" rel="noopener">{{ i18n "btn_all_releases" }}</a> ·
+  <a href="{{ $repo }}/blob/main/extensiones/vscode/CHANGELOG.md" rel="noopener">{{ i18n "btn_changelog" }}</a>
+</p>

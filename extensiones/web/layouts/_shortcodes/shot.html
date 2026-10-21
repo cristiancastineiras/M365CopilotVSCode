@@ -1,0 +1,6 @@
+{{- /* {{< shot src="prompt-pregunta.png" alt="…" caption="…" >}} — captura de assets/img/ con marco de ventana. */ -}}
+<figure class="window{{ if .Get "narrow" }} narrow-shot{{ end }}">
+  <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+  {{ partial "img.html" (dict "src" (.Get "src") "alt" (.Get "alt") "sizes" "(min-width: 900px) 640px, 92vw") }}
+  {{ with .Get "caption" }}<figcaption>{{ . }}</figcaption>{{ end }}
+</figure>

@@ -1,0 +1,120 @@
+{{ define "main" }}
+{{- $p := .Params }}
+{{- $repo := printf "https://github.com/%s" site.Params.repo }}
+{{- $market := printf "https://marketplace.visualstudio.com/items?itemName=%s" site.Params.marketplaceId }}
+
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <p class="eyebrow">{{ $p.hero.eyebrow }}</p>
+      <h1>{{ $p.hero.title }}</h1>
+      <p class="lead">{{ $p.hero.lead | markdownify }}</p>
+      <div class="actions">
+        <a class="btn btn-primary btn-lg" href="{{ $market }}" rel="noopener">{{ partial "icon.html" "download" }}{{ i18n "btn_marketplace" }}</a>
+        <a class="btn btn-secondary btn-lg" href="{{ $repo }}/releases/latest" data-ext="vsix" rel="noopener">{{ partial "icon.html" "github" }}{{ i18n "btn_releases" }}</a>
+      </div>
+      <p class="note">{{ $p.hero.note }}</p>
+    </div>
+    {{ partial "hero-art.html" . }}
+  </div>
+</section>
+
+<section class="section alt" id="how">
+  <div class="wrap">
+    <header class="section-head">
+      <h2>{{ $p.how.title }}</h2>
+      <p class="lead">{{ $p.how.lead }}</p>
+    </header>
+    <div class="how-grid">
+      <ol class="steps">
+        {{- range $p.how.steps }}
+        <li>
+          <h3>{{ .title }}</h3>
+          <p>{{ .text | markdownify }}</p>
+        </li>
+        {{- end }}
+      </ol>
+      <figure class="window popup-shot">
+        <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        {{ partial "img.html" (dict "src" $p.how.popupImg "alt" $p.how.popupAlt "sizes" "(min-width: 900px) 360px, 80vw") }}
+        <figcaption>{{ $p.how.popupCaption }}</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="shots">
+  <div class="wrap">
+    <header class="section-head">
+      <h2>{{ $p.shots.title }}</h2>
+      <p class="lead">{{ $p.shots.lead }}</p>
+    </header>
+    <div class="shots-grid">
+      {{- range $p.shots.items }}
+      <figure class="window">
+        <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+        {{ partial "img.html" (dict "src" .img "alt" .alt) }}
+        <figcaption><strong>{{ .title }}</strong> {{ .text | $.Page.RenderString (dict "display" "inline") }}</figcaption>
+      </figure>
+      {{- end }}
+    </div>
+    <p class="muted small center">{{ i18n "shot_caption_note" }}</p>
+  </div>
+</section>
+
+<section class="section alt" id="features">
+  <div class="wrap">
+    <header class="section-head">
+      <h2>{{ $p.features.title }}</h2>
+      <p class="lead">{{ $p.features.lead }}</p>
+    </header>
+    <ul class="feature-grid">
+      {{- range $p.features.items }}
+      <li class="card feature">
+        <span class="feature-icon">{{ partial "icon.html" .icon }}</span>
+        <h3>{{ .title }}</h3>
+        <p>{{ .text | markdownify }}</p>
+      </li>
+      {{- end }}
+    </ul>
+  </div>
+</section>
+
+<section class="section" id="download">
+  <div class="wrap">
+    <header class="section-head">
+      <h2>{{ i18n "nav_download" }}</h2>
+      <p class="lead">{{ i18n "dl_requirements_title" }}: {{ i18n "dl_req_vscode" }} · {{ i18n "dl_req_account" }} · {{ i18n "dl_req_browser" }}</p>
+    </header>
+    {{ partial "downloads.html" . }}
+    <p class="center"><a class="link-arrow" href="{{ with site.GetPage "/guide" }}{{ .RelPermalink }}{{ end }}">{{ i18n "btn_guide" }} {{ partial "icon.html" "arrow" }}</a></p>
+  </div>
+</section>
+
+<section class="section alt" id="faq">
+  <div class="wrap narrow">
+    <header class="section-head">
+      <h2>{{ $p.faq.title }}</h2>
+    </header>
+    <div class="faq">
+      {{- range $p.faq.items }}
+      <details>
+        <summary>{{ .q }}<span class="faq-mark">{{ partial "icon.html" "plus" }}</span></summary>
+        <p>{{ .a }}</p>
+      </details>
+      {{- end }}
+    </div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="wrap center">
+    <h2>{{ $p.cta.title }}</h2>
+    <p class="lead">{{ $p.cta.text }}</p>
+    <div class="actions center-actions">
+      <a class="btn btn-primary btn-lg" href="{{ $market }}" rel="noopener">{{ partial "icon.html" "download" }}{{ i18n "btn_marketplace" }}</a>
+      {{ with site.GetPage "/download" }}<a class="btn btn-secondary btn-lg" href="{{ .RelPermalink }}">{{ i18n "nav_download" }}</a>{{ end }}
+    </div>
+  </div>
+</section>
+{{ end }}

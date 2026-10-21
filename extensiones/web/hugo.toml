@@ -1,0 +1,43 @@
+# Sitio de M365 Copilot for VS Code (Hugo, sin tema externo: todo está en layouts/ y assets/).
+# En local:  hugo server        En CI: .github/workflows/pages.yml pasa --baseURL de Pages.
+baseURL = "https://cristiancastineiras.github.io/M365CopilotVSCode/"
+title = "M365 Copilot for VS Code"
+
+# Inglés en la raíz, español en /es/. Sin redirección automática por idioma: es mala para SEO.
+defaultContentLanguage = "en"
+defaultContentLanguageInSubdir = false
+
+enableRobotsTXT = true
+disableKinds = ["RSS", "taxonomy", "term"]
+
+[languages.en]
+  label = "English"
+  locale = "en"
+  weight = 1
+
+[languages.es]
+  label = "Español"
+  locale = "es"
+  weight = 2
+
+[params]
+  repo = "cristiancastineiras/M365CopilotVSCode"
+  marketplaceId = "m365-copilot-vscode.m365-copilot-vscode"
+  defaultLang = "en"
+
+[markup.goldmark.renderer]
+  unsafe = false
+
+[markup.tableOfContents]
+  startLevel = 2
+  endLevel = 2
+
+[minify]
+  minifyOutput = true
+
+[sitemap]
+  changefreq = "monthly"
+  priority = 0.7
+
+[imaging.webp]
+  quality = 82

@@ -1,0 +1,116 @@
+[skip]
+other = "Skip to content"
+
+[nav_how]
+other = "How it works"
+[nav_features]
+other = "Features"
+[nav_download]
+other = "Download"
+[nav_guide]
+other = "Guide"
+[nav_faq]
+other = "FAQ"
+[nav_menu]
+other = "Menu"
+[nav_main]
+other = "Main"
+[nav_language]
+other = "Language"
+[github]
+other = "GitHub"
+
+[btn_marketplace]
+other = "Install from VS Marketplace"
+[btn_releases]
+other = "Download from GitHub"
+[btn_guide]
+other = "Read the guide"
+[btn_download]
+other = "Download"
+[btn_all_releases]
+other = "All releases"
+[btn_changelog]
+other = "Changelog"
+[btn_copy]
+other = "Copy"
+[btn_copied]
+other = "Copied"
+[btn_back_home]
+other = "Back to the home page"
+
+[dl_latest]
+other = "Latest release"
+[dl_vscode_title]
+other = "VS Code extension"
+[dl_vscode_text]
+other = "Adds the @m365 chat participant, the models, the editor actions and the commit tools."
+[dl_marketplace]
+other = "Install from Marketplace"
+[dl_vsix]
+other = "Download .vsix"
+[dl_cmd_label]
+other = "Or paste this in VS Code (Ctrl+P):"
+[dl_browser_title]
+other = "Browser extension"
+[dl_browser_text]
+other = "Captures your Copilot session token and keeps it renewed in VS Code. Recommended."
+[dl_chrome]
+other = "Chrome"
+[dl_edge]
+other = "Edge"
+[dl_firefox]
+other = "Firefox"
+[dl_browser_hint]
+other = "Chrome and Edge: unzip and load unpacked. Firefox: open the file."
+[dl_userscript_title]
+other = "Userscript (alternative)"
+[dl_userscript_text]
+other = "The same capture as a Tampermonkey or Violentmonkey script, for browsers where you cannot load extensions."
+[dl_userscript]
+other = "Install the userscript"
+[dl_requirements_title]
+other = "What you need"
+[dl_req_vscode]
+other = "VS Code 1.104 or later"
+[dl_req_account]
+other = "A Microsoft 365 account with a Copilot licence"
+[dl_req_browser]
+other = "Chrome, Edge or Firefox 128+ (or Tampermonkey)"
+
+[shot_caption_note]
+other = "Screenshots of VS Code in English. The extension follows VS Code's language, English or Spanish."
+
+[footer_tagline]
+other = "Use your Microsoft 365 Copilot inside VS Code."
+[footer_project]
+other = "Project"
+[footer_source]
+other = "Source code"
+[footer_issues]
+other = "Report an issue"
+[footer_releases]
+other = "Releases"
+[footer_docs]
+other = "Documentation"
+[footer_legal]
+other = "M365 Copilot for VS Code is an independent open source project. It is not affiliated with, endorsed by or sponsored by Microsoft. Microsoft 365 Copilot and Visual Studio Code are trademarks of Microsoft Corporation. Use it in line with Microsoft's terms and policies; the software is provided “as is”, without warranties."
+
+[nf_title]
+other = "Page not found"
+[nf_text]
+other = "The page you were looking for does not exist or has moved."
+
+[on_this_page]
+other = "On this page"
+[breadcrumb_home]
+other = "Home"
+
+[art_alt]
+other = "M365 Copilot and VS Code: the extension connects to Microsoft 365 Copilot, captures the token and links it to VS Code"
+[art_waiting]
+other = "Waiting for your Copilot token…"
+[art_captured]
+other = "Token captured. Looking for VS Code…"
+[art_connected]
+other = "Connected to VS Code. The token syncs by itself."
