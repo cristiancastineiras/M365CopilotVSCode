@@ -25,12 +25,12 @@
     "wxt": "^0.21.4"
   },
   "devDependencies": {
-    "@types/chrome": "^0.3.5",
-    "@types/node": "^26.6.4",
+    "@types/chrome": "^0.3.6",
+    "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "rolldown": "^1.2.12",
+    "rolldown": "^1.2.15",
     "typescript": "^7.0.2",
-    "vite": "^8.3.3"
+    "vite": "^8.3.5"
   }
 }
