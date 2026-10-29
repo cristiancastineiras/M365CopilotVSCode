@@ -98,13 +98,22 @@ export async function buildUserscript() {
       hash: false,
       logLevel: "warn",
       tsconfig: join(ROOT, "userscript", "tsconfig.json"),
-      deps: { alwaysBundle: ["@m365copilot/core"] },
+      deps: {
+        alwaysBundle: ["@m365copilot/core"],
+        neverBundle: true,
+      },
       banner: metadata(version),
     });
     const [file] = (await import("node:fs"))
       .readdirSync(outDir)
       .filter((name) => name.endsWith(".js"));
-    return readFileSync(join(outDir, file), "utf8").replace(/\r\n/g, "\n");
+    const output = readFileSync(join(outDir, file), "utf8").replace(/\r\n/g, "\n");
+    if (/\b_m365copilot_core\b/.test(output)) {
+      throw new Error(
+        "The userscript has an unresolved @m365copilot/core global; build the core package before generating it.",
+      );
+    }
+    return output;
   } finally {
     rmSync(outDir, { recursive: true, force: true });
   }

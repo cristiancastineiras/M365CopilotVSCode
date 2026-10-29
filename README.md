@@ -58,6 +58,23 @@ inline completions — and keep its token in sync. Everything is available in
 | VS Code extension | [README](extensiones/vscode/README.md) · [guide](extensiones/vscode/Guide.md) |
 | Browser extension | [README](extensiones/browser/README.md)                                       |
 
+## Install in VS Code
+
+- **VS Marketplace:** open the [extension page](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode), or run `code --install-extension m365-copilot-vscode.m365-copilot-vscode`.
+- **GitHub release:** download the `.vsix` from the [latest release](https://github.com/cristiancastineiras/M365CopilotVSCode/releases/latest), then run `code --install-extension m365-copilot-vscode-X.Y.Z.vsix` or choose **Install from VSIX…** in VS Code's Extensions view.
+
+## Connect the browser
+
+The browser companion captures and renews the Microsoft 365 Copilot token, then
+sends it to VS Code automatically. Install it from the same
+[GitHub release](https://github.com/cristiancastineiras/M365CopilotVSCode/releases/latest):
+Chrome and Edge use **Load unpacked** from their extensions page; Firefox can
+install the signed `.xpi`. See the [browser installation guide](extensiones/browser/README.md#install)
+for exact steps and permissions. Browser security requires this one-time manual
+confirmation; then open [M365 Copilot](https://m365.cloud.microsoft/chat/) and
+send a message to connect. The browser companion is not yet distributed through
+the browser stores.
+
 ## Getting started
 
 ```bash
@@ -105,5 +122,8 @@ pnpm version-packages   # bump versions + CHANGELOGs
 git commit -am "chore: release vX.Y.Z" && git tag vX.Y.Z && git push --follow-tags
 ```
 
-Pushing the tag runs `.github/workflows/release.yml`, which builds everything
-and publishes a GitHub release with the `.vsix` and both browser zips.
+Pushing the tag runs `.github/workflows/release.yml`, which checks that the tag
+matches all package versions, builds everything and publishes a GitHub release
+with the `.vsix` and browser artifacts. To also publish the VS Code extension
+to the Marketplace, configure the repository secret `VSCE_PAT` with a
+Marketplace publishing token; without it, the GitHub release still succeeds.

@@ -37,6 +37,7 @@ jobs:
     # en sí sólo las ve el step que firma, no los postinstall de `pnpm install`.
     env:
       HAS_AMO_KEYS: ${{ secrets.AMO_JWT_ISSUER != '' && secrets.AMO_JWT_SECRET != '' }}
+      HAS_VSCE_PAT: ${{ secrets.VSCE_PAT != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -51,6 +52,27 @@ jobs:
 
       - name: Instalar dependencias
         run: pnpm install --frozen-lockfile
+
+      - name: Comprobar que el tag coincide con las versiones
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            const expected = process.env.RELEASE_TAG.replace(/^v/, "");
+            const packages = [
+              "extensiones/vscode/package.json",
+              "extensiones/browser/package.json",
+              "packages/core/package.json",
+            ];
+            for (const path of packages) {
+              const { name, version } = JSON.parse(readFileSync(path, "utf8"));
+              if (version !== expected) {
+                console.error(`${path} (${name}) is ${version}; tag requires ${expected}`);
+                process.exitCode = 1;
+              }
+            }
+          '
 
       - name: Compilar y empaquetar todo (core + VS Code + navegador + userscript)
         run: pnpm package
@@ -92,3 +114,11 @@ jobs:
           tag_name: ${{ github.ref_name }}
           fail_on_unmatched_files: true
           files: releases/firefox/m365-copilot-vscode-extension-firefox.xpi
+
+      # VSCE_PAT es un PAT de Azure DevOps con acceso a publicar extensiones.
+      # Sin él, la release de GitHub se publica normalmente y este paso se omite.
+      - name: Publicar extensión de VS Code en VS Marketplace
+        if: env.HAS_VSCE_PAT == 'true'
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: pnpm --filter m365-copilot-vscode exec vsce publish --packagePath "$GITHUB_WORKSPACE/releases/vscode/m365-copilot-vscode-${VERSION}.vsix" --pat "$VSCE_PAT"
