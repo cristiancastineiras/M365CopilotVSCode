@@ -107,13 +107,13 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
     const profile = await this.store.get();
     if (!profile) {
       debug(scope, "refused: no token stored");
-      throw new Error(t("provider.noToken"));
+      throw userError(t("provider.noToken"));
     }
     if (!isTokenUsable(profile)) {
       const mins = minutesUntilExpiry(profile);
       debug(scope, `refused: the stored token expired (${mins} min)`);
       this.changeEmitter.fire();
-      throw new Error(
+      throw userError(
         t("provider.tokenExpired", mins !== null ? t("provider.expiredAgo", Math.abs(mins)) : ""),
       );
     }
@@ -352,9 +352,9 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
         selected &&
         selected.source !== "builtin"
       ) {
-        throw new Error(`${error.message}${t("models.rejectedHint", selected.name)}`);
+        throw userError(`${error.message}${t("models.rejectedHint", selected.name)}`);
       }
-      throw error instanceof Error ? error : new Error(String(error));
+      throw userError(error);
     } finally {
       cancelListener.dispose();
     }
@@ -383,6 +383,16 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
     this.storeListener.dispose();
     this.changeEmitter.dispose();
   }
+}
+
+/**
+ * Copilot Chat shows a provider's error as "Reason: <message>: <stack>" (VS Code's
+ * verbose toErrorMessage), so the stack is dropped: it is in the deep trace already.
+ */
+function userError(error: unknown): Error {
+  const shown = error instanceof Error ? error : new Error(String(error));
+  shown.stack = "";
+  return shown;
 }
 
 /** What a chat request carries, for the deep trace: roles and part sizes (the flattened prompt is logged whole separately). */

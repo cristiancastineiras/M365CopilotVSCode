@@ -879,9 +879,14 @@ function testSkills() {
   assert.equal(renderSkills({ ponytail: false, agentSkills: false, graphify: false }), "");
   const all = renderSkills({ ponytail: true, agentSkills: true, graphify: true });
   assert.match(all, /^WORKING STYLE[\s\S]*ENGINEERING DISCIPLINE[\s\S]*graphify query/);
-  assert.doesNotMatch(renderSkills({ ponytail: true, agentSkills: false, graphify: false }), /DISCIPLINE|graphify/);
+  assert.doesNotMatch(
+    renderSkills({ ponytail: true, agentSkills: false, graphify: false }),
+    /DISCIPLINE|graphify/,
+  );
   setLocale("es");
-  console.log("  ✓ skills: Ponytail, agent-skills y Graphify se añaden al prompt sólo si están activados");
+  console.log(
+    "  ✓ skills: Ponytail, agent-skills y Graphify se añaden al prompt sólo si están activados",
+  );
 }
 
 function testEnvironment() {
@@ -1785,8 +1790,8 @@ async function test401FastFail() {
     (err: unknown) => {
       assert.ok(err instanceof CopilotAuthError, "expected CopilotAuthError");
       assert.equal(err.statusCode, 401);
-      assert.match(err.message, /401/);
-      assert.doesNotMatch(err.message, /handshake/i);
+      assert.match(err.message, /token/);
+      assert.doesNotMatch(err.message, /handshake|401/i);
       return true;
     },
   );
@@ -2420,9 +2425,10 @@ async function testThrottledTurn() {
       assert.ok(
         error.until >= before + THROTTLE_HOLD_MS && error.until <= Date.now() + THROTTLE_HOLD_MS,
       );
-      assert.match(error.message, /PerUserThrottled/);
+      // Human words only: the code and the server's own text stay on the error, not in the message.
+      assert.doesNotMatch(error.message, /PerUserThrottled|You have sent/);
       assert.match(error.message, /reintentar antes solo lo alarga/);
-      assert.match(error.message, /«You have sent too many messages\.»/);
+      assert.equal(error.serverMessage, "You have sent too many messages.");
       return true;
     });
     assert.equal(server.connections.length, 1, "no se reintenta: solo lo alargaría");
@@ -2494,10 +2500,7 @@ async function testQuotaAndLicense() {
       );
       assert.match(error.message, /Claude Opus 5\.5/);
       assert.match(error.message, /medianoche UTC/);
-      assert.match(
-        error.message,
-        /«You have used up your priority access to Claude Opus for today\.»/,
-      );
+      assert.equal(error.serverMessage, daily);
       resetsAt = error.resetsAt;
       return true;
     });
@@ -2558,7 +2561,7 @@ async function testQuotaAndLicense() {
       assert.ok(error instanceof CopilotLicenseError, "esperaba CopilotLicenseError");
       assert.equal(error.errorCode, "InvalidCopilotLicense");
       assert.match(error.message, /licencia válida/);
-      assert.match(error.message, /«It looks like you don't have a valid license\.»/);
+      assert.equal(error.serverMessage, "It looks like you don't have a valid license.");
       return true;
     });
     assert.equal(server.connections.length - connectionsBefore, 1, "no se reintenta");
@@ -2594,7 +2597,7 @@ async function testDisengaged() {
       }),
       (error: unknown) => {
         assert.ok(error instanceof CopilotDisengagedError, "esperaba CopilotDisengagedError");
-        assert.match(error.message, /rehusado responder/);
+        assert.match(error.message, /preferido no responder/);
         return true;
       },
     );
@@ -2825,7 +2828,7 @@ async function testPaidScenario() {
       assert.ok(error instanceof CopilotModelUnavailableError, "cuenta como modelo no disponible");
       assert.match(error.message, /Claude Sonnet \(paid\)/);
       assert.match(error.message, /licencia de Microsoft 365 Copilot/);
-      assert.match(error.message, /«It looks like you don't have a valid licence/);
+      assert.match(error.serverReply, /It looks like you don't have a valid licence/);
       return true;
     });
     assert.equal(refusing.connections.length, 1, "no se reintenta");
@@ -3426,8 +3429,16 @@ function testI18nLayers() {
     setCoreLocale("en");
     assert.equal(translate("layers.appOnly", ["hi"]), "app says hi");
     assert.equal(translate("client.error.401"), "overridden by the app", "the app wins");
-    assert.notEqual(translate("client.error.idle"), "client.error.idle", "a layer key still resolves");
-    assert.equal(translate("nobody.defines.this"), "nobody.defines.this", "unknown: the key itself");
+    assert.notEqual(
+      translate("client.error.idle"),
+      "client.error.idle",
+      "a layer key still resolves",
+    );
+    assert.equal(
+      translate("nobody.defines.this"),
+      "nobody.defines.this",
+      "unknown: the key itself",
+    );
 
     // The app overrode the layer's English only: Spanish keeps the layer's own Spanish text.
     setCoreLocale("es");

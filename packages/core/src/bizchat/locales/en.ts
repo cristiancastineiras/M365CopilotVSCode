@@ -32,53 +32,54 @@ export const en = {
 
   // ------------------------------------------------------------ client (BizChat)
   "client.error.401":
-    "M365 Copilot rejected the token (401 Unauthorized). The token has expired, or the server invalidated it even though " +
-    "its expiry date had not passed yet. Capture it again at m365.cloud.microsoft and paste it with " +
-    "“M365 Copilot: Paste profile or token”.",
+    "M365 Copilot did not accept your token: it has expired, or Microsoft revoked it early. Capture it again at " +
+    "m365.cloud.microsoft and paste it with “M365 Copilot: Paste profile or token”.",
   "client.error.403":
-    "M365 Copilot denied access (403 Forbidden). Your account may not have a Copilot license, or the captured token is " +
-    "not allowed on this endpoint. Capture the profile again and retry.",
+    "M365 Copilot did not let you in. Your account may not have a Copilot licence, or the captured token does not " +
+    "work for the chat. Capture the profile again and retry.",
   "client.error.foreignAudience":
-    "M365 Copilot rejected the token ({0}): the saved token is for {1}, not for Copilot. Copy the URL of the chat " +
-    "WebSocket (DevTools → Network, filter: chathub, at m365.cloud.microsoft/chat) and paste it with “M365 Copilot: Paste profile or token”.",
+    "The saved token is for {0}, not for M365 Copilot. Copy the URL of the chat WebSocket (DevTools → Network, " +
+    "filter: chathub, at m365.cloud.microsoft/chat) and paste it with “M365 Copilot: Paste profile or token”.",
   "client.error.429":
-    "M365 Copilot is rate limiting requests (429 Too Many Requests). Wait a few seconds and retry.",
-  "client.error.upgrade": "M365 Copilot rejected the WebSocket connection (HTTP {0}).",
+    "M365 Copilot is getting too many requests. Wait a few seconds and try again.",
+  "client.error.upgrade":
+    "M365 Copilot did not accept the connection (error {0}). Try again in a few minutes.",
   "client.error.turnTimeout":
-    "The turn ran for more than 5 minutes without finishing and was cancelled. The model may be stuck on a very long " +
-    "answer — try asking for less at once (for example, one file at a time).",
+    "The answer was taking more than 5 minutes and was cancelled. The model may be stuck on something very long — " +
+    "try asking for less at once (for example, one file at a time).",
   "client.error.repetition":
-    "M365 Copilot got stuck repeating the same fragment without making progress (model loop) and the turn was " +
-    "cancelled. Try again; if it happens again, ask for something more specific or in fewer steps.",
-  "client.error.idle": "No response from M365 Copilot (timeout).",
-  "client.error.handshake": "The Copilot WebSocket did not complete its handshake.",
-  "client.error.connection": "Connection to Copilot failed: {0}",
-  "client.error.closed": "Copilot closed the connection (code {0}).",
-  "client.error.handshakeRejected": "Handshake rejected: {0}",
-  "client.error.rejected": "The service rejected the request ({0}){1}",
+    "M365 Copilot got stuck repeating itself and the answer was cut off. Try again; if it happens again, ask for " +
+    "something more specific or in fewer steps.",
+  "client.error.idle": "M365 Copilot stopped responding. Check your connection and try again.",
+  "client.error.handshake":
+    "Could not open the connection to M365 Copilot. Check your internet connection and try again.",
+  "client.error.connection":
+    "Could not reach M365 Copilot. Check your internet connection (or VPN / proxy) and try again. ({0})",
+  "client.error.closed": "M365 Copilot closed the connection before answering. Try again.",
+  "client.error.handshakeRejected": "M365 Copilot refused the connection: {0}",
+  "client.error.rejected": "M365 Copilot could not handle this request.",
   "client.error.modelUnavailable":
-    "M365 Copilot did not run “{0}” for your account ({1}). New models reach organisations in phases, and the " +
-    "Anthropic and OpenAI ones need your admin to enable them. Pick “M365 Copilot (Auto)”, or run " +
-    "“M365 Copilot: Check models” to see which ones you have.",
-  "client.error.disengaged":
-    "M365 Copilot declined to answer this request (it ended the conversation without a reply).",
+    "“{0}” is not available on your account yet. New models reach organisations gradually, and the Anthropic and " +
+    "OpenAI ones need your admin to turn them on. Pick “M365 Copilot (Auto)”, or run “M365 Copilot: Check models” " +
+    "to see which ones you have. (M365 Copilot said: “{1}”)",
+  "client.error.disengaged": "M365 Copilot chose not to answer this request. Try rephrasing it.",
   "client.error.serverSaid": " M365 Copilot said: “{0}”",
   "client.error.throttled":
-    "M365 Copilot is limiting requests from your account ({0}): too many in a short time. It lifts by itself after " +
-    "about an hour without requests; retrying sooner only makes it last longer. Inline completions and the automatic " +
-    "checks are paused until about {1}.",
+    "You have sent M365 Copilot too many requests in a short time, so it has paused your account for a while. " +
+    "It lifts by itself after about an hour without using it — trying again sooner only makes it last longer. " +
+    "Until then (about {0}), inline completions and automatic checks are paused.",
   "client.error.quotaDay":
-    "Your priority access to {0} is used up for today. It resets at midnight UTC ({1} your time); until then, pick " +
+    "You have used up today’s priority access to {0}. It resets at midnight UTC ({1} your time); until then, pick " +
     "another model.",
   "client.error.quotaWeek":
-    "Your priority access to {0} is used up for this week. It resets on Monday at midnight UTC ({1} your time); " +
+    "You have used up this week’s priority access to {0}. It resets on Monday at midnight UTC ({1} your time); " +
     "until then, pick another model.",
   "client.error.license":
-    "M365 Copilot says your account does not have a valid licence for this request ({0}). Check with your " +
-    "Microsoft 365 administrator.",
+    "M365 Copilot says your account does not have a valid licence for this. Check with your Microsoft 365 " +
+    "administrator.",
   "client.error.premiumRequired":
-    "“{0}” needs a Microsoft 365 Copilot licence, and M365 Copilot says your account does not have one (Copilot " +
-    "Chat alone is not enough). Pick another model, such as “M365 Copilot (Auto)”.",
+    "“{0}” needs a Microsoft 365 Copilot licence, and your account does not have one (Copilot Chat alone is not " +
+    "enough). Pick another model, such as “M365 Copilot (Auto)”.",
   "client.image.tooMany": "only the last {1} images go with a request ({0} left out)",
   "client.image.type": "{0} images are not supported (PNG, JPEG, GIF, WebP or BMP)",
   "client.image.tooBig": "an image of {0} MB is over the {1} MB limit",
