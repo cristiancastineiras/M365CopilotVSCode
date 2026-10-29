@@ -222,11 +222,7 @@ export class CopilotModelUnavailableError extends CopilotClientError {
  */
 export class CopilotPremiumRequiredError extends CopilotModelUnavailableError {
   constructor(tone: string, serverReply: string) {
-    super(
-      tone,
-      serverReply,
-      t("client.error.premiumRequired", prettyTone(tone)) + serverSaid(serverReply),
-    );
+    super(tone, serverReply, t("client.error.premiumRequired", prettyTone(tone)));
   }
 }
 
@@ -248,7 +244,7 @@ export class CopilotThrottledError extends CopilotClientError {
   /** When automatic requests may resume (epoch ms). */
   readonly until: number;
   constructor(errorCode: string, serverMessage: string, until: number) {
-    super(t("client.error.throttled", errorCode, formatMoment(until)) + serverSaid(serverMessage));
+    super(t("client.error.throttled", formatMoment(until)));
     this.errorCode = errorCode;
     this.serverMessage = serverMessage;
     this.until = until;
@@ -277,7 +273,7 @@ export class CopilotQuotaExhaustedError extends CopilotClientError {
         window === "week" ? "client.error.quotaWeek" : "client.error.quotaDay",
         tone ? prettyTone(tone) : "M365 Copilot",
         formatMoment(resetsAt),
-      ) + serverSaid(serverMessage),
+      ),
     );
     this.tone = tone;
     this.serverMessage = serverMessage;
@@ -296,7 +292,7 @@ export class CopilotLicenseError extends CopilotClientError {
   readonly errorCode: string;
   readonly serverMessage: string;
   constructor(errorCode: string, serverMessage: string) {
-    super(t("client.error.license", errorCode) + serverSaid(serverMessage));
+    super(t("client.error.license"));
     this.errorCode = errorCode;
     this.serverMessage = serverMessage;
   }
@@ -536,8 +532,7 @@ function describeUpgradeFailure(
   // A token for another service (pasted by hand) explains the rejection better
   // than "expired": the fix is copying the right one, not re-capturing.
   const audience = status === 401 || status === 403 ? foreignAudience(token) : null;
-  if (audience)
-    return new CopilotAuthError(t("client.error.foreignAudience", status, audience), status);
+  if (audience) return new CopilotAuthError(t("client.error.foreignAudience", audience), status);
   if (status === 401) return new CopilotAuthError(t("client.error.401"), status);
   if (status === 403) return new CopilotAuthError(t("client.error.403"), status);
   if (status === 429) return new CopilotClientError(t("client.error.429"));
@@ -979,7 +974,7 @@ export async function streamCopilotTurn(options: {
         // A clean close after we have some text is a normal end for a few
         // rings; treat any accumulated content as a completed turn.
         if (totalEmittedChars > 0) succeed();
-        else fail(new CopilotClientError(t("client.error.closed", code)));
+        else fail(new CopilotClientError(t("client.error.closed")));
       }
     });
 
@@ -1091,11 +1086,8 @@ export async function streamCopilotTurn(options: {
               fail(known);
               return;
             }
-            const detail = result.message ? `: ${result.message}` : "";
-            rejected(
-              new CopilotClientError(t("client.error.rejected", result.value, detail)),
-              `${result.value}${detail}`,
-            );
+            const reply = `${result.value}${result.message ? `: ${result.message}` : ""}`;
+            rejected(new CopilotClientError(t("client.error.rejected") + serverSaid(reply)), reply);
           },
           onDisengaged: () => {
             // The service ended the conversation itself: nothing to stop.

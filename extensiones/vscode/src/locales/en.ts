@@ -212,7 +212,7 @@ export const en = {
   "log.modelAvailable": "model {0} answered: no longer flagged as unavailable",
   "log.modelUnavailable": "model {0} flagged as unavailable for this account: {1}",
   "models.rejectedHint":
-    " — “{0}” may not be available in your tenant (any more); try M365 Copilot (Auto) or another model.",
+    " “{0}” may not be available in your organisation (any more); try “M365 Copilot (Auto)” or another model.",
   "menu.models": "Models: update and list",
   "log.modelsCatalog": "model catalog downloaded: {0} entries",
   "log.modelsCatalogFailed": "model catalog not downloaded ({0}); using the cached list",
@@ -298,7 +298,7 @@ export const en = {
     "Before writing, read the code the task touches and list every place the change must reach (callers, tests, " +
       "config, exports). Take the first option that fully works: does it need to exist at all? → something already " +
       "in this codebase → the standard library or platform → an installed dependency → one clear line → the minimum code.",
-    "No abstraction, option, wrapper or \"for later\" code nobody asked for; never add a dependency for a few lines. " +
+    'No abstraction, option, wrapper or "for later" code nobody asked for; never add a dependency for a few lines. ' +
       "Deletion beats addition. Keep the codebase's structure and conventions. Bug fix: find every caller, fix the root " +
       "cause once. New non-trivial logic leaves one small test. Never cut validation at trust boundaries, error " +
       "handling that prevents data loss, security, accessibility or anything the user asked for.",
@@ -313,14 +313,14 @@ export const en = {
     "- New feature: spec (goal, acceptance criteria) → small verifiable tasks → implement in thin slices, each verified " +
       "before the next. Bug: reproduce → find the root cause → fix → add a test that would have caught it.",
     "- Verify, don't assume: a task is done only with evidence (tests, build, diagnostics, output), never because it " +
-      "\"looks right\".",
+      '"looks right".',
     "- Review on five axes: correctness, readability, architecture, security, performance.",
   ].join("\n"),
   "prompt.skill.graphify":
     "This workspace has a graphify knowledge graph in `graphify-out/`. For questions about architecture, file " +
-    "relationships or \"how does X work / what calls Y\", use it before searching file by file: read " +
-    "`graphify-out/GRAPH_REPORT.md`, or, if you can run commands, `graphify query \"<question>\"`, " +
-    "`graphify path \"<A>\" \"<B>\"` or `graphify explain \"<node>\"`. After editing code, " +
+    'relationships or "how does X work / what calls Y", use it before searching file by file: read ' +
+    '`graphify-out/GRAPH_REPORT.md`, or, if you can run commands, `graphify query "<question>"`, ' +
+    '`graphify path "<A>" "<B>"` or `graphify explain "<node>"`. After editing code, ' +
     "`graphify . --update` refreshes it.",
   "prompt.markdownReminder":
     "Remember: if your answer includes code of 2 or more lines, put it inside ``` fences with the language. Never as " +
@@ -619,7 +619,7 @@ export const en = {
   "participant.stepLimit":
     "_(Stopped after {0} tool calls without a final answer — choose Continue below, or raise `m365copilot.chat.maxToolCalls` (0 = no limit).)_",
   "participant.timeLimit": "_(Stopped: the request took more than {0} min.)_",
-  "participant.error": "M365 Copilot failed: {0}",
+  "participant.error": "The answer could not be completed. {0}",
   "participant.followup.continue": "Continue",
   "participant.followup.continue.prompt": "Continue where you left off.",
   "participant.followup.explain": "Explain this code",

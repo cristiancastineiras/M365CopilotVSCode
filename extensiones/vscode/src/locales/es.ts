@@ -218,7 +218,7 @@ export const es: Record<keyof typeof en, string> = {
   "log.modelAvailable": "el modelo {0} contestó: ya no se marca como no disponible",
   "log.modelUnavailable": "el modelo {0} queda marcado como no disponible en esta cuenta: {1}",
   "models.rejectedHint":
-    " — puede que «{0}» no esté (ya) disponible en tu tenant; prueba M365 Copilot (Auto) u otro modelo.",
+    " Puede que «{0}» no esté (ya) disponible en tu organización; prueba «M365 Copilot (Auto)» u otro modelo.",
   "menu.models": "Modelos: actualizar y ver la lista",
   "log.modelsCatalog": "catálogo de modelos descargado: {0} entradas",
   "log.modelsCatalogFailed": "catálogo de modelos no descargado ({0}); se usa la lista en caché",
@@ -325,8 +325,8 @@ export const es: Record<keyof typeof en, string> = {
   "prompt.skill.graphify":
     "Este workspace tiene un grafo de conocimiento de graphify en `graphify-out/`. Para preguntas de arquitectura, " +
     "relaciones entre archivos o «cómo funciona X / quién llama a Y», úsalo antes de buscar archivo por archivo: lee " +
-    "`graphify-out/GRAPH_REPORT.md` o, si puedes ejecutar comandos, `graphify query \"<pregunta>\"`, " +
-    "`graphify path \"<A>\" \"<B>\"` o `graphify explain \"<nodo>\"`. Tras editar código, " +
+    '`graphify-out/GRAPH_REPORT.md` o, si puedes ejecutar comandos, `graphify query "<pregunta>"`, ' +
+    '`graphify path "<A>" "<B>"` o `graphify explain "<nodo>"`. Tras editar código, ' +
     "`graphify . --update` lo actualiza.",
   "prompt.markdownReminder":
     "Recuerda: si tu respuesta incluye código de 2 o más líneas, ponlo entre vallas ``` con el lenguaje. Nunca como " +
@@ -633,7 +633,7 @@ export const es: Record<keyof typeof en, string> = {
   "participant.stepLimit":
     "_(Me detuve tras {0} llamadas a herramientas sin una respuesta final — pulsa Continuar abajo, o sube `m365copilot.chat.maxToolCalls` (0 = sin límite).)_",
   "participant.timeLimit": "_(Me detuve: la petición superó los {0} min.)_",
-  "participant.error": "M365 Copilot falló: {0}",
+  "participant.error": "No se ha podido completar la respuesta. {0}",
   "participant.followup.continue": "Continuar",
   "participant.followup.continue.prompt": "Continúa donde lo dejaste.",
   "participant.followup.explain": "Explica este código",
