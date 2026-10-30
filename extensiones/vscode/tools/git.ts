@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import * as vscode from "vscode";
+import type * as vscode from "vscode";
 import { t } from "../src/i18n";
 import { debug } from "@m365copilot/core/bizchat";
 import { ensureNotCancelled, resolveWorkspacePath } from "./common";

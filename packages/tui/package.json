@@ -1,6 +1,6 @@
 {
   "name": "@m365copilot/tui",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "private": true,
   "description": "M365 Copilot en el terminal: un programa independiente con su propio cliente del protocolo BizChat; sólo necesita Node.",
   "type": "module",

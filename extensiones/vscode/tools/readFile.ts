@@ -1,4 +1,4 @@
-import * as vscode from "vscode";
+import type * as vscode from "vscode";
 import { t } from "../src/i18n";
 import {
   boundedInteger,
