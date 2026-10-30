@@ -9,7 +9,7 @@ description: "Instala la extensión de VS Code y la de navegador, conéctalas co
 
 - **VS Code 1.104 o posterior.**
 - **Una cuenta de Microsoft 365 con licencia de Copilot.** Si no la tienes, el servicio responde con un error de licencia y la extensión te lo dice; pregunta a tu administrador de Microsoft 365.
-- **Chrome, Edge o Firefox 128+** para la extensión de navegador (o Tampermonkey, mira el [paso 6](#6-sin-extensión-de-navegador-dos-alternativas)).
+- **Chrome, Edge o Firefox 140+** para la extensión de navegador (o Tampermonkey, mira el [paso 6](#6-sin-extensión-de-navegador-dos-alternativas)).
 
 El pack tiene dos piezas. La **extensión de VS Code** añade el chat, los modelos y las acciones del editor. La **extensión de navegador** lee el token de sesión que ya usa la aplicación web de Microsoft 365 Copilot y se lo envía a VS Code, así que nunca copias y pegas un token.
 

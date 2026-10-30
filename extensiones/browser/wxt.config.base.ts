@@ -85,12 +85,7 @@ export function manifestFor({ browser }: ConfigEnv): UserManifest {
     browser_specific_settings: {
       gecko: {
         id: FIREFOX_ADDON_ID,
-        // 128 es la primera versión con `world: 'MAIN'` en los content
-        // scripts del manifest (también en MV2): sin eso el interceptor corre
-        // aislado y no ve el WebSocket del chat, así que no captura nada.
-        strict_min_version: "128.0",
-        // Consentimiento de datos nativo de Firefox (140+; las anteriores lo
-        // ignoran con un aviso). AMO lo exige para firmar extensiones nuevas.
+        strict_min_version: "140.0",
         // Para Mozilla «transmitir» es sacar datos del navegador, y mandar el
         // perfil al servidor local de VS Code lo es: el token
         // (authenticationInfo) y la plantilla de la invocación `chat`, que
