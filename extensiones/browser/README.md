@@ -80,7 +80,7 @@ the next heartbeat (up to a minute).
 | Permission                                                  | What for                                                                                                                               |
 | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `storage`                                                   | The captured token and the auto-renewer’s state.                                                                                       |
-| `tabs`, `activeTab`                                         | Finding, reloading or opening the M365 Copilot tab.                                                                                    |
+| `tabs`                                                      | Finding, reloading or opening the M365 Copilot tab.                                                                                    |
 | `alarms`                                                    | The auto-renewer’s 1-min heartbeat (in MV3 the background sleeps).                                                                     |
 | `cookies`                                                   | Deleting Microsoft’s session cookies on sign-out.                                                                                      |
 | `browsingData`                                              | Clearing MSAL’s cache and the site storage of Microsoft’s sites.                                                                       |

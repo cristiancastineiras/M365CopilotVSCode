@@ -83,7 +83,7 @@ cerrado, la petición se recoge en el siguiente latido (hasta un minuto).
 | Permiso                                                           | Para qué                                                                                                                              |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `storage`                                                         | El token capturado y el estado del auto-renovador.                                                                                    |
-| `tabs`, `activeTab`                                               | Encontrar, recargar o abrir la pestaña de M365 Copilot.                                                                               |
+| `tabs`                                                            | Encontrar, recargar o abrir la pestaña de M365 Copilot.                                                                               |
 | `alarms`                                                          | El latido de 1 min del auto-renovador (en MV3 el background se duerme).                                                               |
 | `cookies`                                                         | Borrar las cookies de sesión de Microsoft al cerrar sesión.                                                                           |
 | `browsingData`                                                    | Vaciar la caché de MSAL y el almacenamiento de las webs de Microsoft.                                                                 |

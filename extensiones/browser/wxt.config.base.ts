@@ -37,7 +37,7 @@ export const sharedManifest: UserManifest = {
   // de MSAL (localStorage/IndexedDB) de cada web de M365. Sin estos dos
   // permisos, «renovar» sólo podía pedir otro token — y MSAL lo daba en
   // silencio con la sesión de siempre, sin volver a preguntar nada.
-  permissions: ["storage", "tabs", "activeTab", "alarms", "cookies", "browsingData"],
+  permissions: ["storage", "tabs", "alarms", "cookies", "browsingData"],
   host_permissions: [
     // Necesario para que el background pueda hacer fetch al servidor local de
     // la extensión de VS Code (http://localhost:51827) sin bloqueo de CORS.

@@ -117,7 +117,6 @@ El complemento necesita permisos relacionados con su función de enlace entre la
 
 - Almacenamiento: conservar el estado y los datos necesarios para el funcionamiento del complemento.
 - Pestañas: localizar y gestionar las páginas utilizadas en la captura, la renovación y el cierre de sesión.
-- Pestaña activa: intervenir sobre la pestaña correspondiente en las acciones que lo requieren.
 - Alarmas: programar las comprobaciones y los intentos de renovación.
 - Cookies: gestionar las cookies de los dominios contemplados durante el cierre de sesión completo.
 - Datos de navegación: eliminar almacenamiento de los orígenes correspondientes durante ese cierre.
