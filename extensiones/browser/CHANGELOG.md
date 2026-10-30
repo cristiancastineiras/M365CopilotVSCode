@@ -1,5 +1,16 @@
 # m365-copilot-vscode-extension
 
+## 3.0.4
+
+### Patch Changes
+
+- Require Firefox 140 so the browser extension's data collection declarations use Firefox's built-in consent flow. Remove the unused activeTab permission.
+
+  Add English Chrome Web Store listing assets and privacy declarations, publish a browser extension privacy policy, and update the installation guides and website requirements.
+
+- Updated dependencies [47b08c4]
+  - @m365copilot/core@3.0.4
+
 ## 3.0.3
 
 ### Patch Changes

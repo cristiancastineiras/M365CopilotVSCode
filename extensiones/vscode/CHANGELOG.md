@@ -1,5 +1,33 @@
 # m365-copilot-vscode
 
+## 3.0.4
+
+### Patch Changes
+
+- c5772e2: **`@m365` ya no se detiene a las 10 llamadas a herramientas: el límite es un ajuste y se puede continuar con un clic.**
+
+  - **Ajuste nuevo `m365copilot.chat.maxToolCalls`:** llamadas a herramientas por
+    petición antes de detenerse. Sube de 10 a 30 por defecto; `0` quita el límite
+    (la petición se detiene igualmente a los 8 minutos). `/explain` y `/terminal`
+    conservan sus límites cortos (4 y 6).
+  - **Botón «Continuar»:** si una petición se corta por el límite de llamadas o de
+    tiempo, el chat ofrece continuarla en vez de pedir que lo escribas, y el aviso
+    indica el ajuste que lo controla.
+
+- 47b08c4: **Los errores se leen como una frase, no como un volcado técnico.**
+
+  - **Sin pila en el chat:** cuando una petición falla, el chat de Copilot ya no
+    añade la traza (`Error: … at serviceResultError (client.ts:357)…`) tras el
+    motivo; sólo queda el mensaje.
+  - **Mensajes más claros:** fuera los códigos (`PerUserThrottled`, `401
+Unauthorized`, `403 Forbidden`, `429`, el código de cierre del socket) y la
+    cita repetida del servidor cuando el mensaje ya explica lo que pasa (límite de
+    peticiones, cuota, licencia). Los códigos siguen en el error y en la traza del
+    modo debug profundo.
+
+- Updated dependencies [47b08c4]
+  - @m365copilot/core@3.0.4
+
 ## 3.0.3
 
 ### Patch Changes

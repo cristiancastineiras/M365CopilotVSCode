@@ -1,4 +1,4 @@
-import * as vscode from "vscode";
+import type * as vscode from "vscode";
 import { ensureNotCancelled, type ResolvedWorkspacePath, resolveWorkspacePath } from "./common";
 import { validateConventionalCommitMessage } from "./commitMessage";
 import { execGit } from "./git";
