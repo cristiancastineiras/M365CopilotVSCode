@@ -117,7 +117,6 @@ The extension needs permissions related to its role as a link between the web se
 
 - Storage: retain the state and data needed for the extension to operate.
 - Tabs: locate and manage the pages used for capture, renewal, and sign-out.
-- Active tab: interact with the relevant tab when an action requires it.
 - Alarms: schedule checks and renewal attempts.
 - Cookies: manage cookies for the relevant domains during a full sign-out.
 - Browsing data: remove storage for the relevant origins during that sign-out.
