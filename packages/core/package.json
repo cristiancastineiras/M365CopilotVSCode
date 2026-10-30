@@ -33,9 +33,9 @@
     "ws": "^8.22.0"
   },
   "devDependencies": {
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "@types/ws": "^8.18.2",
-    "oxlint": "^1.87.0",
+    "oxlint": "^1.89.0",
     "typescript": "^7.0.2"
   }
 }
