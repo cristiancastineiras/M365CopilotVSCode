@@ -72,7 +72,7 @@ export const sharedManifest: UserManifest = {
  * temporales de about:debugging. Una vez firmado en AMO no se puede cambiar
  * — si cambia, Firefox lo trata como otro complemento distinto.
  */
-export const FIREFOX_ADDON_ID = "m365-copilot-vscode@cristiancastineiras.github.io";
+export const FIREFOX_ADDON_ID = "{d2fb168e-26b6-4d68-8bd8-2a2c46fe5a3f}";
 
 /**
  * Manifest por navegador. Chrome y Edge no conocen `browser_specific_settings`
