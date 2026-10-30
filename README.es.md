@@ -60,6 +60,24 @@ disponible en **inglés y español**.
 | Extensión de VS Code   | [README](extensiones/vscode/README.es.md) · [guía](extensiones/vscode/Guia.md) |
 | Extensión de navegador | [README](extensiones/browser/README.es.md)                                     |
 
+## Instalar en VS Code
+
+- **VS Marketplace:** abre la [página de la extensión](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode), o ejecuta `code --install-extension m365-copilot-vscode.m365-copilot-vscode`.
+- **Release de GitHub:** descarga el `.vsix` de la [última versión](https://github.com/cristiancastineiras/M365CopilotVSCode/releases/latest), luego ejecuta `code --install-extension m365-copilot-vscode-X.Y.Z.vsix` o elige **Instalar desde VSIX…** en la vista de Extensiones de VS Code.
+
+## Conectar el navegador
+
+La extensión complementaria del navegador captura y renueva el token de
+Microsoft 365 Copilot y lo envía a VS Code automáticamente. Instálala desde la
+misma [release de GitHub](https://github.com/cristiancastineiras/M365CopilotVSCode/releases/latest):
+Chrome y Edge usan **Cargar descomprimida** desde su página de extensiones;
+Firefox puede instalar el `.xpi` firmado. Consulta la
+[guía de instalación del navegador](extensiones/browser/README.es.md#instalación)
+para los pasos y permisos exactos. Por seguridad, el navegador requiere esta
+confirmación manual una sola vez; después, abre
+[M365 Copilot](https://m365.cloud.microsoft/chat/) y envía un mensaje para
+conectar. La extensión de navegador todavía no se distribuye en las tiendas.
+
 ## Primeros pasos
 
 ```bash
@@ -109,5 +127,9 @@ pnpm version-packages   # sube versiones + CHANGELOGs
 git commit -am "chore: release vX.Y.Z" && git tag vX.Y.Z && git push --follow-tags
 ```
 
-El push del tag lanza `.github/workflows/release.yml`, que compila todo y publica
-una release de GitHub con el `.vsix` y los dos zips del navegador.
+El push del tag lanza `.github/workflows/release.yml`, que comprueba que el tag
+coincida con las versiones de todos los paquetes, compila todo y publica una
+release de GitHub con el `.vsix` y los artefactos del navegador. Para publicar
+también la extensión de VS Code en el Marketplace, configura el secreto del
+repositorio `VSCE_PAT` con un token de publicación; sin él, la release de GitHub
+se publica normalmente.
