@@ -50,7 +50,7 @@ Descárgala desde las
   `xpinstall.signatures.required` a `false` en `about:config` y luego
   `about:addons` → ⚙ → _Instalar complemento desde archivo_ con el `.zip`.
 
-Firefox 128 o posterior. Si Firefox dice que el complemento «parece estar
+Firefox 140 o posterior. Si Firefox dice que el complemento «parece estar
 dañado», el zip es de la 2.0.0 o anterior (no llevaba ID de complemento):
 vuelve a descargarlo.
 

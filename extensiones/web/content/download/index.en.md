@@ -25,7 +25,7 @@ Same as Chrome, with `m365-copilot-vscode-extension-edge.zip` and `edge://extens
 - **Temporary, no signature needed:** `about:debugging` → **This Firefox** → **Load Temporary Add-on** and choose the `.zip` (no need to unzip it). Firefox removes it when it closes.
 - **Developer Edition, Nightly or ESR:** set `xpinstall.signatures.required` to `false` in `about:config`, then `about:addons` → ⚙ → **Install Add-on From File**.
 
-Firefox 128 or later.
+Firefox 140 or later.
 
 ## Installing the VS Code extension from a file
 

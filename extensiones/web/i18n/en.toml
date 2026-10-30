@@ -76,7 +76,7 @@ other = "VS Code 1.104 or later"
 [dl_req_account]
 other = "A Microsoft 365 account with a Copilot licence"
 [dl_req_browser]
-other = "Chrome, Edge or Firefox 128+ (or Tampermonkey)"
+other = "Chrome, Edge or Firefox 140+ (or Tampermonkey)"
 
 [shot_caption_note]
 other = "Screenshots of VS Code in English. The extension follows VS Code's language, English or Spanish."

@@ -48,7 +48,7 @@ Download it from the
   `xpinstall.signatures.required` to `false` in `about:config` and then
   `about:addons` → ⚙ → _Install Add-on From File_ with the `.zip`.
 
-Firefox 128 or later. If Firefox says the add-on "appears to be corrupt", the
+Firefox 140 or later. If Firefox says the add-on "appears to be corrupt", the
 zip is 2.0.0 or older (it had no add-on ID): download it again.
 
 Then open <https://m365.cloud.microsoft/chat/> and send a message.
