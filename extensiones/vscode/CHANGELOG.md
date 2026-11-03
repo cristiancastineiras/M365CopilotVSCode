@@ -1,5 +1,11 @@
 # m365-copilot-vscode
 
+## 3.0.6
+
+### Patch Changes
+
+- @m365copilot/core@3.0.6
+
 ## 3.0.5
 
 ### Patch Changes
