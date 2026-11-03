@@ -20,13 +20,14 @@ There are two ways to get your Microsoft 365 Copilot token into VS Code:
 
 ## 1. Option A: browser extension
 
-1. Download the extension for your browser from the
+1. Install the extension from the
+   [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd)
+   (Chrome and Edge) or from
+   [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/).
+   Without a store, the
    [repository releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases)
-   (Chrome/Edge or Firefox) and load it (in Chrome/Edge: unzip it, then
-   `chrome://extensions` → _Developer mode_ → _Load unpacked_; in Firefox: open
-   the signed `.xpi`, or without it `about:debugging` → _This Firefox_ → _Load
-   Temporary Add-on_ with the `.zip` — see the
-   [browser extension README](https://github.com/cristiancastineiras/M365CopilotVSCode/blob/main/extensiones/browser/README.md#install)).
+   have the `.zip` files — how to load them is in the
+   [browser extension README](https://github.com/cristiancastineiras/M365CopilotVSCode/blob/main/extensiones/browser/README.md#install).
 2. Go to [Microsoft 365 Copilot](https://m365.cloud.microsoft/chat/) and send
    any message.
 3. Open the extension's popup: when everything is green, the token is already

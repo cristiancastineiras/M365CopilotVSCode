@@ -1,5 +1,8 @@
 # M365 Copilot — extensión de navegador
 
+[![Chrome Web Store](https://img.shields.io/chrome-web-store/v/cdeegiifkgahagfcjhedkdcfbpipffdd?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white&color=0f6cbd)](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd)
+[![Firefox Add-ons](https://img.shields.io/amo/v/microsoft-365-copilot-vs-code?label=Firefox%20Add-ons&logo=firefoxbrowser&logoColor=white&color=0f6cbd)](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/)
+
 [English](README.md) · **Español**
 
 Compañera de la extensión [M365 Copilot para VS Code](../vscode). Captura el
@@ -31,17 +34,19 @@ navegador), igual que el nombre y la descripción de la extensión.
 
 ## Instalación
 
-Descárgala desde las
-[releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases):
+- **Chrome:** [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd).
+- **Firefox:** [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/).
+- **Edge:** desde la misma ficha de la Chrome Web Store (la primera vez Edge
+  pide _Permitir extensiones de otras tiendas_), o descomprime
+  `m365-copilot-vscode-extension-edge.zip` de las
+  [releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases)
+  → `edge://extensions` → _Modo de desarrollador_ → _Cargar descomprimida_.
+
+Desde la tienda se actualiza sola: cada versión llega en cuanto la tienda
+termina de revisarla. Sin tienda, cada release trae también los zips:
 
 - **Chrome:** descomprime `m365-copilot-vscode-extension-chrome.zip` →
   `chrome://extensions` → _Modo de desarrollador_ → _Cargar descomprimida_.
-- **Edge:** descomprime `m365-copilot-vscode-extension-edge.zip` →
-  `edge://extensions` → _Modo de desarrollador_ → _Cargar descomprimida_.
-- **Firefox (permanente):** abre `m365-copilot-vscode-extension-firefox.xpi` en
-  Firefox (o arrástralo a `about:addons`). Es el build firmado por Mozilla, el
-  único que Firefox Release instala de forma permanente; las releases sin
-  `.xpi` no se firmaron.
 - **Firefox (temporal, sin firma):** `about:debugging` → _Este Firefox_ →
   _Cargar complemento temporal_ → elige
   `m365-copilot-vscode-extension-firefox.zip` (no hace falta descomprimirlo).
@@ -105,10 +110,15 @@ pnpm build              # → ../../releases/chrome
 pnpm build:edge         # → ../../releases/edge
 pnpm build:firefox      # → ../../releases/firefox
 pnpm zip && pnpm zip:edge && pnpm zip:firefox
-pnpm sign:firefox       # .xpi firmado por Mozilla (AMO, unlisted): requiere WEB_EXT_API_KEY / WEB_EXT_API_SECRET
 pnpm typecheck
 pnpm test               # política y ciclo de renovación contra un `chrome` falso
 ```
+
+La publicación en la Chrome Web Store y en Firefox Add-ons la hace
+[`release.yml`](../../.github/workflows/release.yml) con cada tag `vX.Y.Z`
+(`wxt submit`; los secrets que necesita están listados en el workflow). A mano:
+`pnpm exec wxt submit init` una vez (escribe `.env.submit`, ignorado por git) y
+luego `pnpm exec wxt submit --chrome-zip … --firefox-zip … --firefox-sources-zip …`.
 
 Stack: [WXT](https://wxt.dev/) + React 18 + TypeScript. El contrato compartido
 con VS Code (puerto, rutas, tipos del perfil, utilidades de JWT) vive en
