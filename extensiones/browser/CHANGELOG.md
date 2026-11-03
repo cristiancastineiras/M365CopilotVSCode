@@ -1,5 +1,13 @@
 # m365-copilot-vscode-extension
 
+## 3.0.5
+
+### Patch Changes
+
+- Install the browser extension from the Chrome Web Store (Chrome and Edge) or Firefox Add-ons; every release is submitted to both stores automatically and updates itself from there. Releases no longer include a separately signed Firefox `.xpi`: Firefox Add-ons signs it.
+- d583c09: Use a new UUID-based Firefox add-on ID for a separate AMO submission. Firefox treats this as a different extension; installations using the previous email-style ID cannot update to this identity automatically.
+  - @m365copilot/core@3.0.5
+
 ## 3.0.4
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @m365copilot/tui
 
+## 3.0.4
+
+### Patch Changes
+
+- @m365copilot/core@3.0.5
+
 ## 3.0.3
 
 ### Patch Changes
