@@ -1,5 +1,8 @@
 # M365 Copilot — browser extension
 
+[![Chrome Web Store](https://img.shields.io/chrome-web-store/v/cdeegiifkgahagfcjhedkdcfbpipffdd?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white&color=0f6cbd)](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd)
+[![Firefox Add-ons](https://img.shields.io/amo/v/microsoft-365-copilot-vs-code?label=Firefox%20Add-ons&logo=firefoxbrowser&logoColor=white&color=0f6cbd)](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/)
+
 **English** · [Español](README.es.md)
 
 Companion of the [M365 Copilot for VS Code](../vscode) extension. It captures
@@ -29,17 +32,19 @@ the extension's name and description.
 
 ## Install
 
-Download it from the
-[releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases):
+- **Chrome:** [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd).
+- **Firefox:** [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/).
+- **Edge:** from the same Chrome Web Store page (the first time Edge asks you
+  to _Allow extensions from other stores_), or unzip
+  `m365-copilot-vscode-extension-edge.zip` from the
+  [releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases)
+  → `edge://extensions` → _Developer mode_ → _Load unpacked_.
+
+The store versions update themselves: each version arrives as soon as the
+store has reviewed it. Without a store, every release also has the zips:
 
 - **Chrome:** unzip `m365-copilot-vscode-extension-chrome.zip` →
   `chrome://extensions` → _Developer mode_ → _Load unpacked_.
-- **Edge:** unzip `m365-copilot-vscode-extension-edge.zip` →
-  `edge://extensions` → _Developer mode_ → _Load unpacked_.
-- **Firefox (permanent):** open `m365-copilot-vscode-extension-firefox.xpi` in
-  Firefox (or drag it onto `about:addons`). It is the Mozilla-signed build, the
-  only kind Firefox Release installs permanently; releases without the `.xpi`
-  were not signed.
 - **Firefox (temporary, no signature needed):** `about:debugging` → _This
   Firefox_ → _Load Temporary Add-on_ → choose
   `m365-copilot-vscode-extension-firefox.zip` (no need to unzip it). Firefox
@@ -48,7 +53,7 @@ Download it from the
   `xpinstall.signatures.required` to `false` in `about:config` and then
   `about:addons` → ⚙ → _Install Add-on From File_ with the `.zip`.
 
-Firefox 128 or later. If Firefox says the add-on "appears to be corrupt", the
+Firefox 140 or later. If Firefox says the add-on "appears to be corrupt", the
 zip is 2.0.0 or older (it had no add-on ID): download it again.
 
 Then open <https://m365.cloud.microsoft/chat/> and send a message.
@@ -80,7 +85,7 @@ the next heartbeat (up to a minute).
 | Permission                                                  | What for                                                                                                                               |
 | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `storage`                                                   | The captured token and the auto-renewer’s state.                                                                                       |
-| `tabs`, `activeTab`                                         | Finding, reloading or opening the M365 Copilot tab.                                                                                    |
+| `tabs`                                                      | Finding, reloading or opening the M365 Copilot tab.                                                                                    |
 | `alarms`                                                    | The auto-renewer’s 1-min heartbeat (in MV3 the background sleeps).                                                                     |
 | `cookies`                                                   | Deleting Microsoft’s session cookies on sign-out.                                                                                      |
 | `browsingData`                                              | Clearing MSAL’s cache and the site storage of Microsoft’s sites.                                                                       |
@@ -101,10 +106,15 @@ pnpm build              # → ../../releases/chrome
 pnpm build:edge         # → ../../releases/edge
 pnpm build:firefox      # → ../../releases/firefox
 pnpm zip && pnpm zip:edge && pnpm zip:firefox
-pnpm sign:firefox       # Mozilla-signed .xpi (AMO, unlisted): needs WEB_EXT_API_KEY / WEB_EXT_API_SECRET
 pnpm typecheck
 pnpm test               # refresh policy and refresh cycle against a fake `chrome`
 ```
+
+Publishing to the Chrome Web Store and Firefox Add-ons is done by
+[`release.yml`](../../.github/workflows/release.yml) on every `vX.Y.Z` tag
+(`wxt submit`; the secrets it needs are listed in the workflow). By hand:
+`pnpm exec wxt submit init` once (it writes `.env.submit`, git-ignored), then
+`pnpm exec wxt submit --chrome-zip … --firefox-zip … --firefox-sources-zip …`.
 
 Stack: [WXT](https://wxt.dev/) + React 18 + TypeScript. The shared contract with
 VS Code (port, paths, profile types, JWT helpers) lives in

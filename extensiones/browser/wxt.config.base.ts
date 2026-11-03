@@ -37,7 +37,7 @@ export const sharedManifest: UserManifest = {
   // de MSAL (localStorage/IndexedDB) de cada web de M365. Sin estos dos
   // permisos, «renovar» sólo podía pedir otro token — y MSAL lo daba en
   // silencio con la sesión de siempre, sin volver a preguntar nada.
-  permissions: ["storage", "tabs", "activeTab", "alarms", "cookies", "browsingData"],
+  permissions: ["storage", "tabs", "alarms", "cookies", "browsingData"],
   host_permissions: [
     // Necesario para que el background pueda hacer fetch al servidor local de
     // la extensión de VS Code (http://localhost:51827) sin bloqueo de CORS.
@@ -72,7 +72,7 @@ export const sharedManifest: UserManifest = {
  * temporales de about:debugging. Una vez firmado en AMO no se puede cambiar
  * — si cambia, Firefox lo trata como otro complemento distinto.
  */
-export const FIREFOX_ADDON_ID = "m365-copilot-vscode@cristiancastineiras.github.io";
+export const FIREFOX_ADDON_ID = "{d2fb168e-26b6-4d68-8bd8-2a2c46fe5a3f}";
 
 /**
  * Manifest por navegador. Chrome y Edge no conocen `browser_specific_settings`
@@ -85,12 +85,7 @@ export function manifestFor({ browser }: ConfigEnv): UserManifest {
     browser_specific_settings: {
       gecko: {
         id: FIREFOX_ADDON_ID,
-        // 128 es la primera versión con `world: 'MAIN'` en los content
-        // scripts del manifest (también en MV2): sin eso el interceptor corre
-        // aislado y no ve el WebSocket del chat, así que no captura nada.
-        strict_min_version: "128.0",
-        // Consentimiento de datos nativo de Firefox (140+; las anteriores lo
-        // ignoran con un aviso). AMO lo exige para firmar extensiones nuevas.
+        strict_min_version: "140.0",
         // Para Mozilla «transmitir» es sacar datos del navegador, y mandar el
         // perfil al servidor local de VS Code lo es: el token
         // (authenticationInfo) y la plantilla de la invocación `chat`, que

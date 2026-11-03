@@ -9,7 +9,7 @@ description: "Instala la extensión de VS Code y la de navegador, conéctalas co
 
 - **VS Code 1.104 o posterior.**
 - **Una cuenta de Microsoft 365 con licencia de Copilot.** Si no la tienes, el servicio responde con un error de licencia y la extensión te lo dice; pregunta a tu administrador de Microsoft 365.
-- **Chrome, Edge o Firefox 128+** para la extensión de navegador (o Tampermonkey, mira el [paso 6](#6-sin-extensión-de-navegador-dos-alternativas)).
+- **Chrome, Edge o Firefox 140+** para la extensión de navegador (o Tampermonkey, mira el [paso 6](#6-sin-extensión-de-navegador-dos-alternativas)).
 
 El pack tiene dos piezas. La **extensión de VS Code** añade el chat, los modelos y las acciones del editor. La **extensión de navegador** lee el token de sesión que ya usa la aplicación web de Microsoft 365 Copilot y se lo envía a VS Code, así que nunca copias y pegas un token.
 
@@ -28,11 +28,11 @@ Al terminar aparece un elemento **M365** en la barra de estado (abajo a la derec
 
 ## 2. Instala la extensión de navegador
 
-Descárgala desde la [página de descargas](../descarga/) y cárgala:
+- **Chrome:** instálala desde la [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd).
+- **Edge:** desde la misma ficha de la Chrome Web Store (la primera vez, Edge te pide **Permitir extensiones de otras tiendas**).
+- **Firefox:** instálala desde [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/).
 
-- **Chrome:** descomprime el archivo, abre `chrome://extensions`, activa el **Modo de desarrollador**, pulsa **Cargar descomprimida** y elige la carpeta.
-- **Edge:** igual, desde `edge://extensions`.
-- **Firefox:** abre en Firefox el archivo `.xpi` firmado. Si no lo hay, ve a `about:debugging` → **Este Firefox** → **Cargar complemento temporal** y elige el `.zip` (Firefox lo quita al cerrarse).
+¿No puedes usar las tiendas? La [página de descargas](../descarga/#sin-tienda) explica cómo cargar el `.zip` de la release.
 
 ## 3. Conecta con un solo mensaje
 

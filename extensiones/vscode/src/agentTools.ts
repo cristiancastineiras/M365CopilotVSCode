@@ -7,7 +7,7 @@ import {
   type SearchTextInput,
 } from "../tools/listFiles";
 import { readWorkspaceFile, type ReadFileInput } from "../tools/readFile";
-import { WorkspaceEditManager, type ApplyWorkspaceEditsInput } from "../tools/writeFile";
+import type { WorkspaceEditManager, ApplyWorkspaceEditsInput } from "../tools/writeFile";
 import { getWorkspaceDiagnostics, type GetDiagnosticsInput } from "../tools/diagnostics";
 import { getGitInfo, type GitInfoInput } from "../tools/git";
 import { generateCommitMessage, type GenerateCommitMessageInput } from "../tools/gitCommitMessage";

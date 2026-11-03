@@ -1,5 +1,31 @@
 # m365-copilot-vscode-extension
 
+## 3.0.6
+
+### Patch Changes
+
+- Fix the automatic Chrome Web Store submission: 3.0.5 only reached Firefox Add-ons. The release workflow now accepts the service account key exactly as it appears in Google's JSON file.
+  - @m365copilot/core@3.0.6
+
+## 3.0.5
+
+### Patch Changes
+
+- Install the browser extension from the Chrome Web Store (Chrome and Edge) or Firefox Add-ons; every release is submitted to both stores automatically and updates itself from there. Releases no longer include a separately signed Firefox `.xpi`: Firefox Add-ons signs it.
+- d583c09: Use a new UUID-based Firefox add-on ID for a separate AMO submission. Firefox treats this as a different extension; installations using the previous email-style ID cannot update to this identity automatically.
+  - @m365copilot/core@3.0.5
+
+## 3.0.4
+
+### Patch Changes
+
+- Require Firefox 140 so the browser extension's data collection declarations use Firefox's built-in consent flow. Remove the unused activeTab permission.
+
+  Add English Chrome Web Store listing assets and privacy declarations, publish a browser extension privacy policy, and update the installation guides and website requirements.
+
+- Updated dependencies [47b08c4]
+  - @m365copilot/core@3.0.4
+
 ## 3.0.3
 
 ### Patch Changes

@@ -17,6 +17,7 @@
           {{ with site.GetPage "/guide" }}<li><a href="{{ .RelPermalink }}">{{ i18n "nav_guide" }}</a></li>{{ end }}
           {{ with site.GetPage "/download" }}<li><a href="{{ .RelPermalink }}">{{ i18n "nav_download" }}</a></li>{{ end }}
           <li><a href="{{ site.Home.RelPermalink }}#faq">{{ i18n "nav_faq" }}</a></li>
+          {{ with site.GetPage "/privacy" }}<li><a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a></li>{{ end }}
         </ul>
       </nav>
       <nav aria-label="{{ i18n "footer_project" }}">

@@ -4,6 +4,8 @@
 [![Instalaciones](https://flat.badgen.net/vs-marketplace/i/m365-copilot-vscode.m365-copilot-vscode?label=instalaciones&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode)
 [![Descargas](https://flat.badgen.net/vs-marketplace/d/m365-copilot-vscode.m365-copilot-vscode?label=descargas&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode)
 [![Valoración](https://flat.badgen.net/vs-marketplace/rating/m365-copilot-vscode.m365-copilot-vscode?label=valoraci%C3%B3n&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode&ssr=false#review-details)
+[![Chrome Web Store](https://img.shields.io/chrome-web-store/v/cdeegiifkgahagfcjhedkdcfbpipffdd?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white&color=0f6cbd)](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd)
+[![Firefox Add-ons](https://img.shields.io/amo/v/microsoft-365-copilot-vs-code?label=Firefox%20Add-ons&logo=firefoxbrowser&logoColor=white&color=0f6cbd)](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/)
 
 [![Última versión](https://img.shields.io/github/v/release/cristiancastineiras/M365CopilotVSCode?label=versi%C3%B3n&logo=github&color=24292f)](https://github.com/cristiancastineiras/M365CopilotVSCode/releases/latest)
 [![Compilación](https://img.shields.io/github/actions/workflow/status/cristiancastineiras/M365CopilotVSCode/release.yml?label=compilaci%C3%B3n&logo=githubactions&logoColor=white)](https://github.com/cristiancastineiras/M365CopilotVSCode/actions/workflows/release.yml)
@@ -58,7 +60,7 @@ disponible en **inglés y español**.
 | Paquete                | Documentación                                                                  |
 | ---------------------- | ------------------------------------------------------------------------------ |
 | Extensión de VS Code   | [README](extensiones/vscode/README.es.md) · [guía](extensiones/vscode/Guia.md) |
-| Extensión de navegador | [README](extensiones/browser/README.es.md)                                     |
+| Extensión de navegador | [README](extensiones/browser/README.es.md) · instálala desde la [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd) o [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/) |
 
 ## Instalar en VS Code
 
@@ -69,14 +71,15 @@ disponible en **inglés y español**.
 
 La extensión complementaria del navegador captura y renueva el token de
 Microsoft 365 Copilot y lo envía a VS Code automáticamente. Instálala desde la
-misma [release de GitHub](https://github.com/cristiancastineiras/M365CopilotVSCode/releases/latest):
-Chrome y Edge usan **Cargar descomprimida** desde su página de extensiones;
-Firefox puede instalar el `.xpi` firmado. Consulta la
-[guía de instalación del navegador](extensiones/browser/README.es.md#instalación)
-para los pasos y permisos exactos. Por seguridad, el navegador requiere esta
+[Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd)
+(Chrome y Edge) o [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/).
+Para instalarla manualmente, las releases de GitHub incluyen los ZIP del
+navegador; consulta la
+[guía de instalación](extensiones/browser/README.es.md#instalación) para ver
+los pasos y permisos exactos. Por seguridad, el navegador requiere una
 confirmación manual una sola vez; después, abre
 [M365 Copilot](https://m365.cloud.microsoft/chat/) y envía un mensaje para
-conectar. La extensión de navegador todavía no se distribuye en las tiendas.
+conectar.
 
 ## Primeros pasos
 
@@ -92,8 +95,11 @@ Requiere Node ≥ 22.18 y pnpm 10.
 `releases/` está en `.gitignore`: los artefactos oficiales (VS Code, Chrome,
 Edge, Firefox y el userscript de Tampermonkey) los genera
 [`.github/workflows/release.yml`](.github/workflows/release.yml) al subir un
-tag `vX.Y.Z` y sólo se publican en las
+tag `vX.Y.Z` y se adjuntan a las
 [releases de GitHub](https://github.com/cristiancastineiras/M365CopilotVSCode/releases).
+Si están configuradas las credenciales de las tiendas, el workflow también
+publica la extensión de VS Code en el Marketplace y envía la extensión de
+navegador a revisión en Chrome Web Store y Firefox Add-ons.
 
 ## Idiomas
 
@@ -129,7 +135,8 @@ git commit -am "chore: release vX.Y.Z" && git tag vX.Y.Z && git push --follow-ta
 
 El push del tag lanza `.github/workflows/release.yml`, que comprueba que el tag
 coincida con las versiones de todos los paquetes, compila todo y publica una
-release de GitHub con el `.vsix` y los artefactos del navegador. Para publicar
-también la extensión de VS Code en el Marketplace, configura el secreto del
-repositorio `VSCE_PAT` con un token de publicación; sin él, la release de GitHub
-se publica normalmente.
+release de GitHub con el `.vsix` y los zips del navegador. Después publica el
+`.vsix` en el VS Code Marketplace (Microsoft Entra ID mediante OIDC de GitHub,
+sin PAT) y envía la extensión de navegador a revisión en Chrome Web Store y
+Firefox Add-ons (cada tienda sólo si tiene sus credenciales configuradas; el
+workflow las documenta).

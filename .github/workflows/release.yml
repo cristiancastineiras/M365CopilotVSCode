@@ -7,10 +7,13 @@ name: Release
 #   releases/vscode/m365-copilot-vscode-X.Y.Z.vsix
 #   releases/chrome/m365-copilot-vscode-extension-chrome.zip
 #   releases/edge/m365-copilot-vscode-extension-edge.zip
-#   releases/firefox/m365-copilot-vscode-extension-firefox.zip (+ .xpi firmado)
+#   releases/firefox/m365-copilot-vscode-extension-firefox.zip
 #   releases/tampermonkey/m365copilot-token.user.js
 # La carpeta releases/ sólo existe aquí, en el runner: está en .gitignore y
 # no se versiona; la release de GitHub es el único sitio donde se publican.
+# Después publica el .vsix en el VS Code Marketplace y sube la extensión de
+# navegador a Chrome Web Store y a Firefox Add-ons (AMO), cada tienda sólo si
+# tiene sus secrets (ver más abajo) y cada una aunque otra falle.
 #
 # Flujo para sacar una versión nueva:
 #   1. pnpm changeset            # describe el cambio (interactivo)
@@ -26,18 +29,38 @@ on:
 
 permissions:
   contents: write
+  # Token OIDC de GitHub para entrar en Microsoft Entra ID sin secreto (VS Code
+  # Marketplace).
+  id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Credenciales de la API de AMO (addons.mozilla.org → Developer Hub → Manage
-    # API Keys) guardadas como secrets AMO_JWT_ISSUER / AMO_JWT_SECRET. Si no
-    # están, la release sale igual, sin el .xpi firmado. Aquí sólo va si
-    # existen (`secrets` no se puede usar en el `if:` de un step); las claves
-    # en sí sólo las ve el step que firma, no los postinstall de `pnpm install`.
+    # La credencial federada de la app de Entra ID confía en este entorno
+    # (sujeto `repo:cristiancastineiras/M365CopilotVSCode:environment:marketplace`).
+    environment: marketplace
+    # Credenciales de las tiendas, como secrets del repositorio:
+    #   VS Code Marketplace: AZURE_CLIENT_ID / AZURE_TENANT_ID de una app de
+    #     Microsoft Entra ID con credencial federada para el entorno de arriba,
+    #     añadida como Contributor del publisher `m365-copilot-vscode`. Sin
+    #     PAT: los PAT globales de Azure DevOps se retiran el 1-12-2026. El
+    #     workflow marketplace-check.yml da el ID que pide el Marketplace y
+    #     comprueba los permisos.
+    #   Firefox Add-ons: AMO_JWT_ISSUER / AMO_JWT_SECRET (addons.mozilla.org →
+    #     Developer Hub → Manage API Keys).
+    #   Chrome Web Store (API v2; la v1.1 se apagó el 15-10-2026):
+    #     CWS_PUBLISHER_ID (Developer Dashboard → Account) y la cuenta de
+    #     servicio de Google Cloud con acceso a ese publisher:
+    #     CWS_SERVICE_ACCOUNT_EMAIL / CWS_SERVICE_ACCOUNT_PRIVATE_KEY (el
+    #     `private_key` del JSON, con «\n» literales o con saltos reales).
+    # Sin los de una tienda, la release sale igual y esa tienda no se toca.
+    # Aquí sólo va si existen (`secrets` no se puede usar en el `if:` de un
+    # step); las claves en sí sólo las ve el step que publica, no los
+    # postinstall de `pnpm install`.
     env:
       HAS_AMO_KEYS: ${{ secrets.AMO_JWT_ISSUER != '' && secrets.AMO_JWT_SECRET != '' }}
-      HAS_VSCE_PAT: ${{ secrets.VSCE_PAT != '' }}
+      HAS_CWS_KEYS: ${{ secrets.CWS_PUBLISHER_ID != '' && secrets.CWS_SERVICE_ACCOUNT_EMAIL != '' && secrets.CWS_SERVICE_ACCOUNT_PRIVATE_KEY != '' }}
+      HAS_AZURE_ID: ${{ secrets.AZURE_CLIENT_ID != '' && secrets.AZURE_TENANT_ID != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -84,6 +107,7 @@ jobs:
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
 
       - name: Publicar release en GitHub
+        id: gh-release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
@@ -97,28 +121,52 @@ jobs:
             releases/firefox/m365-copilot-vscode-extension-firefox.zip
             releases/tampermonkey/m365copilot-token.user.js
 
-      # Firefox Release sólo instala de forma permanente complementos firmados
-      # por Mozilla: sin firma, el .zip sólo sirve como complemento temporal.
-      # Canal «unlisted»: AMO lo firma pero no lo publica en la tienda.
-      - name: Firmar la extensión de Firefox en AMO
-        if: env.HAS_AMO_KEYS == 'true'
-        env:
-          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
-          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
-        run: pnpm --filter m365-copilot-vscode-extension sign:firefox
-
-      - name: Añadir el .xpi firmado a la release
-        if: env.HAS_AMO_KEYS == 'true'
-        uses: softprops/action-gh-release@v3
+      # Cada tienda corre si la release de GitHub salió, aunque otra tienda
+      # falle (`!cancelled()`): un fallo en una no deja a las demás sin versión.
+      - name: Iniciar sesión en Microsoft Entra ID (VS Code Marketplace)
+        id: azure-login
+        if: ${{ !cancelled() && steps.gh-release.outcome == 'success' && env.HAS_AZURE_ID == 'true' }}
+        uses: azure/login@v3
         with:
-          tag_name: ${{ github.ref_name }}
-          fail_on_unmatched_files: true
-          files: releases/firefox/m365-copilot-vscode-extension-firefox.xpi
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
 
-      # VSCE_PAT es un PAT de Azure DevOps con acceso a publicar extensiones.
-      # Sin él, la release de GitHub se publica normalmente y este paso se omite.
-      - name: Publicar extensión de VS Code en VS Marketplace
-        if: env.HAS_VSCE_PAT == 'true'
+      # El mismo .vsix de la release. --skip-duplicate: relanzar el job no
+      # falla por una versión que ya está publicada.
+      - name: Publicar en VS Code Marketplace
+        if: ${{ !cancelled() && steps.azure-login.outcome == 'success' }}
+        working-directory: extensiones/vscode
+        run: pnpm exec vsce publish --azure-credential --skip-duplicate --packagePath "../../releases/vscode/m365-copilot-vscode-${VERSION}.vsix"
+
+      # `wxt submit` (publish-browser-extension, viene con WXT) sube cada zip y
+      # lo manda a revisión; la tienda publica la versión cuando la aprueba.
+      # Una tienda sin zip se salta. AMO recibe también el zip de fuentes
+      # porque el código va minificado, y firma la versión él mismo: no hay
+      # .xpi propio (AMO no admite el mismo número de versión en dos canales).
+      # Edge no tiene tienda aquí: se instala desde la Chrome Web Store o con
+      # el .zip de la release.
+      - name: Publicar en Chrome Web Store y Firefox Add-ons
+        if: ${{ !cancelled() && steps.gh-release.outcome == 'success' && (env.HAS_CWS_KEYS == 'true' || env.HAS_AMO_KEYS == 'true') }}
+        working-directory: extensiones/browser
         env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: pnpm --filter m365-copilot-vscode exec vsce publish --packagePath "$GITHUB_WORKSPACE/releases/vscode/m365-copilot-vscode-${VERSION}.vsix" --pat "$VSCE_PAT"
+          CHROME_ZIP: ${{ env.HAS_CWS_KEYS == 'true' && '../../releases/chrome/m365-copilot-vscode-extension-chrome.zip' || '' }}
+          CHROME_API_VERSION: v2
+          CHROME_EXTENSION_ID: cdeegiifkgahagfcjhedkdcfbpipffdd
+          CHROME_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+          CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL: ${{ secrets.CWS_SERVICE_ACCOUNT_EMAIL }}
+          CHROME_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.CWS_SERVICE_ACCOUNT_PRIVATE_KEY }}
+          FIREFOX_ZIP: ${{ env.HAS_AMO_KEYS == 'true' && '../../releases/firefox/m365-copilot-vscode-extension-firefox.zip' || '' }}
+          FIREFOX_SOURCES_ZIP: ../../releases/firefox/m365-copilot-vscode-extension-${{ env.VERSION }}-sources.zip
+          # ID numérico de AMO del complemento (FIREFOX_ADDON_ID en
+          # wxt.config.base.ts). No el GUID: wxt submit le quita las llaves y
+          # AMO sólo encuentra un GUID de tipo UUID con ellas (404).
+          FIREFOX_EXTENSION_ID: "3113010"
+          FIREFOX_CHANNEL: listed
+          FIREFOX_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          FIREFOX_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        # La clave de la cuenta de servicio se acepta tal cual sale del JSON de
+        # Google (con «\n» literales): el PEM necesita saltos de línea reales.
+        run: |
+          CHROME_SERVICE_ACCOUNT_PRIVATE_KEY="$(printf '%s' "$CHROME_SERVICE_ACCOUNT_PRIVATE_KEY" | sed 's/\\n/\n/g')" \
+            pnpm exec wxt submit

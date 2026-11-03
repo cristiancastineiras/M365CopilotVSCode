@@ -23,6 +23,8 @@ disableKinds = ["RSS", "taxonomy", "term"]
 [params]
   repo = "cristiancastineiras/M365CopilotVSCode"
   marketplaceId = "m365-copilot-vscode.m365-copilot-vscode"
+  chromeStore = "https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd"
+  firefoxStore = "https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/"
   defaultLang = "en"
   # Analítica sin cookies (https://<nombre>.goatcounter.com). Vacío = sin analítica.
   goatcounter = "m365copilotvscode"

@@ -1,6 +1,6 @@
 {
   "name": "m365-copilot-vscode-extension",
-  "version": "3.0.3",
+  "version": "3.0.6",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,7 +14,6 @@
     "zip": "wxt zip && node scripts/rename-zip.mjs ../../releases/chrome chrome m365-copilot-vscode-extension-chrome.zip",
     "zip:edge": "wxt zip -b edge -c wxt.config.edge.ts && node scripts/rename-zip.mjs ../../releases/edge edge m365-copilot-vscode-extension-edge.zip",
     "zip:firefox": "wxt zip -b firefox -c wxt.config.firefox.ts && node scripts/rename-zip.mjs ../../releases/firefox firefox m365-copilot-vscode-extension-firefox.zip",
-    "sign:firefox": "node scripts/sign-firefox.mjs",
     "postinstall": "wxt prepare",
     "test": "node --experimental-strip-types --import ./test/register.mjs test/refreshPolicy.mts && node --experimental-strip-types --import ./test/register.mjs test/refreshCycle.mts && node --experimental-strip-types --import ./test/register.mjs test/capture.mts && node --experimental-strip-types --import ./test/register.mjs test/hardReset.mts"
   },

@@ -8,7 +8,7 @@ description: "Install the VS Code extension and the browser extension, connect t
 
 - **VS Code 1.104 or later.**
 - **A Microsoft 365 account with a Copilot licence.** If you do not have one, the service answers with a licence error and the extension tells you so; ask your Microsoft 365 admin.
-- **Chrome, Edge or Firefox 128+** for the browser extension (or Tampermonkey, see [step 6](#6-no-browser-extension-two-alternatives)).
+- **Chrome, Edge or Firefox 140+** for the browser extension (or Tampermonkey, see [step 6](#6-no-browser-extension-two-alternatives)).
 
 The pack has two pieces. The **VS Code extension** adds the chat, the models and the editor actions. The **browser extension** reads the session token the Microsoft 365 Copilot web app already uses and sends it to VS Code, so you never copy and paste a token.
 
@@ -24,11 +24,11 @@ When it is installed, an **M365** item appears in the status bar (bottom right).
 
 ## 2. Install the browser extension
 
-Download it from the [downloads page](../download/) and load it:
+- **Chrome:** install it from the [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd).
+- **Edge:** from the same Chrome Web Store page (the first time, Edge asks you to **Allow extensions from other stores**).
+- **Firefox:** install it from [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/).
 
-- **Chrome:** unzip the file, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and choose the unzipped folder.
-- **Edge:** the same, from `edge://extensions`.
-- **Firefox:** open the signed `.xpi` file in Firefox. Without it, go to `about:debugging` → **This Firefox** → **Load Temporary Add-on** and choose the `.zip` (Firefox removes it when it closes).
+Can't use the stores? The [downloads page](../download/#without-the-store) explains how to load the `.zip` from the release.
 
 ## 3. Connect with one message
 

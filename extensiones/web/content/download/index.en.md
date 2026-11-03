@@ -2,30 +2,28 @@
 title: "Download M365 Copilot for VS Code"
 heading: "Download the pack"
 layout: download
-description: "Direct downloads of the M365 Copilot VS Code extension, the Chrome, Edge and Firefox extension and the Tampermonkey userscript, from the latest GitHub release."
+description: "Install the M365 Copilot VS Code extension, the browser extension from the Chrome Web Store (Chrome and Edge) or Firefox Add-ons, and the Tampermonkey userscript."
 ---
 
 ## Installing the browser extension
 
-The browser extension is not in the browser stores: you load the file from the release. It takes a minute.
+### Chrome and Edge
 
-### Chrome
-
-1. Unzip `m365-copilot-vscode-extension-chrome.zip` into a folder you will keep (the browser reads it from there).
-2. Open `chrome://extensions` and turn on **Developer mode**.
-3. Click **Load unpacked** and choose that folder.
-
-### Edge
-
-Same as Chrome, with `m365-copilot-vscode-extension-edge.zip` and `edge://extensions`.
+Install it from the [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd). Edge installs it from there too: the first time, it asks you to **Allow extensions from other stores**.
 
 ### Firefox
 
-- **Permanent:** open the signed `.xpi` file in Firefox (or drag it onto `about:addons`). When a release has no `.xpi` the Firefox button gives you the `.zip` instead.
-- **Temporary, no signature needed:** `about:debugging` → **This Firefox** → **Load Temporary Add-on** and choose the `.zip` (no need to unzip it). Firefox removes it when it closes.
-- **Developer Edition, Nightly or ESR:** set `xpinstall.signatures.required` to `false` in `about:config`, then `about:addons` → ⚙ → **Install Add-on From File**.
+Install it from [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/). Firefox 140 or later.
 
-Firefox 128 or later.
+From the store it updates itself: each new version arrives once the store has reviewed it.
+
+### Without the store
+
+Every [release](https://github.com/cristiancastineiras/M365CopilotVSCode/releases/latest) also has the `.zip` files:
+
+- **Chrome or Edge:** unzip `m365-copilot-vscode-extension-chrome.zip` (or `-edge.zip`) into a folder you will keep (the browser reads it from there), open `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**, click **Load unpacked** and choose that folder.
+- **Firefox, temporary:** `about:debugging` → **This Firefox** → **Load Temporary Add-on** and choose `m365-copilot-vscode-extension-firefox.zip` (no need to unzip it). Firefox removes it when it closes.
+- **Firefox Developer Edition, Nightly or ESR:** set `xpinstall.signatures.required` to `false` in `about:config`, then `about:addons` → ⚙ → **Install Add-on From File** with the `.zip`.
 
 ## Installing the VS Code extension from a file
 
