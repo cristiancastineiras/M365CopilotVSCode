@@ -1,0 +1,39 @@
+name: Marketplace check
+
+# Manual (Actions → Marketplace check → Run workflow). Entra en Microsoft
+# Entra ID igual que release.yml y, sin publicar nada:
+#   1. imprime el ID de Azure DevOps de la app, que es el que hay que añadir
+#      como Contributor del publisher en https://marketplace.visualstudio.com/manage
+#      (sólo se puede consultar autenticado como la propia app);
+#   2. comprueba que la app puede publicar en el publisher `m365-copilot-vscode`
+#      (falla hasta que se ha hecho el paso 1).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    environment: marketplace
+    steps:
+      - name: Iniciar sesión en Microsoft Entra ID
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      # 499b84ac-… es el recurso de Azure DevOps (y del Marketplace).
+      - name: ID de la app en Azure DevOps
+        run: |
+          id=$(az rest --method get --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+            --url "https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1" \
+            --query id -o tsv)
+          echo "ID para el Marketplace: $id"
+          echo "### ID para el Marketplace: \`$id\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Permiso de publicación en m365-copilot-vscode
+        run: npx --yes @vscode/vsce@4.0.0 verify-pat --azure-credential m365-copilot-vscode

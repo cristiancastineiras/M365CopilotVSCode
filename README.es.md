@@ -112,6 +112,8 @@ git commit -am "chore: release vX.Y.Z" && git tag vX.Y.Z && git push --follow-ta
 ```
 
 El push del tag lanza `.github/workflows/release.yml`, que compila todo y publica
-una release de GitHub con el `.vsix` y los zips del navegador. Después manda la
-extensión de navegador a revisión en la Chrome Web Store y en Firefox Add-ons
-(cada tienda sólo si tiene sus secrets; el workflow los lista).
+una release de GitHub con el `.vsix` y los zips del navegador. Después publica
+el `.vsix` en el VS Code Marketplace (Microsoft Entra ID mediante OIDC de
+GitHub, sin PAT) y manda la extensión de navegador a revisión en la Chrome Web
+Store y en Firefox Add-ons (cada tienda sólo si tiene sus secrets; el workflow
+los lista).
