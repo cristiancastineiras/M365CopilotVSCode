@@ -109,5 +109,7 @@ git commit -am "chore: release vX.Y.Z" && git tag vX.Y.Z && git push --follow-ta
 
 Pushing the tag runs `.github/workflows/release.yml`, which builds everything
 and publishes a GitHub release with the `.vsix` and the browser zips. It then
-submits the browser extension to the Chrome Web Store and Firefox Add-ons for
-review (each store only when its secrets are set; the workflow lists them).
+publishes the `.vsix` to the VS Code Marketplace (Microsoft Entra ID through
+GitHub OIDC, no PAT) and submits the browser extension to the Chrome Web Store
+and Firefox Add-ons for review (each store only when its secrets are set; the
+workflow lists them).
