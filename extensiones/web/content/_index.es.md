@@ -13,7 +13,7 @@ how:
     - title: "Instala la extensión de VS Code"
       text: "Consíguela en el VS Marketplace, o carga el `.vsix` de las versiones de GitHub."
     - title: "Instala la extensión de navegador"
-      text: "Descárgala para Chrome, Edge o Firefox. Captura el token de tu sesión de Copilot, así que no hay nada que copiar y pegar."
+      text: "Instálala desde la Chrome Web Store (Chrome y Edge) o Firefox Add-ons. Captura el token de tu sesión de Copilot, así que no hay nada que copiar y pegar."
     - title: "Conecta con un solo mensaje"
       text: "Abre [m365.cloud.microsoft/chat](https://m365.cloud.microsoft/chat/) y envía cualquier mensaje. El popup se pone en verde y VS Code ya tiene tu token. Se renueva solo mientras haya una pestaña de Microsoft 365 abierta."
     - title: "Escribe @m365 en el chat"

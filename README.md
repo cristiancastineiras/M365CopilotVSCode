@@ -4,6 +4,8 @@
 [![Installs](https://flat.badgen.net/vs-marketplace/i/m365-copilot-vscode.m365-copilot-vscode?label=installs&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode)
 [![Downloads](https://flat.badgen.net/vs-marketplace/d/m365-copilot-vscode.m365-copilot-vscode?label=downloads&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode)
 [![Rating](https://flat.badgen.net/vs-marketplace/rating/m365-copilot-vscode.m365-copilot-vscode?label=rating&color=0f6cbd)](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode&ssr=false#review-details)
+[![Chrome Web Store](https://img.shields.io/chrome-web-store/v/cdeegiifkgahagfcjhedkdcfbpipffdd?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white&color=0f6cbd)](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd)
+[![Firefox Add-ons](https://img.shields.io/amo/v/microsoft-365-copilot-vs-code?label=Firefox%20Add-ons&logo=firefoxbrowser&logoColor=white&color=0f6cbd)](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/)
 
 [![Latest release](https://img.shields.io/github/v/release/cristiancastineiras/M365CopilotVSCode?label=release&logo=github&color=24292f)](https://github.com/cristiancastineiras/M365CopilotVSCode/releases/latest)
 [![Build](https://img.shields.io/github/actions/workflow/status/cristiancastineiras/M365CopilotVSCode/release.yml?label=build&logo=githubactions&logoColor=white)](https://github.com/cristiancastineiras/M365CopilotVSCode/actions/workflows/release.yml)
@@ -56,7 +58,7 @@ inline completions — and keep its token in sync. Everything is available in
 | Package           | Docs                                                                          |
 | ----------------- | ----------------------------------------------------------------------------- |
 | VS Code extension | [README](extensiones/vscode/README.md) · [guide](extensiones/vscode/Guide.md) |
-| Browser extension | [README](extensiones/browser/README.md)                                       |
+| Browser extension | [README](extensiones/browser/README.md) · install from the [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd) or [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/) |
 
 ## Getting started
 
@@ -106,4 +108,6 @@ git commit -am "chore: release vX.Y.Z" && git tag vX.Y.Z && git push --follow-ta
 ```
 
 Pushing the tag runs `.github/workflows/release.yml`, which builds everything
-and publishes a GitHub release with the `.vsix` and both browser zips.
+and publishes a GitHub release with the `.vsix` and the browser zips. It then
+submits the browser extension to the Chrome Web Store and Firefox Add-ons for
+review (each store only when its secrets are set; the workflow lists them).

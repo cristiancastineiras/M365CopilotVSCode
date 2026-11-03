@@ -22,9 +22,9 @@
     <div class="dl-head"><span class="chip">2</span><img class="px-logo" src="{{ "pixel/m365.svg" | relURL }}" width="32" height="32" alt=""><h3>{{ i18n "dl_browser_title" }}</h3></div>
     <p>{{ i18n "dl_browser_text" }}</p>
     <div class="actions">
-      <a class="btn btn-primary" href="{{ $dl }}/m365-copilot-vscode-extension-chrome.zip" rel="noopener" data-goatcounter-click="dl-chrome">{{ i18n "dl_chrome" }}</a>
-      <a class="btn btn-primary" href="{{ $dl }}/m365-copilot-vscode-extension-edge.zip" rel="noopener" data-goatcounter-click="dl-edge">{{ i18n "dl_edge" }}</a>
-      <a class="btn btn-primary" href="{{ $dl }}/m365-copilot-vscode-extension-firefox.zip" data-ext="xpi" rel="noopener" data-goatcounter-click="dl-firefox">{{ i18n "dl_firefox" }}</a>
+      <a class="btn btn-primary" href="{{ site.Params.chromeStore }}" rel="noopener" data-goatcounter-click="dl-chrome">{{ i18n "dl_chrome" }}</a>
+      <a class="btn btn-primary" href="{{ site.Params.firefoxStore }}" rel="noopener" data-goatcounter-click="dl-firefox">{{ i18n "dl_firefox" }}</a>
+      <a class="btn btn-secondary" href="{{ $dl }}/m365-copilot-vscode-extension-edge.zip" rel="noopener" data-goatcounter-click="dl-edge">{{ i18n "dl_edge" }}</a>
     </div>
     <p class="muted small">{{ i18n "dl_browser_hint" }}</p>
   </article>

@@ -56,13 +56,13 @@ other = "Extensión de navegador"
 [dl_browser_text]
 other = "Captura el token de tu sesión de Copilot y lo mantiene renovado en VS Code. Recomendada."
 [dl_chrome]
-other = "Chrome"
+other = "Chrome Web Store"
 [dl_edge]
-other = "Edge"
+other = "Edge (.zip)"
 [dl_firefox]
-other = "Firefox"
+other = "Firefox Add-ons"
 [dl_browser_hint]
-other = "Chrome y Edge: descomprime y carga sin empaquetar. Firefox: abre el archivo."
+other = "Desde la tienda se actualiza sola. Edge también la instala desde la Chrome Web Store, o descomprime el .zip y cárgalo sin empaquetar."
 [dl_userscript_title]
 other = "Userscript (alternativa)"
 [dl_userscript_text]

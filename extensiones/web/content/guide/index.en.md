@@ -24,11 +24,11 @@ When it is installed, an **M365** item appears in the status bar (bottom right).
 
 ## 2. Install the browser extension
 
-Download it from the [downloads page](../download/) and load it:
+- **Chrome:** install it from the [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd).
+- **Edge:** from the same Chrome Web Store page (the first time, Edge asks you to **Allow extensions from other stores**).
+- **Firefox:** install it from [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/).
 
-- **Chrome:** unzip the file, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and choose the unzipped folder.
-- **Edge:** the same, from `edge://extensions`.
-- **Firefox:** open the signed `.xpi` file in Firefox. Without it, go to `about:debugging` → **This Firefox** → **Load Temporary Add-on** and choose the `.zip` (Firefox removes it when it closes).
+Can't use the stores? The [downloads page](../download/#without-the-store) explains how to load the `.zip` from the release.
 
 ## 3. Connect with one message
 

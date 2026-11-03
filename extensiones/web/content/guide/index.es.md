@@ -28,11 +28,11 @@ Al terminar aparece un elemento **M365** en la barra de estado (abajo a la derec
 
 ## 2. Instala la extensión de navegador
 
-Descárgala desde la [página de descargas](../descarga/) y cárgala:
+- **Chrome:** instálala desde la [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd).
+- **Edge:** desde la misma ficha de la Chrome Web Store (la primera vez, Edge te pide **Permitir extensiones de otras tiendas**).
+- **Firefox:** instálala desde [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/).
 
-- **Chrome:** descomprime el archivo, abre `chrome://extensions`, activa el **Modo de desarrollador**, pulsa **Cargar descomprimida** y elige la carpeta.
-- **Edge:** igual, desde `edge://extensions`.
-- **Firefox:** abre en Firefox el archivo `.xpi` firmado. Si no lo hay, ve a `about:debugging` → **Este Firefox** → **Cargar complemento temporal** y elige el `.zip` (Firefox lo quita al cerrarse).
+¿No puedes usar las tiendas? La [página de descargas](../descarga/#sin-tienda) explica cómo cargar el `.zip` de la release.
 
 ## 3. Conecta con un solo mensaje
 
