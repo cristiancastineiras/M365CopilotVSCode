@@ -1,5 +1,12 @@
 # m365-copilot-vscode
 
+## 3.0.5
+
+### Patch Changes
+
+- The walkthrough step that installs the browser extension now links to the Chrome Web Store and Firefox Add-ons, plus the release `.zip` files for loading it by hand.
+  - @m365copilot/core@3.0.5
+
 ## 3.0.4
 
 ### Patch Changes
