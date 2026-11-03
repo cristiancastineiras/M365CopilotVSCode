@@ -38,8 +38,8 @@ jobs:
     #   Chrome Web Store (API v2; la v1.1 se apagó el 15-10-2026):
     #     CWS_PUBLISHER_ID (Developer Dashboard → Account) y la cuenta de
     #     servicio de Google Cloud con acceso a ese publisher:
-    #     CWS_SERVICE_ACCOUNT_EMAIL / CWS_SERVICE_ACCOUNT_PRIVATE_KEY (el PEM
-    #     de `private_key` del JSON, con saltos de línea reales).
+    #     CWS_SERVICE_ACCOUNT_EMAIL / CWS_SERVICE_ACCOUNT_PRIVATE_KEY (el
+    #     `private_key` del JSON, con «\n» literales o con saltos reales).
     # Sin los de una tienda, la release sale igual y esa tienda no se toca.
     # Aquí sólo va si existen (`secrets` no se puede usar en el `if:` de un
     # step); las claves en sí sólo las ve el step que publica, no los
@@ -111,4 +111,8 @@ jobs:
           FIREFOX_CHANNEL: listed
           FIREFOX_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
           FIREFOX_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
-        run: pnpm exec wxt submit
+        # La clave de la cuenta de servicio se acepta tal cual sale del JSON de
+        # Google (con «\n» literales): el PEM necesita saltos de línea reales.
+        run: |
+          CHROME_SERVICE_ACCOUNT_PRIVATE_KEY="$(printf '%s' "$CHROME_SERVICE_ACCOUNT_PRIVATE_KEY" | sed 's/\\n/\n/g')" \
+            pnpm exec wxt submit
