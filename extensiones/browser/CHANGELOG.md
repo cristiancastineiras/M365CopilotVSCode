@@ -1,5 +1,12 @@
 # m365-copilot-vscode-extension
 
+## 3.0.6
+
+### Patch Changes
+
+- Fix the automatic Chrome Web Store submission: 3.0.5 only reached Firefox Add-ons. The release workflow now accepts the service account key exactly as it appears in Google's JSON file.
+  - @m365copilot/core@3.0.6
+
 ## 3.0.5
 
 ### Patch Changes
