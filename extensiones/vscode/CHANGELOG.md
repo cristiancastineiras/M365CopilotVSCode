@@ -1,5 +1,30 @@
 # m365-copilot-vscode
 
+## 4.0.1
+
+### Patch Changes
+
+- 28cff7c: Long tasks and long conversations go further.
+
+  - `m365copilot.chat.maxDurationMinutes` (8) sets how long one `@m365` request or one sub-agent can run, and `0` removes the limit. The notice when it is reached names the setting.
+  - A task picks up the token the browser renews while it runs, before each step, instead of ending in an error when the first one expires.
+  - `m365copilot.models.maxInputTokens` (128000) and `m365copilot.models.maxOutputTokens` (16000) set what VS Code is told about every model.
+  - `maxInputTokens` now also sets how much of the conversation reaches the model in Copilot Chat: about 448,000 characters by default, up to 750,000, where it was always about 72,000. If the service refuses a message that long, the extension retries with the old size and keeps to it until the window reloads.
+  - `@m365` and sub-agents keep far more of each tool result: about 75,000 characters by default, where it was 4,000, so a whole `read_file` reaches the model.
+  - A task that reaches 400,000 characters continues in a new conversation with the request and the steps so far, because BizChat silently forgets the oldest part of a longer one, which is the request.
+
+- 6ae0746: Automatic sending now tells you what is going on with both kinds of account.
+
+  - The userscript panel and the browser extension popup show whether the account is personal or work/school, and what that means for renewing the token.
+  - They no longer say "Connected" when VS Code is rejecting the token: they say so and tell you to update the VS Code extension. VS Code also warns once per reason, and confirms a token it received even when the token does not say when it expires.
+  - The browser extension no longer lets another Microsoft frame replace the token in use with an older one, or with none at all.
+  - The popup copies the whole profile for a personal account, because its token alone cannot be pasted.
+  - When the service refuses a token (401), VS Code marks it as expired right away and says what to do. For a personal account, whose token does not say when it expires, that is send a message in the web chat: the new token arrives by itself.
+  - A very long chat address no longer loses the captured endpoint, which says what kind of account it is.
+
+- Updated dependencies [6ae0746]
+  - @m365copilot/core@4.0.1
+
 ## 4.0.0
 
 ### Major Changes
