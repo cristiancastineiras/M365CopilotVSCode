@@ -1,5 +1,12 @@
 # @m365copilot/tui
 
+## 4.0.1
+
+### Patch Changes
+
+- Updated dependencies [6ae0746]
+  - @m365copilot/core@4.0.1
+
 ## 4.0.0
 
 ### Major Changes
