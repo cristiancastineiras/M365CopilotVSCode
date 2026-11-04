@@ -36,8 +36,10 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    # La credencial federada de la app de Entra ID confía en este entorno
-    # (sujeto `repo:cristiancastineiras/M365CopilotVSCode:environment:marketplace`).
+    # La credencial federada de la app de Entra ID confía en este entorno. Su
+    # sujeto tiene que ser exactamente el que envía GitHub, con los ids, no el
+    # que propone el asistente de Azure (lo imprime `azure/login` en el log):
+    # `repo:cristiancastineiras@37689114/M365CopilotVSCode@1356270350:environment:marketplace`
     environment: marketplace
     # Credenciales de las tiendas, como secrets del repositorio:
     #   VS Code Marketplace: AZURE_CLIENT_ID / AZURE_TENANT_ID de una app de
