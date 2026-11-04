@@ -12,8 +12,8 @@ name: Release
 # La carpeta releases/ sólo existe aquí, en el runner: está en .gitignore y
 # no se versiona; la release de GitHub es el único sitio donde se publican.
 # Después publica el .vsix en el VS Code Marketplace y sube la extensión de
-# navegador a Chrome Web Store y a Firefox Add-ons (AMO), cada tienda sólo si
-# tiene sus secrets (ver más abajo) y cada una aunque otra falle.
+# navegador a Chrome Web Store y a Firefox Add-ons (AMO), cada una aunque otra
+# falle y las dos últimas sólo si tienen sus secrets (ver más abajo).
 #
 # Flujo para sacar una versión nueva:
 #   1. pnpm changeset            # describe el cambio (interactivo)
@@ -29,25 +29,19 @@ on:
 
 permissions:
   contents: write
-  # Token OIDC de GitHub para entrar en Microsoft Entra ID sin secreto (VS Code
-  # Marketplace).
+  # Token OIDC de GitHub para publicar en el VS Code Marketplace sin secreto.
   id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    # La credencial federada de la app de Entra ID confía en este entorno. Su
-    # sujeto tiene que ser exactamente el que envía GitHub, con los ids, no el
-    # que propone el asistente de Azure (lo imprime `azure/login` en el log):
-    # `repo:cristiancastineiras@37689114/M365CopilotVSCode@1356270350:environment:marketplace`
+    # VS Code Marketplace, sin secrets: Trusted Publishing. El publisher
+    # `m365-copilot-vscode` tiene en marketplace.visualstudio.com/manage una
+    # política que confía en este repositorio, este archivo y este entorno, y
+    # los tres tienen que coincidir con ella: si cambia alguno, hay que
+    # actualizarla. Sin PAT: los globales de Azure DevOps se retiran el 1-12-2026.
     environment: marketplace
-    # Credenciales de las tiendas, como secrets del repositorio:
-    #   VS Code Marketplace: AZURE_CLIENT_ID / AZURE_TENANT_ID de una app de
-    #     Microsoft Entra ID con credencial federada para el entorno de arriba,
-    #     añadida como Contributor del publisher `m365-copilot-vscode`. Sin
-    #     PAT: los PAT globales de Azure DevOps se retiran el 1-12-2026. El
-    #     workflow marketplace-check.yml da el ID que pide el Marketplace y
-    #     comprueba los permisos.
+    # Credenciales de las demás tiendas, como secrets del repositorio:
     #   Firefox Add-ons: AMO_JWT_ISSUER / AMO_JWT_SECRET (addons.mozilla.org →
     #     Developer Hub → Manage API Keys).
     #   Chrome Web Store (API v2; la v1.1 se apagó el 15-10-2026):
@@ -62,7 +56,6 @@ jobs:
     env:
       HAS_AMO_KEYS: ${{ secrets.AMO_JWT_ISSUER != '' && secrets.AMO_JWT_SECRET != '' }}
       HAS_CWS_KEYS: ${{ secrets.CWS_PUBLISHER_ID != '' && secrets.CWS_SERVICE_ACCOUNT_EMAIL != '' && secrets.CWS_SERVICE_ACCOUNT_PRIVATE_KEY != '' }}
-      HAS_AZURE_ID: ${{ secrets.AZURE_CLIENT_ID != '' && secrets.AZURE_TENANT_ID != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -104,21 +97,12 @@ jobs:
 
       # Cada tienda corre si la release de GitHub salió, aunque otra tienda
       # falle (`!cancelled()`): un fallo en una no deja a las demás sin versión.
-      - name: Iniciar sesión en Microsoft Entra ID (VS Code Marketplace)
-        id: azure-login
-        if: ${{ !cancelled() && steps.gh-release.outcome == 'success' && env.HAS_AZURE_ID == 'true' }}
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          allow-no-subscriptions: true
-
       # El mismo .vsix de la release. --skip-duplicate: relanzar el job no
       # falla por una versión que ya está publicada.
       - name: Publicar en VS Code Marketplace
-        if: ${{ !cancelled() && steps.azure-login.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.gh-release.outcome == 'success' }}
         working-directory: extensiones/vscode
-        run: pnpm exec vsce publish --azure-credential --skip-duplicate --packagePath "../../releases/vscode/m365-copilot-vscode-${VERSION}.vsix"
+        run: pnpm exec vsce publish --oidc --skip-duplicate --packagePath "../../releases/vscode/m365-copilot-vscode-${VERSION}.vsix"
 
       # `wxt submit` (publish-browser-extension, viene con WXT) sube cada zip y
       # lo manda a revisión; la tienda publica la versión cuando la aprueba.
