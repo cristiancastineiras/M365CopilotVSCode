@@ -12,6 +12,7 @@ import {
   type ModelEntry,
   debug,
 } from "@m365copilot/core/bizchat";
+import { boundedInteger } from "../tools/common";
 import { formatMoment, getLocale, t } from "./i18n";
 import type { ProfileStore } from "./secrets";
 
@@ -59,8 +60,10 @@ function stillUnavailable(entry: Unavailability, now: number): boolean {
   return entry.until !== undefined ? now < entry.until : now - entry.at < UNAVAILABLE_TTL_MS;
 }
 
-const MAX_INPUT_TOKENS = 128_000;
-const MAX_OUTPUT_TOKENS = 16_000;
+const DEFAULT_MAX_INPUT_TOKENS = 128_000;
+const DEFAULT_MAX_OUTPUT_TOKENS = 16_000;
+const MIN_TOKEN_SETTING = 1_000;
+const MAX_TOKEN_SETTING = 2_000_000;
 
 let registry: ModelRegistry | undefined;
 
@@ -119,6 +122,13 @@ export class ModelRegistry implements vscode.Disposable {
           catalogEnabled()
         ) {
           void this.refreshCatalog();
+        }
+        // Not part of the list recompute() compares, but VS Code shows and budgets by them.
+        if (
+          event.affectsConfiguration("m365copilot.models.maxInputTokens") ||
+          event.affectsConfiguration("m365copilot.models.maxOutputTokens")
+        ) {
+          this.changed.fire();
         }
       }),
     );
@@ -314,6 +324,20 @@ function catalogEnabled(): boolean {
     .get<boolean>("updateFromCatalog", true);
 }
 
+/**
+ * The context and reply size VS Code is told about, the same for every model.
+ * It also sets how much of it reaches the model (transcriptLimitsFor, loopLimitsFor).
+ */
+export function tokenLimits(): { maxInputTokens: number; maxOutputTokens: number } {
+  const config = vscode.workspace.getConfiguration("m365copilot.models");
+  const limit = (key: string, fallback: number) =>
+    boundedInteger(config.get<number>(key), fallback, MIN_TOKEN_SETTING, MAX_TOKEN_SETTING);
+  return {
+    maxInputTokens: limit("maxInputTokens", DEFAULT_MAX_INPUT_TOKENS),
+    maxOutputTokens: limit("maxOutputTokens", DEFAULT_MAX_OUTPUT_TOKENS),
+  };
+}
+
 /** The picker's one-line description of a model. */
 export function modelDetail(model: CopilotModel): string {
   if (model.detailKey) return t(model.detailKey);
@@ -375,8 +399,7 @@ export function toChatInformation(
     name: model.name,
     family: model.family,
     version: "1.0.0",
-    maxInputTokens: MAX_INPUT_TOKENS,
-    maxOutputTokens: MAX_OUTPUT_TOKENS,
+    ...tokenLimits(),
     detail:
       tokenState !== "ok"
         ? t(tokenState === "missing" ? "model.needsToken" : "model.tokenExpired")

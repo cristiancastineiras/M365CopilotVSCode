@@ -103,7 +103,7 @@ export const DEFAULT_MAX_TOOL_CALLS = 30;
 /**
  * Tool-call budget per request: an explanation rarely needs more than a couple
  * of reads, so `/explain` and `/terminal` keep a short one. The rest get the
- * user's `maxToolCalls`; 0 means no limit (the loop's time ceiling still stops it).
+ * user's `maxToolCalls`; 0 means no limit (`maxDurationMinutes` can still stop it).
  */
 export function maxStepsForCommand(
   command: ParticipantCommand | undefined,

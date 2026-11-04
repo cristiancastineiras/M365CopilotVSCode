@@ -27,7 +27,12 @@ import {
   toolFreeProblem,
   type ToolFreeProblem,
 } from "./giveUp";
-import { condenseToolResult, toolResultBudgets } from "./transcript";
+import {
+  condenseToolResult,
+  isTurnRefusal,
+  toolResultBudgets,
+  transcriptLimitsFor,
+} from "./transcript";
 import { t } from "./i18n";
 
 // --------------------------------------------------------- concurrency
@@ -93,6 +98,12 @@ export interface ToolLoopParams {
    */
   readonly framing: string;
   readonly profile: CopilotProfile;
+  /**
+   * El perfil guardado ahora mismo, leído antes de cada paso: en una tarea larga
+   * el navegador envía el token renovado y sin esto el bucle seguiría con el
+   * caducado hasta acabar en error.
+   */
+  readonly latestProfile?: () => Promise<CopilotProfile | null>;
   readonly tone: string | null;
   readonly maxSteps: number;
   readonly signal: AbortSignal;
@@ -111,8 +122,16 @@ export interface ToolLoopParams {
   readonly log?: (message: string) => void;
   /** Sólo para tests: apunta `streamCopilotTurn` a un servidor BizChat simulado. */
   readonly endpointBase?: string;
-  /** Sustituye {@link MAX_TASK_WALL_CLOCK_MS} (los tests usan un techo más corto). */
+  /**
+   * Techo de tiempo total (ver {@link durationBudgetMs}); `Infinity` lo quita.
+   * Sin indicar, el de {@link DEFAULT_MAX_DURATION_MINUTES}.
+   */
   readonly maxWallClockMs?: number;
+  /**
+   * `m365copilot.models.maxInputTokens`: decide cuánto cabe en cada paso (ver
+   * {@link loopLimitsFor}). Sin indicar, lo mínimo.
+   */
+  readonly maxInputTokens?: number;
   /** Workspace de una sola carpeta: el catálogo omite `workspaceFolder`. */
   readonly singleRoot?: boolean;
   /** Imágenes que el usuario adjuntó: se envían al iniciar la conversación. */
@@ -145,26 +164,73 @@ export interface SubagentTaskResult {
   readonly steps: number;
 }
 
-const MAX_STEP_RESULT_CHARS = 4_000;
-/** How many of the latest results keep {@link MAX_STEP_RESULT_CHARS}; older ones keep the next one. */
+/** How many of the latest results keep `resultChars`; older ones keep `oldResultChars`. */
 const FULL_STEP_RESULTS = 2;
-const MAX_OLD_STEP_RESULT_CHARS = 800;
 const MAX_CALL_PREVIEW_CHARS = 600;
-const MAX_TRANSCRIPT_CHARS = 24_000;
 const MAX_LAST_RESULT_PREVIEW_CHARS = 2_000;
 const MAX_FORCED_RETRIES = 3;
 
 /**
- * Techo de tiempo TOTAL de un sub-agente, independiente de `maxSteps`. Cada
- * paso ya tiene su propio límite duro de 5 min (`MAX_TURN_MS` en client.ts),
- * pero eso por sí solo permite que una sola tarea (con `maxSteps` hasta 12)
- * tarde hasta una hora en darse por vencida — desde el chat eso se ve
- * exactamente como "se queda colgado", porque el aviso de "Delegando..." no
- * cambia y la única señal de progreso vive en una notificación aparte. Se
- * comprueba ENTRE pasos (nunca corta uno ya en curso) para no perder trabajo
- * a medio hacer.
+ * Lo que una conversación aguanta sin olvidar. BizChat guarda la historia en su
+ * lado y recorta lo más antiguo SIN AVISAR, y lo más antiguo es la petición, que
+ * sólo va en el primer mensaje. Medido contra el servicio real en noviembre de
+ * 2026 con una cuenta personal: de 419.000 caracteres se conservaba todo, y de
+ * 2.000.000 sólo los últimos 600.000.
  */
-export const MAX_TASK_WALL_CLOCK_MS = 8 * 60_000;
+const MAX_CONVERSATION_CHARS = 400_000;
+/** Por debajo de los 600 mensajes por conversación que anuncia el servicio. */
+const MAX_CONVERSATION_TURNS = 500;
+
+interface LoopLimits {
+  /** Los últimos {@link FULL_STEP_RESULTS} resultados… */
+  readonly resultChars: number;
+  /** …y los anteriores, cuando se reenvían al empezar otra conversación. */
+  readonly oldResultChars: number;
+  /** Los pasos que caben en un prompt. */
+  readonly historyChars: number;
+  /** Lo enviado y recibido en una conversación antes de seguir en otra. */
+  readonly conversationChars: number;
+}
+
+const MINIMUM_LOOP_LIMITS: LoopLimits = {
+  resultChars: 4_000,
+  oldResultChars: 800,
+  historyChars: 24_000,
+  conversationChars: MAX_CONVERSATION_CHARS,
+};
+
+/**
+ * Los límites del bucle para el tamaño de contexto configurado: un resultado
+ * cabe como en el chat (transcript.ts), y al cambiar de conversación los pasos
+ * reenviados dejan sitio para seguir trabajando en la nueva.
+ */
+export function loopLimitsFor(maxInputTokens: number): LoopLimits {
+  const chat = transcriptLimitsFor(maxInputTokens);
+  const conversationChars = Math.min(chat.maxContextChars, MAX_CONVERSATION_CHARS);
+  return {
+    resultChars: Math.max(MINIMUM_LOOP_LIMITS.resultChars, chat.maxToolResultChars),
+    oldResultChars: Math.max(MINIMUM_LOOP_LIMITS.oldResultChars, chat.maxOldToolResultChars),
+    historyChars: Math.max(MINIMUM_LOOP_LIMITS.historyChars, conversationChars / 2),
+    conversationChars,
+  };
+}
+
+/**
+ * Techo por defecto del tiempo TOTAL de un bucle, independiente de `maxSteps`
+ * (`m365copilot.chat.maxDurationMinutes`). Cada paso ya tiene su propio límite
+ * duro de 5 min (`MAX_TURN_MS` en client.ts), pero eso por sí solo permite que
+ * una sola tarea (con `maxSteps` hasta 12) tarde hasta una hora en darse por
+ * vencida — desde el chat eso se ve exactamente como "se queda colgado", porque
+ * el aviso de "Delegando..." no cambia y la única señal de progreso vive en una
+ * notificación aparte. Se comprueba ENTRE pasos (nunca corta uno ya en curso)
+ * para no perder trabajo a medio hacer.
+ */
+export const DEFAULT_MAX_DURATION_MINUTES = 8;
+
+/** El ajuste en minutos como presupuesto del bucle: `0` quita el límite, igual que `maxToolCalls`. */
+export function durationBudgetMs(minutes: number): number {
+  return minutes === 0 ? Number.POSITIVE_INFINITY : minutes * 60_000;
+}
 
 /**
  * Bucle de un sub-agente: llama a BizChat, decodifica la respuesta y, si pide
@@ -185,8 +251,8 @@ export async function runSubagentTask(params: SubagentTaskParams): Promise<Subag
  * lanza: el resultado dice cómo terminó (`outcome`).
  */
 export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResult> {
-  const { framing, profile, tone, maxSteps, signal, offeredTools, executeTool, endpointBase } =
-    params;
+  const { framing, tone, maxSteps, signal, offeredTools, executeTool, endpointBase } = params;
+  let profile = params.profile;
   const log = params.log ?? (() => {});
   const onStep = params.onStep ?? (() => {});
 
@@ -197,8 +263,15 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
     singleRoot: params.singleRoot,
   });
   const steps: LoopStep[] = [];
-  // One conversation per loop, never shared between concurrent sub-agents.
-  const conversation = createCopilotConversation();
+  let limits =
+    params.maxInputTokens === undefined
+      ? MINIMUM_LOOP_LIMITS
+      : loopLimitsFor(params.maxInputTokens);
+  // Never shared between concurrent sub-agents. A long task moves to a new one
+  // before the service starts forgetting this one.
+  let conversation = createCopilotConversation();
+  let conversationChars = 0;
+  let conversationTurns = 0;
   let lastResultText = "";
   const startedAt = Date.now();
   const toolsOffered = catalog.callable.size > 0;
@@ -209,7 +282,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
   let forced: ToolFreeProblem | null = null;
   let forcedNote = "";
   let forcedRetries = 0;
-  const wallClockBudgetMs = params.maxWallClockMs ?? MAX_TASK_WALL_CLOCK_MS;
+  const wallClockBudgetMs = params.maxWallClockMs ?? durationBudgetMs(DEFAULT_MAX_DURATION_MINUTES);
 
   for (let step = 1; step <= maxSteps; step += 1) {
     if (signal.aborted)
@@ -224,6 +297,31 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
       onStep({ step, kind: "limit", detail: summary });
       return { ok: false, outcome: "timeLimit", summary, steps: step - 1 };
     }
+    profile = await renewedProfile(profile, params.latestProfile, log);
+    if (
+      conversationChars >= limits.conversationChars ||
+      conversationTurns >= MAX_CONVERSATION_TURNS
+    ) {
+      log(t("log.loopNewConversation", conversationChars));
+      conversation = createCopilotConversation();
+      conversationChars = 0;
+      conversationTurns = 0;
+    }
+    // The start of a conversation carries the task and the steps so far; after
+    // that the service has them, and only the latest result travels.
+    const promptWith = (stepLimits: LoopLimits) =>
+      conversation.isStartOfSession
+        ? buildLoopPrompt(framing, catalog, steps, stepLimits) + forcedNote
+        : [
+            compactBlocks(renderSteps(steps.slice(-1), stepLimits), stepLimits),
+            buildToolProtocolReminder(catalog, false),
+            forcedNote,
+          ]
+            .filter(Boolean)
+            .join("\n\n");
+    const prompt = promptWith(limits);
+    conversationChars += prompt.length;
+    conversationTurns += 1;
 
     let call: DecodedToolCall | null = null;
     let text = "";
@@ -239,10 +337,12 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
       catalog.callable,
       (delta) => {
         text += delta;
+        conversationChars += delta.length;
         held.push(delta);
       },
       (decoded) => {
         call = decoded;
+        conversationChars += JSON.stringify(decoded.input).length;
         held.flush();
         finishTurn.abort();
       },
@@ -253,15 +353,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
     try {
       await streamCopilotTurnWithRetry({
         profile,
-        prompt: conversation.isStartOfSession
-          ? buildLoopPrompt(framing, catalog, steps) + forcedNote
-          : [
-              compactBlocks(renderSteps(steps.slice(-1))),
-              buildToolProtocolReminder(catalog, false),
-              forcedNote,
-            ]
-              .filter(Boolean)
-              .join("\n\n"),
+        prompt,
         conversation,
         tone,
         signal,
@@ -286,6 +378,19 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
           summary: t("subagent.cancelled"),
           steps: step - 1,
         };
+      // BizChat has no error for a message that is too long (transcript.ts):
+      // only a tenant's real limit tells, so the same step once more, shorter.
+      if (
+        !text &&
+        !call &&
+        isTurnRefusal(error) &&
+        promptWith(MINIMUM_LOOP_LIMITS).length < prompt.length
+      ) {
+        log(t("log.loopPromptShortened", prompt.length));
+        limits = MINIMUM_LOOP_LIMITS;
+        step -= 1;
+        continue;
+      }
       const message = error instanceof Error ? error.message : String(error);
       onStep({ step, kind: "error", detail: message });
       return {
@@ -354,6 +459,29 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
   return { ok: false, outcome: "stepLimit", summary, steps: maxSteps };
 }
 
+/**
+ * El perfil con el que seguir: el guardado si trae otro token de la misma
+ * cuenta. Uno de otra cuenta se ignora porque no puede continuar esta
+ * conversación (la URL del hub lleva `oid@tid`), y un fallo al leerlo tampoco
+ * debe parar la tarea: el bucle nunca lanza.
+ */
+async function renewedProfile(
+  current: CopilotProfile,
+  latest: ToolLoopParams["latestProfile"],
+  log: (message: string) => void,
+): Promise<CopilotProfile> {
+  try {
+    const stored = await latest?.();
+    if (!stored || stored.accessToken === current.accessToken) return current;
+    if (stored.claims?.oid !== current.claims?.oid || stored.claims?.tid !== current.claims?.tid)
+      return current;
+    log(t("log.loopTokenRenewed"));
+    return stored;
+  } catch {
+    return current;
+  }
+}
+
 function buildSubagentFraming(task: string, environment?: string): string {
   return [
     t("subagent.prompt.framing"),
@@ -376,11 +504,12 @@ function buildLoopPrompt(
   framing: string,
   catalog: ToolCatalog,
   steps: readonly LoopStep[],
+  limits: LoopLimits,
 ): string {
   return [
     buildToolProtocolInstructions(catalog),
     framing,
-    compactBlocks(renderSteps(steps)),
+    compactBlocks(renderSteps(steps, limits), limits),
     buildToolProtocolReminder(catalog, false),
   ]
     .filter(Boolean)
@@ -389,17 +518,17 @@ function buildLoopPrompt(
 
 /**
  * The steps as prompt blocks. Like the chat transcript (transcript.ts): the
- * latest results whole (up to {@link MAX_STEP_RESULT_CHARS}), older ones
+ * latest results whole (up to `resultChars`), older ones
  * shortened, and an older result repeated word for word later on reduced to
  * a pointer — so ten steps still fit instead of the first ones falling out.
  */
-function renderSteps(steps: readonly LoopStep[]): string[] {
+function renderSteps(steps: readonly LoopStep[], limits: LoopLimits): string[] {
   const budgets = toolResultBudgets(
     steps.map((step) => ({ name: step.name, text: step.result })),
     {
       full: FULL_STEP_RESULTS,
-      maxChars: MAX_STEP_RESULT_CHARS,
-      maxOldChars: MAX_OLD_STEP_RESULT_CHARS,
+      maxChars: limits.resultChars,
+      maxOldChars: limits.oldResultChars,
     },
   );
   return steps.flatMap((step, index) => {
@@ -414,10 +543,10 @@ function renderSteps(steps: readonly LoopStep[]): string[] {
 
 /** Se queda con los pasos más recientes y avisa cuando descarta los más
  * antiguos por espacio. */
-function compactBlocks(blocks: readonly string[]): string {
+function compactBlocks(blocks: readonly string[], limits: LoopLimits): string {
   if (blocks.length === 0) return "";
   const kept: string[] = [];
-  let remaining = MAX_TRANSCRIPT_CHARS;
+  let remaining = limits.historyChars;
   let omitted = false;
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
     const block = blocks[index]!;

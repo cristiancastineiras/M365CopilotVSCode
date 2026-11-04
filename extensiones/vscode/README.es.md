@@ -132,10 +132,13 @@ en vivo, informa de cada paso de herramienta, ofrece un botón **Revisar cambios
 pendientes** tras editar y sugiere continuaciones (`/doc`, `/tests`…).
 
 Cada petición puede hacer hasta **30 llamadas a herramientas** (leer, buscar,
-editar, ejecutar…) y el límite se cambia con `m365copilot.chat.maxToolCalls`
-(`0` = sin límite; la petición se detiene igualmente a los 8 minutos). Si se
-corta, el chat avisa y ofrece un botón **Continuar**. `/explain` y `/terminal`
-conservan límites propios más cortos (4 y 6).
+editar, ejecutar…) y durar hasta **8 minutos**; se cambia con
+`m365copilot.chat.maxToolCalls` y `m365copilot.chat.maxDurationMinutes` (`0` = sin
+límite en ambos). Si se corta, el chat avisa y ofrece un botón **Continuar**.
+`/explain` y `/terminal` conservan límites propios más cortos de llamadas (4 y 6).
+Sin ninguno de los dos límites, la petición sigue hasta que termina o la cancelas.
+Recoge el token que renueva el navegador, y sólo acaba con un error si caduca sin
+que haya otro.
 
 ### Menú contextual, bombilla y barra de título
 
@@ -434,10 +437,30 @@ funcionan.
 
 Los ajustes de modelo de los sub-agentes, del autocompletado y de las respuestas
 en el editor (`*.model`) ofrecen los modelos de serie.
+| `m365copilot.models.maxInputTokens`    | `128000`    | Tamaño de contexto de cada modelo (ver abajo).               |
+| `m365copilot.models.maxOutputTokens`   | `16000`     | Tamaño de respuesta que ve VS Code en cada modelo.           |
 
 ## Límites y rechazos de M365 Copilot
 
 M365 Copilot también puede rechazar un turno por motivos que no tienen nada que
+Los dos ajustes de tokens se aplican a todos los modelos a la vez. `maxInputTokens`
+también fija cuánto de la conversación llega al modelo en Copilot Chat: la extensión
+la encaja en un mensaje de BizChat a unos 3,5 caracteres por token (unos 448.000
+caracteres por defecto), hasta 750.000. BizChat no publica límites. Medido en
+noviembre de 2026 con una cuenta personal, todos los modelos disponibles aceptaron
+446.000 caracteres y siguieron llamando a herramientas, y Auto aceptó 1.000.000 pero
+no 1.200.000. Si el servicio rechaza un mensaje tan largo, la extensión reintenta con
+unos 72.000 caracteres y se queda en ese tamaño hasta recargar la ventana.
+`maxOutputTokens` sólo cambia lo que se le indica a VS Code: BizChat decide cuánto
+ocupan sus respuestas.
+
+`maxInputTokens` también fija cuánto conservan `@m365` y los sub-agentes de cada
+resultado de herramienta (unos 75.000 caracteres por defecto). Sus tareas corren en
+una sola conversación de BizChat, y BizChat olvida sin avisar lo más antiguo de una
+conversación larga, que es tu petición: medido igual, conservó los 419.000 caracteres
+enteros y sólo los últimos 600.000 de 2.000.000. Por eso una tarea que llega a 400.000
+caracteres sigue en una conversación nueva, con la petición y los pasos hechos.
+
 ver con el modelo. La extensión los reconoce, dice qué ha pasado con palabras
 claras (con el mensaje del propio servicio) y no reintenta: la misma petición
 recibiría la misma respuesta.
@@ -592,7 +615,8 @@ mucho no llena el contexto de la conversación principal. Las llamadas que
 editan, ejecutan comandos o tocan git se serializan entre sub-agentes; las de
 solo lectura corren en paralelo. _Limitación conocida:_ el diálogo de
 confirmación no indica qué sub-agente lo pidió; la notificación de progreso y
-el registro sí.
+el registro sí. `m365copilot.chat.maxDurationMinutes` también limita a cada
+sub-agente, contando desde que le toca correr.
 
 | Ajuste                                | Por defecto | Para qué                                                            |
 | ------------------------------------- | ----------- | ------------------------------------------------------------------- |

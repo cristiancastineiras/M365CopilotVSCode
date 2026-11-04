@@ -25,7 +25,7 @@ import {
 } from "./editorContext";
 import type { EditorHandoff } from "./editorActions";
 import { MarkdownStreamFormatter } from "./markdown";
-import { findModel } from "./models";
+import { findModel, tokenLimits } from "./models";
 import {
   asParticipantCommand,
   buildParticipantFraming,
@@ -46,7 +46,7 @@ import {
 import type { ProfileStore } from "./secrets";
 import { MAX_TASK_WALL_CLOCK_MS, runToolLoop } from "./subagentCore";
 import { retrievalText } from "./transcript";
-import { toolResultToText } from "./subagents";
+import { configuredWallClockMs, toolResultToText } from "./subagents";
 import { chatReviewOf, type WorkspaceEditManager } from "../tools/writeFile";
 import type { TerminalHistory } from "./terminalHistory";
 import type { ContextOptions } from "./projectIndex";
@@ -199,11 +199,15 @@ async function handleRequest(
     markdown = new MarkdownStreamFormatter();
   };
 
+  // Read once: the notice must quote the limit this request ran under.
+  const maxWallClockMs = configuredWallClockMs();
+
   stream.progress(t("participant.progress.thinking"));
   try {
     const result = await runToolLoop({
       framing,
       profile,
+      latestProfile: () => deps.store.get(),
       tone,
       maxSteps: maxStepsForCommand(
         command,
@@ -214,6 +218,8 @@ async function handleRequest(
           200,
         ),
       ),
+      maxWallClockMs,
+      maxInputTokens: tokenLimits().maxInputTokens,
       signal: controller.signal,
       offeredTools,
       singleRoot: (vscode.workspace.workspaceFolders?.length ?? 0) <= 1,
@@ -270,9 +276,7 @@ async function handleRequest(
         unfinished = true;
         break;
       case "timeLimit":
-        stream.markdown(
-          `\n\n${t("participant.timeLimit", Math.round(MAX_TASK_WALL_CLOCK_MS / 60_000))}`,
-        );
+        stream.markdown(`\n\n${t("participant.timeLimit", Math.round(maxWallClockMs / 60_000))}`);
         unfinished = true;
         break;
       default:
