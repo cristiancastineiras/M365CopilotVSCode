@@ -45,7 +45,9 @@ import {
   type ThrottleChange,
   accountOf,
   foreignAudience,
+  isTokenUsable,
   looksLikeProfile,
+  minutesUntilExpiry,
   parsePastedProfile,
   M365_TOOL_NAMES,
   NEAR_OUTPUT_LIMIT_CHARS,
@@ -236,6 +238,9 @@ function fakeJwt(extra: Record<string, unknown> = {}): string {
   return `${b64url({ alg: "none", typ: "JWT" })}.${b64url(payload)}.sig`;
 }
 
+/** The encrypted token of personal accounts: `alg: dir` leaves the second part empty. */
+const FAKE_JWE = `${b64url({ alg: "dir", enc: "A256GCM" })}..aXZhaXZhaXZh.Y2lwaGVyY2lwaGVy.dGFndGFndGFn`;
+
 // ---- profile.ts ------------------------------------------------------------
 
 function testProfileParsing() {
@@ -286,8 +291,41 @@ function testProfileParsing() {
     "https://graph.microsoft.com",
   );
   assert.equal(foreignAudience(fakeJwt({ aud: undefined })), "?");
+
+  // Cuentas personales: el token va cifrado, y la cuenta sale de la URL.
+  const hub = "wss://substrate.office.com/m365Copilot/Chathub/zero-oid@msa-tid";
+  const query = "scenario=OfficeWebPremiumConsumerCopilot&licenseType=Premium";
+  const personal = parsePastedProfile(`${hub}?access_token=${FAKE_JWE}&${query}`);
+  assert.equal(personal.accessToken, FAKE_JWE);
+  assert.deepEqual(personal.claims, { oid: "zero-oid", tid: "msa-tid" });
+  assert.equal(personal.endpoint, `${hub}?${query}`);
+  assert.equal(personal.origin, "https://copilot.com");
+  assert.equal(foreignAudience(FAKE_JWE), null, "cifrado no es de otro servicio");
+  assert.equal(isTokenUsable(personal), true, "no dice cuándo caduca: vale hasta que lo rechacen");
+  assert.equal(minutesUntilExpiry(personal), null);
+  assert.equal(accountOf(personal)?.sessionId, "msa-tid/zero-oid");
+  assert.equal(looksLikeProfile(`${hub}?access_token=${FAKE_JWE}`), true);
+  assert.equal(looksLikeProfile(FAKE_JWE), true);
+  assert.equal(looksLikeProfile(`Bearer ${FAKE_JWE}`), true);
+
+  // Lo que envía el navegador (y «Copiar perfil») conserva la cuenta y el origen.
+  const pushed = parsePastedProfile(
+    JSON.stringify({ ...personal, origin: "https://x.copilot.com" }),
+  );
+  assert.deepEqual(pushed.claims, personal.claims);
+  assert.equal(pushed.origin, "https://x.copilot.com");
+
+  // Sin la URL no se sabe de quién es: mejor decirlo ahora que un error raro al chatear.
+  for (const bareJwe of [FAKE_JWE, `Bearer ${FAKE_JWE}`, JSON.stringify({ accessToken: FAKE_JWE })])
+    assert.throws(() => parsePastedProfile(bareJwe), /encrypted|cifrado/);
+  assert.throws(
+    () => parsePastedProfile(`https://evil.example/Chathub/o@t?access_token=${FAKE_JWE}`),
+    /encrypted|cifrado/,
+    "la cuenta de un host que no es de Microsoft no vale",
+  );
+  assert.throws(() => parsePastedProfile(JSON.stringify({ accessToken: "a.b.c.d" })));
   console.log(
-    "  ✓ profile parsing (bare JWT, Bearer, Chathub URL, full JSON, rejects garbage, foreign audience)",
+    "  ✓ profile parsing (bare JWT, Bearer, Chathub URL, full JSON, encrypted token, rejects garbage, foreign audience)",
   );
 }
 
@@ -2759,9 +2797,38 @@ async function testPaidScenario() {
       "Gpt_6_Reasoning",
       "wss://substrate.office.com/m365Copilot/Chathub/o@t?scenario=OfficeWebPaidCopilotV2&licenseType=PremiumPlus",
     );
+    // A personal account: its encrypted token goes on the web app's own scenario, or the
+    // consumer one, whatever the model, under the account of the captured URL.
+    const personal = (endpoint: string | null, oid = "zero-oid") =>
+      streamCopilotTurn({
+        profile: {
+          ...makeProfile(server.port),
+          accessToken: FAKE_JWE,
+          claims: { oid, tid: "msa-tid" },
+          endpoint,
+        },
+        endpointBase: mockBase(server.port),
+        prompt: "PROMPT",
+        tone: "Claude_Opus",
+        signal: new AbortController().signal,
+        callbacks: { onText: () => {} },
+      });
+    await personal(
+      "wss://substrate.office.com/x/Chathub/a@b?scenario=FromTheWebApp&licenseType=Top",
+    );
+    await personal(null);
+    await personal(null, "a/../b");
   } finally {
     server.close();
   }
+  assert.deepEqual(sent(5), { scenario: "FromTheWebApp", licenseType: "Top", tone: "Claude_Opus" });
+  assert.deepEqual(sent(6), {
+    scenario: "OfficeWebPremiumConsumerCopilot",
+    licenseType: "Premium",
+    tone: "Claude_Opus",
+  });
+  assert.match(server.connections[5]?.url ?? "", /\/Chathub\/zero-oid@msa-tid\?/);
+  assert.match(server.connections[7]?.url ?? "", /\/Chathub\/a%2F\.\.%2Fb@msa-tid\?/);
   assert.deepEqual(sent(0), {
     scenario: "OfficeWebIncludedCopilot",
     licenseType: null,
@@ -5825,6 +5892,12 @@ function testLoggerRedaction() {
   assert.match(redacted, /Authorization: <REDACTED>/);
   assert.match(redacted, /<JWT \d+ chars>/, "a bare JWT is shown as its length");
   assert.match(redacted, /someone@contoso\.com/, "what is not a secret stays readable");
+
+  // An encrypted token, whole: five parts, the second one empty with `alg: dir`.
+  const wrappedJwe = FAKE_JWE.replace("..", ".a2V5a2V5a2V5.");
+  for (const jwe of [FAKE_JWE, wrappedJwe]) {
+    assert.match(redactSecrets(`bare ${jwe} token`), /^bare <JWT \d+ chars> token$/);
+  }
 
   // What a log may say about a profile never includes the token itself.
   const summary = JSON.stringify(describeProfile(makeProfile(1234)));

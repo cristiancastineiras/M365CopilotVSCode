@@ -51,6 +51,7 @@ export const MICROSOFT_COOKIE_DOMAINS = [
   "outlook.com",
   "sharepoint.com",
   "microsoft365.com",
+  "copilot.com",
   "bing.com",
 ] as const;
 
@@ -81,6 +82,7 @@ export const MICROSOFT_SESSION_ORIGINS = [
   "https://excel.cloud.microsoft",
   "https://powerpoint.cloud.microsoft",
   "https://outlook.cloud.microsoft",
+  "https://copilot.com",
   // --- el resto de M365
   "https://www.office.com",
   "https://office.com",

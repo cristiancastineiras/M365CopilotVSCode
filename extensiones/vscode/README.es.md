@@ -54,6 +54,13 @@ navegador y VS Code lo usa.
      401 (el comando de pegar avisa). Dura alrededor de una hora; repítelo
      cuando caduque. La búsqueda web necesita una de las dos capturas
      anteriores.
+   - _Suscripciones personales de Microsoft 365 (Personal, Familia):_ su token va
+     cifrado, así que sólo se captura del propio chat: envía un mensaje en
+     <https://m365.cloud.microsoft/chat/> o <https://copilot.com>. A mano, pega la
+     URL de arriba o **Copiar perfil**: el token solo no dice de quién es. Nada
+     puede saber cuándo caduca, así que nada avisa ni lo renueva: cuando un
+     mensaje falle con un 401, envía otro en el chat de la web. Todavía sin probar
+     de principio a fin con una cuenta personal real.
 2. **Chatea**: escribe **`@m365`** en el chat, o elige uno de los modelos **M365
    Copilot** (`Auto`, `Quick response`, `Think deeper`, `GPT 5.6 Think deeper`,
    `GPT 5.5`, `Claude Sonnet`…) en el selector de modelos.

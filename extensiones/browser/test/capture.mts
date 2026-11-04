@@ -15,11 +15,14 @@ import {
   SCAN_MISSING_MS,
   acceptToken,
   areClaimsUsable,
+  claimsInSocketUrl,
   connectionArtSvg,
   connectionState,
   diagnoseToken,
   inspectOutgoingFrames,
+  isCapturedTokenUsable,
   isCopilotSocketUrl,
+  isEncryptedToken,
   isMicrosoftHost,
   isValidJwt,
   nextScan,
@@ -28,6 +31,7 @@ import {
   sameCapture,
   tokenInSocketUrl,
   tokensInStorageValue,
+  tokenStamp,
   toneOfTemplate,
   withObservedTone,
   withoutExpiredToken,
@@ -325,7 +329,84 @@ function testObservedTones() {
   );
 }
 
+function testEncryptedToken() {
+  // Las dos formas de JWE: `alg: dir` deja vacía la segunda parte.
+  const direct = `${b64url({ alg: "dir", enc: "A256GCM" })}..aXY.Y2lwaGVy.dGFn`;
+  const wrapped = `${b64url({ alg: "RSA-OAEP", enc: "A256GCM" })}.a2V5.aXY.Y2lwaGVy.dGFn`;
+  const hub =
+    "wss://substrate.office.com/m365Copilot/Chathub/00000000-0000-0000-ea11-3f83b27d9e04@84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa";
+  const query = "scenario=OfficeWebPremiumConsumerCopilot&licenseType=Premium";
+  const socket = (token: string) => `${hub}?access_token=${token}&${query}`;
+  const account = {
+    oid: "00000000-0000-0000-ea11-3f83b27d9e04",
+    tid: "84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa",
+  };
+
+  assert.equal(isEncryptedToken(direct), true);
+  assert.equal(isEncryptedToken(wrapped), true);
+  assert.equal(isEncryptedToken(jwt({ exp: inMinutes(60) })), false);
+  assert.equal(isEncryptedToken("a.b.c.d.e"), false, "sin cabecera JSON");
+
+  // En el hub del chat se acepta, con la cuenta de la URL.
+  for (const token of [direct, wrapped]) {
+    assert.deepEqual(acceptToken({}, token, NOW, socket(token)), {
+      accessToken: token,
+      claims: account,
+    });
+  }
+
+  // En cualquier otro sitio no hay nada que pruebe que es el de Copilot.
+  assert.equal(diagnoseToken({}, direct, NOW).diagnosis, "not-sydney", "MSAL o cabecera");
+  for (const url of [
+    `wss://substrate.office.com/notifications?access_token=${direct}`,
+    `wss://substrate.office.com/m365Copilot/Chathub?access_token=${direct}`,
+    `wss://evil.example/m365Copilot/Chathub/o@t?access_token=${direct}`,
+  ]) {
+    assert.equal(diagnoseToken({}, direct, NOW, url).diagnosis, "not-sydney", url);
+  }
+  const huge = `${b64url({ alg: "dir" })}..aXY.${"x".repeat(MAX_JWT_CHARS)}.dGFn`;
+  assert.equal(diagnoseToken({}, huge, NOW, socket(huge)).diagnosis, "not-sydney", "tope");
+
+  const current = { accessToken: direct, claims: account };
+  assert.equal(diagnoseToken(current, direct, NOW, socket(direct)).diagnosis, "duplicate");
+  assert.equal(acceptToken(current, wrapped, NOW, socket(wrapped))?.accessToken, wrapped);
+
+  // Un JWT de la caché (otra cuenta del navegador) no lo pisa; el del chat, sí.
+  const other = jwt({ exp: inMinutes(60) });
+  assert.equal(diagnoseToken(current, other, NOW).diagnosis, "older-than-current");
+  assert.equal(
+    acceptToken(current, other, NOW, `wss://substrate.office.com/x/Chathub/o@t?access_token=x`)
+      ?.accessToken,
+    other,
+  );
+
+  // No dice cuándo caduca: sigue valiendo y se vigila de lejos.
+  assert.equal(isCapturedTokenUsable(current, NOW), true);
+  assert.equal(isCapturedTokenUsable({}, NOW), false);
+  assert.equal(isCapturedTokenUsable({ accessToken: other, claims: { exp: 1 } }, NOW), false);
+  assert.equal(withoutExpiredToken(current, NOW), null);
+  assert.equal(nextScan(current, SCAN_MISSING_MS, NOW).delay, SCAN_FRESH_MS);
+
+  // Lo que distingue a un token para VS Code es su `exp` o, sin él, la captura.
+  const capturedAt = new Date(NOW).toISOString();
+  assert.equal(tokenStamp({ claims: account, capturedAt }), NOW / 1000);
+  assert.equal(tokenStamp({ claims: { exp: 5 }, capturedAt }), 5);
+  assert.equal(tokenStamp(null), null);
+
+  // El endpoint no se pierde por lo largo que es el token que lleva dentro.
+  const long = `${b64url({ alg: "dir" })}..aXY.${"x".repeat(4000)}.dGFn`;
+  assert.equal(normalizeEndpoint(socket(long)), `${hub}?${query}`);
+
+  assert.deepEqual(claimsInSocketUrl(hub), account);
+  assert.deepEqual(claimsInSocketUrl(hub.replace("@", "%40")), account, "@ codificada");
+  assert.equal(claimsInSocketUrl("not a url"), null);
+  console.log(
+    "  ✓ JWE de cuentas personales: sólo desde el hub del chat, con su cuenta y sin caducidad",
+  );
+}
+
 testTokenValidation();
+testEncryptedToken();
 testDiagnosis();
 testSources();
 testFrames();

@@ -19,7 +19,7 @@
  *    pestaña que re-escanee la caché de MSAL (la web renueva su propio token
  *    sola) → recargar la pestaña → abrir una en segundo plano.
  */
-import { M365_CHAT_URL } from "@m365copilot/core";
+import { M365_CHAT_URL, tokenStamp } from "@m365copilot/core";
 import { ext } from "./api";
 import { logger } from "./logger";
 import {
@@ -196,7 +196,7 @@ export async function runRefreshCycle(): Promise<RefreshDecision> {
     needsResync({
       capturedAt: profile?.capturedAt ?? null,
       syncedTokenExp: syncState.syncedTokenExp,
-      currentTokenExp: token.expEpochSeconds,
+      currentTokenExp: tokenStamp(profile),
       hasToken: token.hasToken,
       lastSyncAttemptAt: syncState.lastSyncAttemptAt,
       now,

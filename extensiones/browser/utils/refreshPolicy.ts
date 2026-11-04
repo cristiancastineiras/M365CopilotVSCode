@@ -79,6 +79,11 @@ export function decideRefreshAction(context: RefreshContext): RefreshDecision {
   const { now, token, hasM365Tab, attempts } = context;
 
   const left = msUntilExpiry(token, now);
+  // Cifrado (cuentas personales): no dice cuándo caduca, y el siguiente sólo
+  // llega cuando la web abre otro chat. Recargar a ciegas no lo renovaría.
+  if (token.hasToken && left === null) {
+    return { action: "none", reason: "el token no dice cuándo caduca" };
+  }
   const needsRenewal = !token.hasToken || left === null || left <= RENEW_MARGIN_MS;
   if (!needsRenewal) {
     return {

@@ -88,6 +88,8 @@ If you prefer to pick M365 Copilot as a model (for example in Agent mode), show 
 
 {{< note >}}
 The Copilot token travels as `access_token` inside that URL, not in an `Authorization: Bearer` header. A bearer copied from another request belongs to a different service and fails with a 401.
+
+Personal Microsoft 365 subscriptions (Personal, Family) have an encrypted token: paste the whole URL, because the token alone does not say whose it is. Nothing can tell when it expires: when a message fails with a 401, send another one in the web chat and capture it again.
 {{< /note >}}
 
 Web search needs the session captured by the browser extension or the userscript; a pasted token alone does not carry it.

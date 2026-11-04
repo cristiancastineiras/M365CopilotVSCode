@@ -52,6 +52,13 @@ browser and VS Code uses it.
      other request is for another service and fails with 401 (the paste command
      warns about it). It lasts about an hour; repeat when it expires. Web search
      needs one of the two captures above.
+   - _Personal Microsoft 365 subscriptions (Personal, Family):_ their token is
+     encrypted, so it is captured only from the chat itself: send a message at
+     <https://m365.cloud.microsoft/chat/> or <https://copilot.com>. By hand, paste
+     the URL above or **Copy profile**: the token alone does not say whose it is.
+     Nothing can tell when it expires, so nothing warns you or renews it: when
+     a message fails with a 401, send another one in the web chat. Not yet
+     tested end to end with a real personal account.
 2. **Chat**: type **`@m365`** in the chat, or pick one of the **M365 Copilot**
    models (`Auto`, `Quick response`, `Think deeper`, `GPT 5.6 Think deeper`,
    `GPT 5.5`, `Claude Sonnet`…) in the model picker.

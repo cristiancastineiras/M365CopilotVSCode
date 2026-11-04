@@ -311,7 +311,42 @@ async function testFramesAndMenu() {
   );
 }
 
+async function testEncryptedTokenOfPersonalAccounts() {
+  const token = `${b64url({ alg: "dir", enc: "A256GCM" })}..aXY.${"Y".repeat(3000)}.dGFn`;
+  const hub =
+    "wss://substrate.office.com/m365Copilot/Chathub/00000000-0000-0000-ea11-3f83b27d9e04@84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa";
+  const query = "scenario=OfficeWebPremiumConsumerCopilot&licenseType=Premium";
+
+  // In the MSAL cache nothing proves it is Copilot's.
+  const page = load({ localStorage: { "some-key": JSON.stringify({ secret: token }) } });
+  await settle();
+  assert.equal(page.capture().accessToken, undefined);
+  assert.equal(page.posts().length, 0);
+
+  page.openSocket(`${hub}?access_token=${token}&ConversationId=c1&${query}`);
+  await settle();
+  const capture = page.capture();
+  assert.equal(capture.accessToken, token);
+  assert.deepEqual(capture.claims, {
+    oid: "00000000-0000-0000-ea11-3f83b27d9e04",
+    tid: "84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa",
+  });
+  assert.equal(capture.endpoint, `${hub}?${query}`, "the long token does not cost the endpoint");
+
+  // Sent to VS Code once, even with no `exp` to tell one token from another.
+  assert.equal(page.posts().length, 1);
+  const profile = JSON.parse(page.posts()[0].data!);
+  assert.equal(profile.accessToken, token);
+  assert.deepEqual(profile.claims, capture.claims);
+  assert.equal(typeof page.sync().syncedTokenExp, "number");
+  page.openSocket(`${hub}?access_token=${token}&${query}`);
+  await settle();
+  assert.equal(page.posts().length, 1);
+  console.log("  ✓ JWE de cuentas personales: se captura del hub del chat y se envía una vez");
+}
+
 await testWebSocketCaptureAndSync();
+await testEncryptedTokenOfPersonalAccounts();
 await testMsalCacheAndRenewal();
 await testHeadersAndVsCodeDown();
 await testFramesAndMenu();

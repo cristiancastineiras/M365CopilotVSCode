@@ -5,6 +5,7 @@ import {
   SIGNOUT_ENDPOINT_PATH,
   isTokenUsable,
   profileFromCapture,
+  tokenStamp,
   type CopilotProfile,
 } from "@m365copilot/core";
 import { ext } from "@/utils/api";
@@ -70,7 +71,7 @@ export default defineBackground(() => {
       logger.info("Profile sent to VS Code successfully");
       await setStorage("lastSyncedAt", new Date().toISOString());
       await patchStorage("syncState", {
-        syncedTokenExp: profile.claims?.exp ?? null,
+        syncedTokenExp: tokenStamp(profile),
         lastError: null,
       });
       return true;

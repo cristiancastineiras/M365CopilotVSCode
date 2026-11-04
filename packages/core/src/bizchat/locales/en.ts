@@ -13,6 +13,8 @@ export const en = {
   "profile.error.notObject": "The pasted JSON is not a profile object.",
   "profile.error.noToken": "The profile does not contain any accessToken.",
   "profile.error.invalidJwt": "The accessToken does not look like a valid JWT.",
+  "profile.error.encryptedWithoutAccount":
+    "This token is encrypted (personal Microsoft 365 accounts) and does not say which account it belongs to. Use “Copy profile” in the browser extension, or paste the URL of the chat WebSocket (DevTools → Network, filter: chathub).",
   "profile.error.urlWithoutToken":
     "That URL has no access_token. Copy the URL of the chat WebSocket (DevTools → Network, filter: chathub), which carries the token.",
 

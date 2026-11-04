@@ -42,6 +42,7 @@ export const M365_CHAT_URL = "https://m365.cloud.microsoft/chat/";
  *                            entra mucha gente, sobre todo desde Edge.
  * - `*.office.com`          Outlook/Office en la web embeben BizChat.
  * - `teams.microsoft.com`   Copilot dentro de Teams.
+ * - `*.copilot.com`         el chat de las cuentas personales (incluye `copilot.com`).
  *
  * Antes la lista era más estrecha que los `host_permissions` del manifest, así
  * que en esas otras superficies el interceptor ni siquiera arrancaba: ni log ni
@@ -53,6 +54,7 @@ export const COPILOT_CONTENT_MATCHES = [
   "https://*.microsoft365.com/*",
   "https://*.office.com/*",
   "https://teams.microsoft.com/*",
+  "https://*.copilot.com/*",
 ] as const;
 
 /** Clave de localStorage donde el interceptor del navegador acumula la captura. */

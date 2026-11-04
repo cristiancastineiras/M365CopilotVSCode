@@ -16,6 +16,8 @@ export const es: Record<keyof typeof en, string> = {
   "profile.error.notObject": "El JSON pegado no es un objeto de perfil.",
   "profile.error.noToken": "El perfil no contiene ningún accessToken.",
   "profile.error.invalidJwt": "El accessToken no parece un JWT válido.",
+  "profile.error.encryptedWithoutAccount":
+    "Este token está cifrado (cuentas personales de Microsoft 365) y no dice de qué cuenta es. Usa «Copiar perfil» de la extensión de navegador o pega la URL del WebSocket del chat (DevTools → Red, filtro: chathub).",
   "profile.error.urlWithoutToken":
     "Esa URL no lleva access_token. Copia la URL del WebSocket del chat (DevTools → Red, filtro: chathub), que es la que lleva el token.",
 
