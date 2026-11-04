@@ -281,25 +281,12 @@ export const es: Record<keyof typeof en, string> = {
   "log.signOut.timeout": "⚠️ Nadie confirmó el cierre de sesión. Endpoints de Microsoft: {0}",
 
   // ------------------------------------------------------------ prompt (proveedor del chat)
-  "prompt.tone": [
-    "Sé serio, directo y funcional: ve al grano, sin cháchara ni relleno.",
-    'Nada de coletillas de relleno ("¡Claro!", "¡Buena pregunta!", "Voy a ayudarte con eso", disculpas innecesarias) ' +
-      "ni emojis decorativos que no aportan información. Empieza directamente por la respuesta o la acción.",
-    "Antes de una llamada a herramienta, como mucho UNA frase corta de qué vas a hacer — nunca un párrafo explicando " +
-      "el plan paso a paso antes de ejecutarlo.",
-    "No repitas la pregunta del usuario ni resumas al final lo que ya has dicho o hecho arriba. Si hiciste cambios, " +
-      "di escuetamente QUÉ cambió, no el relato de cómo llegaste ahí.",
-    "Sé breve por defecto: respuestas largas sólo cuando el contenido de verdad lo requiere (código, una explicación " +
-      "técnica que el usuario pidió en detalle), nunca por rellenar espacio.",
-    "Responde en el mismo idioma en el que escribe el usuario.",
-  ].join("\n"),
-  "prompt.markdown": [
-    "Responde SIEMPRE en Markdown bien formado.",
-    "OBLIGATORIO: todo bloque de código de 2 o más líneas debe ir entre vallas ``` con el lenguaje adecuado (por ejemplo, ```ts). Nunca lo pegues como texto plano: fuera de una valla, Markdown convierte cada salto de línea en un espacio y el código sale ilegible, todo en una línea.",
-    "Usa código en línea (una sola voz entre `backticks`) sólo para identificadores, rutas, comandos y fragmentos muy cortos de una sola línea.",
-  ].join("\n"),
+  "prompt.tone":
+    "Sé directo y funcional: ve al grano, sin charla ni relleno.\nEvita las frases de relleno («¡Claro!», «¡Buena pregunta!», disculpas innecesarias) y los emojis decorativos. Empieza por la respuesta o la acción.\nAntes de un bloque, como mucho una frase corta sobre lo que vas a hacer.\nNo repitas la pregunta ni resumas al final lo que ya has dicho. Si has hecho cambios, di brevemente qué ha cambiado, no cómo has llegado ahí.\nSé breve: respuestas largas solo cuando el contenido lo necesite (código, una explicación detallada que haya pedido).\nResponde en el idioma en el que escribo.",
+  "prompt.markdown":
+    "Responde en Markdown.\nPon el código de 2 o más líneas dentro de vallas ``` con su lenguaje (por ejemplo, ```ts): fuera de una valla, Markdown convierte cada salto de línea en un espacio.\nUsa código en línea (`así`) solo para identificadores, rutas, comandos y fragmentos muy cortos.",
   "prompt.skill.ponytail": [
-    "ESTILO DE TRABAJO — desarrollador senior perezoso: resuelve el problema completo con el mínimo código nuevo.",
+    "Estilo de trabajo — desarrollador senior perezoso: resuelve el problema completo con el mínimo código nuevo.",
     "Antes de escribir, lee el código que toca la tarea y enumera cada sitio al que debe llegar el cambio (llamadores, " +
       "tests, configuración, exports). Toma la primera opción que funcione entera: ¿hace falta que exista? → algo que ya " +
       "hay en este código → la biblioteca estándar o la plataforma → una dependencia ya instalada → una línea clara → el mínimo código.",
@@ -310,7 +297,7 @@ export const es: Record<keyof typeof en, string> = {
     "Termina los cambios de código con una línea: qué no hiciste o no comprobaste, y cualquier riesgo.",
   ].join("\n"),
   "prompt.skill.agentSkills": [
-    "DISCIPLINA DE INGENIERÍA:",
+    "Disciplina de ingeniería:",
     "- Antes de algo no trivial, enumera tus supuestos en una lista corta; si la petición es ambigua o contradice el " +
       "código, nombra la confusión y pregunta en vez de adivinar.",
     "- Rebate los enfoques con problemas claros: di el inconveniente concreto y propone una alternativa. Sin complacencia.",
@@ -329,12 +316,11 @@ export const es: Record<keyof typeof en, string> = {
     '`graphify path "<A>" "<B>"` o `graphify explain "<nodo>"`. Tras editar código, ' +
     "`graphify . --update` lo actualiza.",
   "prompt.markdownReminder":
-    "Recuerda: si tu respuesta incluye código de 2 o más líneas, ponlo entre vallas ``` con el lenguaje. Nunca como " +
-    "texto plano. Y sé breve y directo: sin cháchara, sin repetir lo obvio, sin párrafos de más.",
+    "Recuerda: el código de 2 o más líneas va dentro de vallas ``` con su lenguaje. Y sé breve.",
   "prompt.continue":
     "Continúa esta conversación: responde a la última petición del usuario. Los turnos anteriores son contexto; " +
     "los resultados de herramientas que la siguen son lo que llevas hecho.",
-  "prompt.toolResult": "[resultado de la herramienta {0}]",
+  "prompt.toolResult": '<tool_response tool="{0}">\n{1}\n</tool_response>',
   "prompt.toolCall": "[llamada a herramienta {0}({1})]",
   "prompt.nonTextOmitted": "[contenido adjunto no textual omitido]",
   "prompt.attachmentOmitted": "[adjunto {0}, {1} KB, omitido]",
@@ -354,26 +340,20 @@ export const es: Record<keyof typeof en, string> = {
 
   // ------------------------------------------------------------ protocolo de herramientas (lo lee el modelo)
   "protocol.force.giveUp":
-    "Nota: en un intento anterior de esta petición respondiste que no podías acceder al workspace, sin llamar a " +
-    "ninguna herramienta. Sí puedes: los archivos y comandos de este workspace son reales y están a tu alcance con las " +
-    "herramientas de la lista de arriba, y el marcador las ejecuta en la máquina del usuario. No le pidas que pegue " +
-    "ni suba nada; responde con la llamada a herramienta del siguiente paso.",
+    "(Una nota mía: no necesitas tener acceso a nada. Los archivos están en mi máquina y cada bloque lo ejecuto yo, así que envíame el bloque del siguiente paso y te pego la salida. No hace falta que me pidas pegar ni subir nada.)",
+  "protocol.force.fakeCompletion":
+    "(Una nota mía: de momento no ha cambiado nada por aquí, porque no se ha ejecutado ningún bloque. Envíame el bloque del primer paso; lo ejecuto aquí y te pego la salida.)",
   "protocol.force.sandbox":
-    "Nota: en un intento anterior de esta petición trabajaste en tu propio sandbox en la nube (/mnt/data, /home/…). " +
-    "Esa no es la máquina del usuario: nada de lo que hay allí está en este workspace, y nada de lo que crees allí " +
-    "llega a él. Usa solo las herramientas de la lista de arriba, con el marcador, para archivos y comandos; responde " +
-    "con la llamada a herramienta del siguiente paso.",
-
+    "(Una nota mía: lo que has hecho en tu propia sandbox en la nube (/mnt/data, /home/…) no ha llegado a mi máquina, y mis archivos no están ahí. Envíame mejor el bloque del siguiente paso de la lista; lo ejecuto aquí y te pego la salida.)",
   // ------------------------------------------------------------ invocación de herramientas (UI del chat)
   "tool.listing": "Listando {0}...",
   "tool.listing.workspace": "el workspace",
   "tool.searching": "Buscando «{0}»...",
   "tool.reading": "Leyendo {0}...",
   "tool.preparingEdits": "Preparando {0} edición(es)...",
-  "tool.edits.confirmTitle": "Aplicar cambios de M365 Copilot",
+  "tool.edits.confirmTitle": "¿Cambiar archivos sensibles?",
   "tool.edits.confirmMessage":
-    "Los cambios se aplicarán en el editor, resaltados y SIN guardar en disco. " +
-    "Encima de cada cambio tendrás «Keep» para aceptarlo y «Undo» para revertirlo, además del diff.",
+    "M365 Copilot quiere cambiar archivos que pueden ejecutar código o guardar secretos: {0}. Después podrás revisar y deshacer los cambios.",
   "tool.diagnostics.file": "Leyendo diagnósticos de {0}...",
   "tool.diagnostics.workspace": "Leyendo diagnósticos del workspace...",
   "tool.git": "Consultando git {0}...",
@@ -507,9 +487,7 @@ export const es: Record<keyof typeof en, string> = {
   "edit.oldText.noMatch":
     "oldText no coincide con el contenido actual de {0}. Vuelve a leer el archivo.",
   "edit.summary":
-    "Cambios aplicados en el editor y pendientes de revisión del usuario: {0}. " +
-    "El usuario los verá resaltados con las acciones «Keep» y «Undo» encima del cambio. " +
-    "No están guardados en disco todavía y el usuario puede revertirlos, así que no des por hecho que son definitivos.",
+    "Aplicado y guardado: {0}. Estoy revisando estos cambios y aún puedo deshacerlos, así que no los des por definitivos.",
   "edit.noEdits": "edits debe contener al menos una edición.",
   "edit.tooMany": "El lote no puede superar {0} ediciones.",
   "edit.itemError": "Edición #{0}: {1}",
@@ -523,8 +501,7 @@ export const es: Record<keyof typeof en, string> = {
   "edit.applyFailed": "VS Code no pudo aplicar los cambios.",
   "edit.restoreFailed": "VS Code no pudo restaurar el contenido anterior.",
   "edit.tooLarge": "{0} supera el límite de {1} caracteres.",
-  "edit.kept":
-    "M365 Copilot: {0} archivo(s) aceptados. Sin guardar todavía — Ctrl+S para escribirlos.",
+  "edit.kept": "M365 Copilot: {0} archivo(s) aceptado(s).",
   "edit.reverted": "M365 Copilot: {0} archivo(s) revertidos.",
   "edit.revertFailed": "M365 Copilot: no se pudo revertir: {0}",
   "edit.noBatch": "M365 Copilot: no hay un lote de cambios para deshacer.",
@@ -547,6 +524,8 @@ export const es: Record<keyof typeof en, string> = {
   "edit.lens.undoHunk": "$(discard) Undo",
   "edit.lens.undoHunkTooltip": "Revertir sólo este bloque de cambios",
   "edit.status.text": "$(edit) M365: {0} cambio(s) sin revisar",
+  "edit.hover.before": "Antes de este cambio:",
+  "edit.hover.more": "… y {0} líneas más",
   "edit.status.tooltip": "Cambios de M365 Copilot pendientes de Keep/Undo. Clic para revisarlos.",
   "diff.newFile": "archivo nuevo",
   "diff.deletedFile": "archivo borrado",
@@ -603,19 +582,13 @@ export const es: Record<keyof typeof en, string> = {
   "subagent.stepLimit":
     "⚠️ Se alcanzó el límite de {0} paso(s) sin una respuesta final. Último resultado:\n{1}",
   "subagent.prompt.framing":
-    "Eres un SUB-AGENTE autónomo dentro de VS Code, delegado por el agente principal de M365 Copilot para UNA " +
-    "tarea concreta y acotada. No ves el resto de la conversación con el usuario — sólo la tarea de abajo — " +
-    "así que no des nada por hecho fuera de ella.",
+    "Esta es una tarea concreta y acotada, separada de un trabajo más grande que estoy haciendo en VS Code. No ves el resto de esa conversación, solo la tarea de abajo, así que no des nada por supuesto fuera de ella.",
   "subagent.prompt.task": "Tarea encomendada:\n{0}",
   "subagent.prompt.finish":
-    "Usa las herramientas que necesites, un paso a la vez. Cuando termines, responde en Markdown con un RESUMEN " +
-    "CONCISO (unos pocos párrafos o una lista de puntos como mucho) de lo que hiciste y lo que encontraste o " +
-    "cambiaste — es lo ÚNICO que va a leer el agente principal, así que no dejes fuera nada importante ni " +
-    "emitas más marcadores de herramienta una vez tengas esa respuesta final. Si el resumen incluye código de " +
-    "2 o más líneas, ponlo entre vallas ``` con el lenguaje.",
+    "Ve paso a paso. Cuando termines, responde en Markdown con un resumen conciso (unos párrafos o una lista como mucho) de lo que has hecho y lo que has encontrado o cambiado: es lo único que verá el resto del trabajo, así que incluye todo lo importante y no envíes más bloques después. El código de 2 o más líneas va dentro de vallas ``` con su lenguaje.",
   "subagent.prompt.omitted": "[pasos anteriores del sub-agente omitidos para conservar contexto]",
-  "subagent.prompt.callBlock": "Sub-agente (paso {0}): llamó a {1} con {2}",
-  "subagent.prompt.resultBlock": "Resultado de {0}:\n{1}",
+  "subagent.prompt.callBlock": "Paso {0}:\n{1}",
+  "subagent.prompt.resultBlock": '<tool_response tool="{0}">\n{1}\n</tool_response>',
   "subagent.clipNote": "… ({0} caracteres omitidos)",
 
   // ------------------------------------------------------------ participante de chat @m365
@@ -661,9 +634,7 @@ export const es: Record<keyof typeof en, string> = {
     "Responde a la petición del usuario de abajo. Usa las herramientas del workspace si necesitas más contexto o " +
     "tienes que cambiar archivos (el usuario revisa las ediciones con Keep/Undo).",
   "participant.prompt.framing":
-    "Eres M365 Copilot, un asistente de programación integrado en VS Code e invocado desde el chat como @m365. " +
-    "Trabaja paso a paso con las herramientas, una llamada cada vez. Cuando termines, responde al usuario en " +
-    "Markdown — esa respuesta se muestra directamente en el chat.",
+    "Te escribo desde el chat de mi editor (VS Code), donde te llamo como @m365. Vamos paso a paso. Cuando esté hecho, respóndeme en Markdown: esa respuesta es lo que veré en el chat.",
   "participant.prompt.context": "Contexto de código — {0}, líneas {1}-{2} ({3}):",
   "participant.prompt.contextTruncated": "[código recortado: {0} caracteres más]",
   "participant.prompt.diagnostics": "Problemas que VS Code marca en ese código:",

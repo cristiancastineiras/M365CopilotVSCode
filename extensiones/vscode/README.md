@@ -489,7 +489,7 @@ search **says when it was not exhaustive** instead of claiming "no matches".
 | -------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `m365copilot.tools.includeEditorTools` | `true`         | Also describe native/MCP tools. `false` = only the `m365_*` tools.                                                           |
 | `m365copilot.tools.duplicates`         | `preferEditor` | Which tool the model should try first when a native one and ours do the same thing. The other stays as a fallback.           |
-| `m365copilot.tools.maxAdvertised`      | `48`           | Cap on tools described in the prompt (the catalog travels as text). Undescribed tools can still run if the model names them. |
+| `m365copilot.tools.maxAdvertised`      | `20`           | Cap on tools described in the prompt (the catalog travels as text). Undescribed tools can still run if the model names them. |
 
 ### How the prompt keeps the context
 
@@ -513,11 +513,22 @@ what goes into it — and what stays out — decides how well the model follows:
 
 ### Reviewing changes (Keep / Undo)
 
-Changes land **in the editor, unsaved**, like VS Code's own editing flows:
+In the `@m365` chat, edits go through **VS Code's own review of chat edits**, the
+one GitHub Copilot's have: red and green inline, **Keep / Undo** on each change
+and for the whole file, **N files changed** next to the chat input, and
+checkpoints. They are saved as they land, so the next command the model runs sees
+them, and **Undo** puts the file back on disk (or deletes it, if the agent created
+it). With an M365 model picked in agent mode, VS Code's own edit tools do the same.
+
+Before changing files that can run code or hold secrets (`.vscode/`, `.github/`,
+`.env`, `package.json`…) you are asked first.
+
+What has no chat to hang that review on (inline edits, quick fixes, fixes from a
+review comment) uses this extension's own, with the same actions:
 
 - each changed **block (hunk)** is highlighted on its own — added lines in your
-  theme's diff colour, removed lines as a red marker — not the whole span from the
-  first change to the last;
+  theme's diff colour, removed lines as a red marker, with the previous text when
+  you hover over them — not the whole span from the first change to the last;
 - every hunk has its own **✓ Keep (+a −b)** and **↶ Undo** CodeLens, and the top
   of the file offers **Keep all / Undo all / Show diff**; the same file-level
   actions, plus **previous / next change**, are in the **editor title bar**;
@@ -529,13 +540,14 @@ Changes land **in the editor, unsaved**, like VS Code's own editing flows:
 - the status bar shows how many files are still waiting for review;
 - being a normal editor edit, **Ctrl+Z works** as usual.
 
-Nothing is written to disk until you save (new files are created, and **Undo**
-deletes them). If you Keep a batch and change your mind, **M365 Copilot: Undo
-last batch of agent changes** reverts it.
+An inline edit stays unsaved until you save it, like typing would, and **Undo**
+leaves the file as it was. If you Keep a batch and change your mind, **M365
+Copilot: Undo last batch of agent changes** reverts it.
 
-> The _chat editing_ API used by GitHub Copilot Edits is a proposed API not
-> available to normally installed extensions, so this reproduces it with stable
-> API (decorations + CodeLens + diff + editor title actions).
+> VS Code's review is reached through `externalEdit`, a method of the chat response
+> stream that is still a proposed API, although the only edit method there open to
+> normally installed extensions (checked on VS Code 1.144 and 1.145). If a version
+> closes it, `@m365` falls back to this extension's own review.
 
 The terminal tool is the only one that runs arbitrary code: before anything
 runs you see the literal command (with an extra warning for classically

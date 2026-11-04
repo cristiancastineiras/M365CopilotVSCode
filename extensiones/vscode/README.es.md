@@ -508,7 +508,7 @@ coincidencias».
 | -------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `m365copilot.tools.includeEditorTools` | `true`         | Describir también las herramientas nativas/MCP. `false` = sólo las `m365_*`.                                                                           |
 | `m365copilot.tools.duplicates`         | `preferEditor` | A cuál debe ir primero el modelo cuando una nativa y una nuestra hacen lo mismo. La otra queda como alternativa.                                       |
-| `m365copilot.tools.maxAdvertised`      | `48`           | Tope de herramientas descritas en el prompt (el catálogo viaja como texto). Las que no se describen siguen siendo ejecutables si el modelo las nombra. |
+| `m365copilot.tools.maxAdvertised`      | `20`           | Tope de herramientas descritas en el prompt (el catálogo viaja como texto). Las que no se describen siguen siendo ejecutables si el modelo las nombra. |
 
 ### Cómo conserva el contexto el prompt
 
@@ -535,12 +535,25 @@ que sigue el hilo el modelo:
 
 ### Revisión de cambios (Keep / Undo)
 
-Los cambios se aplican **en el editor, sin guardar en disco**, como en los
-flujos de edición nativos de VS Code:
+En el chat de `@m365`, las ediciones pasan por **la revisión de VS Code para las
+ediciones del chat**, la misma que tienen las de GitHub Copilot: rojo y verde en
+línea, **Keep / Undo** en cada cambio y en todo el archivo, **N archivos cambiados**
+junto a la caja del chat, y puntos de restauración. Se guardan al aplicarse, para
+que el siguiente comando del modelo las vea, y **Undo** devuelve el archivo en disco
+(o lo borra, si lo creó el agente). Con un modelo de M365 elegido en modo agente,
+las herramientas de edición de VS Code hacen lo mismo.
+
+Antes de cambiar archivos que pueden ejecutar código o guardar secretos
+(`.vscode/`, `.github/`, `.env`, `package.json`…) se te pregunta.
+
+Lo que no tiene un chat del que colgar esa revisión (ediciones en línea, arreglos
+rápidos, arreglos desde un comentario de revisión) usa la de esta extensión, con
+las mismas acciones:
 
 - cada **bloque (hunk)** cambiado se resalta por separado — las líneas añadidas
-  con el color de diff de tu tema, las borradas con una marca roja — y no todo el
-  tramo entre el primer cambio y el último;
+  con el color de diff de tu tema, las borradas con una marca roja, con el texto
+  anterior al pasar el ratón — y no todo el tramo entre el primer cambio y el
+  último;
 - cada bloque tiene su propio CodeLens **✓ Keep (+a −b)** y **↶ Undo**, y arriba
   del archivo están **Keep todo / Undo todo / Ver diff**; esas mismas acciones de
   archivo, más **cambio anterior / siguiente**, están en la **barra de título del
@@ -554,14 +567,14 @@ flujos de edición nativos de VS Code:
 - la barra de estado indica cuántos archivos quedan por revisar;
 - como es una edición normal del editor, **Ctrl+Z funciona** tal cual.
 
-Nada se escribe en disco hasta que guardas (los archivos nuevos sí se crean, y
-**Undo** los borra). Si aceptas un lote con Keep y te arrepientes, **M365
-Copilot: Deshacer último lote de cambios del agente** lo revierte.
+Una edición en línea queda sin guardar hasta que guardas, como si la escribieras, y
+**Undo** deja el archivo como estaba. Si aceptas un lote con Keep y te arrepientes,
+**M365 Copilot: Deshacer último lote de cambios del agente** lo revierte.
 
-> La API de _chat editing_ que usa GitHub Copilot Edits es _proposed API_ y no
-> está disponible para una extensión instalada normalmente, así que esto la
-> reproduce con API estable (decoraciones + CodeLens + diff + acciones en la
-> barra de título).
+> A la revisión de VS Code se llega con `externalEdit`, un método del flujo de
+> respuesta del chat que sigue siendo _proposed API_, aunque es el único método de
+> edición abierto a una extensión instalada normalmente (comprobado en VS Code 1.144
+> y 1.145). Si una versión lo cierra, `@m365` vuelve a la revisión de esta extensión.
 
 La herramienta de terminal es la única que ejecuta código arbitrario: antes de
 correr nada ves el comando literal (con un aviso extra para patrones típicamente

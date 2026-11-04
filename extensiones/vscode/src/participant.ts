@@ -36,12 +36,18 @@ import {
   type ParticipantCommand,
   type PromptTerminalRun,
 } from "./participantPrompts";
-import { isTokenUsable, MAX_TURN_IMAGES, type TurnImage, debug } from "@m365copilot/core/bizchat";
+import {
+  isTokenUsable,
+  M365_TOOL_NAMES,
+  MAX_TURN_IMAGES,
+  type TurnImage,
+  debug,
+} from "@m365copilot/core/bizchat";
 import type { ProfileStore } from "./secrets";
 import { MAX_TASK_WALL_CLOCK_MS, runToolLoop } from "./subagentCore";
 import { retrievalText } from "./transcript";
 import { toolResultToText } from "./subagents";
-import type { WorkspaceEditManager } from "../tools/writeFile";
+import { chatReviewOf, type WorkspaceEditManager } from "../tools/writeFile";
 import type { TerminalHistory } from "./terminalHistory";
 import type { ContextOptions } from "./projectIndex";
 import { boundedInteger, errorMessage, relativePathForUri } from "../tools/common";
@@ -229,6 +235,10 @@ async function handleRequest(
         }
       },
       executeTool: async (name, input) => {
+        // Edits get VS Code's own review of chat edits, the one Copilot's have.
+        const review =
+          name === M365_TOOL_NAMES.applyWorkspaceEdits ? chatReviewOf(stream) : undefined;
+        const offered = review && deps.edits.offerChatReview(review);
         try {
           const result = await traceInvokeTool("participant", name, input, () =>
             vscode.lm.invokeTool(
@@ -240,6 +250,8 @@ async function handleRequest(
           return toolResultToText(result);
         } catch (error) {
           return t("tool.error", errorMessage(error));
+        } finally {
+          offered?.dispose();
         }
       },
     });

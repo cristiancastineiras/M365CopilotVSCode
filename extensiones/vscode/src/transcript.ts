@@ -22,7 +22,13 @@ import { retrievalQuery } from "./rag/text";
 
 export type TranscriptPart =
   | { readonly kind: "text"; readonly text: string }
-  | { readonly kind: "toolCall"; readonly name: string; readonly input: string }
+  | {
+      readonly kind: "toolCall";
+      readonly name: string;
+      readonly input: string;
+      /** The call as the model is asked to write it: seeing it so, it keeps writing it so. */
+      readonly block?: string;
+    }
   | { readonly kind: "toolResult"; readonly name: string; readonly text: string };
 
 export interface TranscriptMessage {
@@ -122,15 +128,17 @@ export function renderTranscript(
     const lines = message.parts.map((part) => {
       if (part.kind === "text") return part.text;
       if (part.kind === "toolCall") {
-        return t(
-          "prompt.toolCall",
-          part.name,
-          trimForContext(part.input, limits.maxToolCallInputChars),
-        );
+        return part.block
+          ? trimForContext(part.block, limits.maxToolCallInputChars)
+          : t(
+              "prompt.toolCall",
+              part.name,
+              trimForContext(part.input, limits.maxToolCallInputChars),
+            );
       }
       const budget = budgets[resultIndex]!; // one budget per tool result, in order
       resultIndex += 1;
-      return `${t("prompt.toolResult", part.name)}\n${condenseToolResult(part.text, budget)}`;
+      return t("prompt.toolResult", part.name, condenseToolResult(part.text, budget));
     });
     const text = lines.join("\n").trim();
     if (!text) continue;

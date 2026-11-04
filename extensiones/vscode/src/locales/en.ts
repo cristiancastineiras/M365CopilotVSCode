@@ -273,28 +273,12 @@ export const en = {
   "log.signOut.timeout": "⚠️ Nobody confirmed the sign-out. Microsoft’s own endpoints: {0}",
 
   // ------------------------------------------------------------ prompt (chat provider)
-  "prompt.tone": [
-    "Be serious, direct and functional: get to the point, no chit-chat or filler.",
-    'No filler phrases ("Sure!", "Great question!", "I\'ll help you with that", needless apologies) and no decorative ' +
-      "emojis that add no information. Start directly with the answer or the action.",
-    "Before a tool call, at most ONE short sentence about what you are going to do — never a whole paragraph " +
-      "explaining the plan step by step before running it.",
-    "Do not restate the user's question or summarise at the end what you already said or did above. If you made " +
-      "changes, say briefly WHAT changed, not the story of how you got there.",
-    "Be brief by default: long answers only when the content really needs it (code, a technical explanation the user " +
-      "asked for in detail), never to fill space.",
-    "Reply in the language the user writes in.",
-  ].join("\n"),
-  "prompt.markdown": [
-    "ALWAYS reply in well-formed Markdown.",
-    "MANDATORY: every code block of 2 or more lines must go inside ``` fences with the right language (for example, ```ts). " +
-      "Never paste it as plain text: outside a fence, Markdown turns every line break into a space and the code " +
-      "becomes unreadable, all on one line.",
-    "Use inline code (a single item between `backticks`) only for identifiers, paths, commands and very short " +
-      "single-line snippets.",
-  ].join("\n"),
+  "prompt.tone":
+    'Be direct and functional: get to the point, without chit-chat or filler.\nSkip filler phrases ("Sure!", "Great question!", needless apologies) and decorative emojis. Start with the answer or the action.\nBefore a block, at most one short sentence about what you are going to do.\nDon\'t restate the question or summarise at the end what you already said. If you made changes, say briefly what changed, not how you got there.\nKeep it brief: long answers only when the content needs it (code, a detailed explanation I asked for).\nReply in the language I write in.',
+  "prompt.markdown":
+    "Reply in Markdown.\nPut code of 2 or more lines inside ``` fences with its language (for example, ```ts): outside a fence, Markdown turns every line break into a space.\nUse inline code (`like this`) only for identifiers, paths, commands and very short snippets.",
   "prompt.skill.ponytail": [
-    "WORKING STYLE — lazy senior developer: solve the whole problem with the least new code.",
+    "Working style — lazy senior developer: solve the whole problem with the least new code.",
     "Before writing, read the code the task touches and list every place the change must reach (callers, tests, " +
       "config, exports). Take the first option that fully works: does it need to exist at all? → something already " +
       "in this codebase → the standard library or platform → an installed dependency → one clear line → the minimum code.",
@@ -305,7 +289,7 @@ export const en = {
     "End code changes with one line: what you skipped or did not check, and any risk.",
   ].join("\n"),
   "prompt.skill.agentSkills": [
-    "ENGINEERING DISCIPLINE:",
+    "Engineering discipline:",
     "- Before anything non-trivial, state your assumptions in a short list; if the request is ambiguous or " +
       "contradicts the code, name the confusion and ask instead of guessing.",
     "- Push back on approaches with clear problems: say the concrete downside and propose an alternative. No sycophancy.",
@@ -323,12 +307,11 @@ export const en = {
     '`graphify path "<A>" "<B>"` or `graphify explain "<node>"`. After editing code, ' +
     "`graphify . --update` refreshes it.",
   "prompt.markdownReminder":
-    "Remember: if your answer includes code of 2 or more lines, put it inside ``` fences with the language. Never as " +
-    "plain text. And be brief and direct: no chit-chat, no restating the obvious, no extra paragraphs.",
+    "Remember: code of 2 or more lines goes inside ``` fences with its language. And keep it brief.",
   "prompt.continue":
     "Continue this conversation: answer the latest user request. Earlier turns are context; the tool results " +
     "after it are what you have done so far.",
-  "prompt.toolResult": "[result of tool {0}]",
+  "prompt.toolResult": '<tool_response tool="{0}">\n{1}\n</tool_response>',
   "prompt.toolCall": "[tool call {0}({1})]",
   "prompt.nonTextOmitted": "[non-text attachment omitted]",
   "prompt.attachmentOmitted": "[attachment {0}, {1} KB, omitted]",
@@ -348,25 +331,20 @@ export const en = {
 
   // ------------------------------------------------------------ tool protocol (model-facing)
   "protocol.force.giveUp":
-    "Note: in an earlier attempt at this request you answered that you could not reach the workspace, without calling " +
-    "any tool. You can: the files and commands of this workspace are real and reachable through the tools listed " +
-    "above, and the marker runs them on the user's machine. Do not ask the user to paste or upload anything; reply " +
-    "with the tool call for the next step.",
+    "(A note from me: you don't need access to anything. The files are on my machine and I run each block myself, so just send me the block for the next step and I'll paste the output back. There's no need to ask me to paste or upload anything.)",
+  "protocol.force.fakeCompletion":
+    "(A note from me: nothing has changed on my side yet, because no block has been run. Please send me the block for the first step; I'll run it here and paste the output back.)",
   "protocol.force.sandbox":
-    "Note: in an earlier attempt at this request you worked in your own cloud sandbox (/mnt/data, /home/…). That is " +
-    "not the user's machine: nothing in it is in this workspace, and nothing you create there reaches it. Use only " +
-    "the tools listed above, through the marker, for files and commands; reply with the tool call for the next step.",
-
+    "(A note from me: what you did in your own cloud sandbox (/mnt/data, /home/…) didn't reach my machine, and my files aren't there. Please send me the block for the next step from the list instead; I'll run it here and paste the output back.)",
   // ------------------------------------------------------------ tool invocation (chat UI)
   "tool.listing": "Listing {0}...",
   "tool.listing.workspace": "the workspace",
   "tool.searching": "Searching “{0}”...",
   "tool.reading": "Reading {0}...",
   "tool.preparingEdits": "Preparing {0} edit(s)...",
-  "tool.edits.confirmTitle": "Apply M365 Copilot changes",
+  "tool.edits.confirmTitle": "Change sensitive files?",
   "tool.edits.confirmMessage":
-    "The changes will be applied in the editor, highlighted and NOT saved to disk. Above each change you will have " +
-    "“Keep” to accept it and “Undo” to revert it, plus the diff.",
+    "M365 Copilot wants to change files that can run code or hold secrets: {0}. You can still review and undo the changes afterwards.",
   "tool.diagnostics.file": "Reading diagnostics of {0}...",
   "tool.diagnostics.workspace": "Reading workspace diagnostics...",
   "tool.git": "Querying git {0}...",
@@ -496,9 +474,7 @@ export const en = {
     "oldText appears more than once in {0}. Include more context so it is unique.",
   "edit.oldText.noMatch": "oldText does not match the current content of {0}. Read the file again.",
   "edit.summary":
-    "Changes applied in the editor and pending the user’s review: {0}. The user will see them highlighted with the " +
-    "“Keep” and “Undo” actions above the change. They are not saved to disk yet and the user can revert them, so do " +
-    "not assume they are final.",
+    "Applied and saved: {0}. I'm reviewing these changes and can still undo them, so don't describe them as final.",
   "edit.noEdits": "edits must contain at least one edit.",
   "edit.tooMany": "The batch cannot exceed {0} edits.",
   "edit.itemError": "Edit #{0}: {1}",
@@ -512,7 +488,7 @@ export const en = {
   "edit.applyFailed": "VS Code could not apply the changes.",
   "edit.restoreFailed": "VS Code could not restore the previous content.",
   "edit.tooLarge": "{0} exceeds the {1}-character limit.",
-  "edit.kept": "M365 Copilot: {0} file(s) accepted. Not saved yet — Ctrl+S to write them.",
+  "edit.kept": "M365 Copilot: {0} file(s) accepted.",
   "edit.reverted": "M365 Copilot: {0} file(s) reverted.",
   "edit.revertFailed": "M365 Copilot: could not revert: {0}",
   "edit.noBatch": "M365 Copilot: there is no batch of changes to undo.",
@@ -535,6 +511,8 @@ export const en = {
   "edit.lens.undoHunk": "$(discard) Undo",
   "edit.lens.undoHunkTooltip": "Revert only this block of changes",
   "edit.status.text": "$(edit) M365: {0} change(s) to review",
+  "edit.hover.before": "Before this change:",
+  "edit.hover.more": "… and {0} more lines",
   "edit.status.tooltip": "M365 Copilot changes pending Keep/Undo. Click to review them.",
   "diff.newFile": "new file",
   "diff.deletedFile": "deleted file",
@@ -590,18 +568,13 @@ export const en = {
   "subagent.stepLimit":
     "⚠️ The limit of {0} step(s) was reached without a final answer. Last result:\n{1}",
   "subagent.prompt.framing":
-    "You are an autonomous SUB-AGENT inside VS Code, delegated by the main M365 Copilot agent for ONE concrete, " +
-    "bounded task. You do not see the rest of the conversation with the user — only the task below — so do not take " +
-    "anything for granted outside it.",
+    "This is one concrete, bounded task, split off from a larger job I'm doing in VS Code. You don't see the rest of that conversation, only the task below, so don't take anything for granted outside it.",
   "subagent.prompt.task": "Assigned task:\n{0}",
   "subagent.prompt.finish":
-    "Use the tools you need, one step at a time. When you are done, reply in Markdown with a CONCISE SUMMARY (a few " +
-    "paragraphs or a bullet list at most) of what you did and what you found or changed — it is the ONLY thing the main " +
-    "agent will read, so do not leave anything important out and do not emit more tool markers once you have that final " +
-    "answer. If the summary includes code of 2 or more lines, put it inside ``` fences with the language.",
+    "Work through it one step at a time. When you're done, reply in Markdown with a concise summary (a few paragraphs or a list at most) of what you did and what you found or changed: it's the only thing the rest of the job will see, so include everything important, and send no more blocks after it. Code of 2 or more lines goes inside ``` fences with its language.",
   "subagent.prompt.omitted": "[earlier sub-agent steps omitted to keep context]",
-  "subagent.prompt.callBlock": "Sub-agent (step {0}): called {1} with {2}",
-  "subagent.prompt.resultBlock": "Result of {0}:\n{1}",
+  "subagent.prompt.callBlock": "Step {0}:\n{1}",
+  "subagent.prompt.resultBlock": '<tool_response tool="{0}">\n{1}\n</tool_response>',
   "subagent.clipNote": "… ({0} characters omitted)",
 
   // ------------------------------------------------------------ @m365 chat participant
@@ -646,9 +619,7 @@ export const en = {
     "Answer the user’s request below. Use the workspace tools if you need more context or have to change files " +
     "(edits are reviewed by the user with Keep/Undo).",
   "participant.prompt.framing":
-    "You are M365 Copilot, a coding assistant integrated into VS Code and invoked from the chat as @m365. Work step by " +
-    "step with the tools, one call at a time. When you are done, reply to the user in Markdown — that reply is shown " +
-    "directly in the chat.",
+    "I'm writing to you from the chat in my editor (VS Code), where I call you as @m365. Let's work through this step by step. When it's done, reply to me in Markdown: that reply is what I'll see in the chat.",
   "participant.prompt.context": "Code context — {0}, lines {1}-{2} ({3}):",
   "participant.prompt.contextTruncated": "[code truncated: {0} more characters]",
   "participant.prompt.diagnostics": "Problems VS Code reports in that code:",

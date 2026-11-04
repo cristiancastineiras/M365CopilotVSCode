@@ -20,6 +20,13 @@
  *
  * A propósito NO importa `vscode`: así se puede probar fuera del host.
  */
+import {
+  deriveFencedSpec,
+  renderFencedCall,
+  type FencedCalls,
+  type FencedShell,
+  type FencedSpec,
+} from "./fencedCalls";
 import { t } from "./i18n";
 
 export const M365_TOOL_NAMES = {
@@ -68,90 +75,31 @@ export function isM365Tool(name: string): name is M365ToolName {
 }
 
 /**
- * Descripción y ejemplo curados de NUESTRAS herramientas. La descripción que
- * llega en `options.tools` es la de package.json (escrita para modelos con
- * function-calling nativo); estas están afinadas para el protocolo de texto,
- * así que las preferimos cuando la herramienta es nuestra.
+ * Descripción curada de NUESTRAS herramientas. La que llega en `options.tools`
+ * es la de package.json (escrita para modelos con function-calling nativo);
+ * éstas están afinadas para el protocolo de texto, así que las preferimos cuando
+ * la herramienta es nuestra. Se construyen en cada llamada (no es una constante
+ * de módulo) para que salgan en el idioma activo: el usuario puede cambiar
+ * `m365copilot.language` sin recargar la ventana.
  */
-interface M365Hint {
-  readonly description: string;
-  readonly example: Record<string, unknown>;
-}
-
-/**
- * Se construye en cada llamada (no es una constante de módulo) para que salga
- * en el idioma activo: el usuario puede cambiar `m365copilot.language` sin
- * recargar la ventana.
- */
-function m365Hints(): Readonly<Record<M365ToolName, M365Hint>> {
+function m365Hints(): Readonly<Record<M365ToolName, string>> {
   return {
-    [M365_TOOL_NAMES.listFiles]: {
-      description: t("hint.listFiles"),
-      example: { path: "src", maxEntries: 100 },
-    },
-    [M365_TOOL_NAMES.searchText]: {
-      description: t("hint.searchText"),
-      example: { query: "registerCommand", path: "src", maxResults: 30 },
-    },
-    [M365_TOOL_NAMES.readFile]: {
-      description: t("hint.readFile"),
-      example: { path: "src/extension.ts", startLine: 1, endLine: 180 },
-    },
-    [M365_TOOL_NAMES.applyWorkspaceEdits]: {
-      description: t("hint.applyEdits"),
-      example: {
-        edits: [
-          {
-            operation: "replace",
-            path: "src/example.ts",
-            oldText: "@@block:1@@",
-            newText: "@@block:2@@",
-          },
-          { operation: "create", path: t("hint.applyEdits.newFile"), content: "@@block:3@@" },
-        ],
-      },
-    },
-    [M365_TOOL_NAMES.getDiagnostics]: {
-      description: t("hint.diagnostics"),
-      example: { path: "src/extension.ts", severity: "error" },
-    },
-    [M365_TOOL_NAMES.gitInfo]: {
-      description: t("hint.gitInfo"),
-      example: { action: "status" },
-    },
-    [M365_TOOL_NAMES.generateCommitMessage]: {
-      description: t("hint.generateCommitMessage", M365_TOOL_NAMES.gitCommit),
-      example: {},
-    },
-    [M365_TOOL_NAMES.gitCommit]: {
-      description: t("hint.gitCommit"),
-      example: { message: t("hint.gitCommit.example"), stageAll: true },
-    },
-    [M365_TOOL_NAMES.runCommand]: {
-      description: t("hint.runCommand"),
-      example: { command: "npm test" },
-    },
-    [M365_TOOL_NAMES.searchProject]: {
-      description: t("hint.searchProject"),
-      example: { query: t("hint.searchProject.example"), maxResults: 8 },
-    },
-    [M365_TOOL_NAMES.projectMap]: {
-      description: t("hint.projectMap"),
-      example: { path: "src/extension.ts" },
-    },
-    [M365_TOOL_NAMES.webSearch]: {
-      description: t("hint.webSearch"),
-      example: { query: t("hint.webSearch.example") },
-    },
-    [M365_TOOL_NAMES.spawnAgents]: {
-      description: t("hint.spawnAgents"),
-      example: {
-        tasks: [
-          { task: t("hint.spawnAgents.task1"), label: t("hint.spawnAgents.label1") },
-          { task: t("hint.spawnAgents.task2"), label: t("hint.spawnAgents.label2") },
-        ],
-      },
-    },
+    [M365_TOOL_NAMES.listFiles]: t("hint.listFiles"),
+    [M365_TOOL_NAMES.searchText]: t("hint.searchText"),
+    [M365_TOOL_NAMES.readFile]: t("hint.readFile"),
+    [M365_TOOL_NAMES.applyWorkspaceEdits]: t("hint.applyEdits"),
+    [M365_TOOL_NAMES.getDiagnostics]: t("hint.diagnostics"),
+    [M365_TOOL_NAMES.gitInfo]: t("hint.gitInfo"),
+    [M365_TOOL_NAMES.generateCommitMessage]: t(
+      "hint.generateCommitMessage",
+      M365_TOOL_NAMES.gitCommit,
+    ),
+    [M365_TOOL_NAMES.gitCommit]: t("hint.gitCommit"),
+    [M365_TOOL_NAMES.runCommand]: t("hint.runCommand"),
+    [M365_TOOL_NAMES.searchProject]: t("hint.searchProject"),
+    [M365_TOOL_NAMES.projectMap]: t("hint.projectMap"),
+    [M365_TOOL_NAMES.webSearch]: t("hint.webSearch"),
+    [M365_TOOL_NAMES.spawnAgents]: t("hint.spawnAgents"),
   };
 }
 
@@ -196,8 +144,8 @@ export interface CatalogEntry {
   readonly capability: ToolCapability;
   readonly description: string;
   readonly parameters: readonly ToolParameter[];
-  /** Ejemplo de `input` curado (sólo para las nuestras), o null. */
-  readonly example: Record<string, unknown> | null;
+  /** Cómo se escribe una llamada a ella como bloque de código. */
+  readonly spec: FencedSpec;
   /** Nombre de la herramienta equivalente que debería usarse antes que ésta. */
   readonly preferInstead: string | null;
 }
@@ -211,7 +159,9 @@ export interface ToolCatalog {
    * herramienta real por su cuenta, ejecutarla es correcto.
    */
   readonly callable: ReadonlySet<string>;
-  /** Nombres que no cupieron en el presupuesto del prompt. */
+  /** Cómo leer las llamadas escritas como bloques de código (fencedCalls.ts). */
+  readonly fenced: FencedCalls;
+  /** Nombres que no cupieron en el presupuesto del prompt, o duplicados de otra. */
   readonly omitted: readonly string[];
   readonly m365Count: number;
   readonly editorCount: number;
@@ -232,8 +182,14 @@ export interface ToolCatalogOptions {
   readonly singleRoot?: boolean;
 }
 
-const DEFAULT_MAX_TOOLS = 48;
-const DEFAULT_MAX_CHARS = 12_000;
+/**
+ * Un catálogo corto, a propósito: los filtros de M365 miran la forma del prompt,
+ * y con ~15 herramientas ya medían respuestas vacías (`Disengaged`); con un
+ * catálogo corto no (github.com/cramt/m365-copilot-proxy, docs/m365-copilot-api.md
+ * §9). Lo que no quepa sigue siendo invocable.
+ */
+const DEFAULT_MAX_TOOLS = 20;
+const DEFAULT_MAX_CHARS = 8_000;
 const MAX_TOOL_DESC_CHARS = 320;
 const MAX_PARAM_DESC_CHARS = 90;
 const MAX_PARAMS = 12;
@@ -251,6 +207,9 @@ const CAPABILITY_RULES: readonly (readonly [ToolCapability, RegExp])[] = [
   // El índice del proyecto (RAG): no es «otra búsqueda de texto» que
   // deduplicar contra la del editor, sino lo primero que conviene usar.
   ["context", /^m365(?:searchproject|projectmap)$/],
+  // Notebooks y `copilot_editFiles` (sin parámetros: sólo existe para citarla en
+  // un prompt): no son los que el modelo debe elegir para editar un archivo.
+  ["other", /notebook|jupyter|editfiles$/],
   ["agent", /spawnagent|subagent|delegat/],
   ["terminal", /terminal|runcommand|runinshell|runtask|runscript|shellexec|executeshell/],
   ["tests", /test/],
@@ -280,6 +239,17 @@ const CAPABILITY_ORDER: readonly ToolCapability[] = [
   "web",
   "agent",
   "other",
+];
+
+/** Sin una de cada, el modelo no puede trabajar en un proyecto. */
+const BASIC_CAPABILITIES: readonly ToolCapability[] = [
+  "read",
+  "search",
+  "list",
+  "edit",
+  "create",
+  "diagnostics",
+  "terminal",
 ];
 
 /**
@@ -326,6 +296,7 @@ export function buildToolCatalog(
 
   const hints = m365Hints();
   const callable = new Set<string>();
+  const specs = new Map<string, FencedSpec>();
   const candidates: CatalogEntry[] = [];
   const order = new Map<string, number>();
 
@@ -335,14 +306,19 @@ export function buildToolCatalog(
     callable.add(tool.name);
 
     const origin: ToolOrigin = isM365Tool(tool.name) ? "m365" : "editor";
-    if (origin === "editor" && !includeEditorTools) continue;
-
-    const hint = origin === "m365" ? hints[tool.name as M365ToolName] : undefined;
-    const description = hint?.description ?? shortText(tool.description ?? "", MAX_TOOL_DESC_CHARS);
     const parameters = parametersOf(tool.inputSchema).filter(
       (parameter) =>
         !(options.singleRoot && origin === "m365" && parameter.name === WORKSPACE_FOLDER_PARAM),
     );
+    const spec: FencedSpec =
+      tool.name === M365_TOOL_NAMES.applyWorkspaceEdits
+        ? { name: tool.name, types: {}, header: [], batchEdits: true }
+        : deriveFencedSpec(tool.name, parameters);
+    specs.set(tool.name, spec);
+    if (origin === "editor" && !includeEditorTools) continue;
+
+    const hint = origin === "m365" ? hints[tool.name as M365ToolName] : undefined;
+    const description = hint ?? shortText(tool.description ?? "", MAX_TOOL_DESC_CHARS);
     order.set(tool.name, order.size);
     candidates.push({
       name: tool.name,
@@ -350,23 +326,35 @@ export function buildToolCatalog(
       capability: classifyCapability(tool.name, tool.description ?? ""),
       description,
       parameters,
-      example: hint?.example ?? null,
+      spec,
       preferInstead: null,
     });
   }
 
   const marked = markDuplicates(candidates, duplicates);
 
-  // Dos ordenaciones distintas a propósito: para RECORTAR, lo primero que
-  // sobra es un duplicado (su equivalente ya está descrito), da igual su
-  // capacidad; para MOSTRAR, el catálogo se lee mucho mejor agrupado por
-  // capacidad, con la preferida delante de su duplicada.
-  const byImportance = [...marked].sort(
-    (a, b) => selectionRank(a, order) - selectionRank(b, order),
-  );
+  // Un duplicado no se describe: gasta prompt en una herramienta que no debe
+  // elegir, y si la elige (la nuestra de editar en vez de la nativa) el usuario
+  // acaba en otro flujo de revisión. Sigue siendo invocable si el modelo la nombra.
+  const omitted = marked.filter((entry) => entry.preferInstead).map((entry) => entry.name);
+  const sorted = marked
+    .filter((entry) => !entry.preferInstead)
+    .sort((a, b) => selectionRank(a, order) - selectionRank(b, order));
+  // Lo primero que entra es la mejor de cada capacidad básica: un catálogo con
+  // cinco formas de buscar y ninguna de ejecutar un comando deja al modelo sin
+  // poder hacer la tarea, por mucho presupuesto que haya gastado.
+  const basics = new Set<CatalogEntry>();
+  for (const capability of BASIC_CAPABILITIES) {
+    const best = sorted.find((entry) => entry.capability === capability);
+    if (best) basics.add(best);
+  }
+  const byImportance = [
+    ...sorted.filter((entry) => entry.name === M365_TOOL_NAMES.spawnAgents),
+    ...basics,
+    ...sorted.filter((entry) => !basics.has(entry) && entry.name !== M365_TOOL_NAMES.spawnAgents),
+  ];
 
   const chosen: CatalogEntry[] = [];
-  const omitted: string[] = [];
   let used = 0;
   for (const entry of byImportance) {
     const weight = entryWeight(entry);
@@ -377,11 +365,12 @@ export function buildToolCatalog(
     chosen.push(entry);
     used += weight;
   }
-  const entries = chosen.sort((a, b) => displayRank(a, order) - displayRank(b, order));
+  const entries = chosen.sort((a, b) => selectionRank(a, order) - selectionRank(b, order));
 
   return {
     entries,
     callable,
+    fenced: { specs, shell: shellOf(entries) },
     omitted,
     m365Count: marked.filter((entry) => entry.origin === "m365").length,
     editorCount: marked.filter((entry) => entry.origin === "editor").length,
@@ -391,10 +380,59 @@ export function buildToolCatalog(
   };
 }
 
+/** El parámetro con el comando de una herramienta que EJECUTA comandos, si lo es. */
+function commandParameterOf(entry: CatalogEntry): ToolParameter | undefined {
+  if (entry.capability !== "terminal") return undefined;
+  // Las de pedir confirmación (`vscode_get_terminal_confirmation`) o escribir en
+  // un terminal ya abierto (`send_to_terminal`, con `id`) también llevan `command`.
+  if (!/run|exec|shell|bash/i.test(entry.name)) return undefined;
+  if (entry.parameters.some((parameter) => parameter.name === "id" && parameter.required)) {
+    return undefined;
+  }
+  return entry.parameters.find((parameter) => /^(command|cmd|script)$/i.test(parameter.name));
+}
+
+/** La herramienta que recibe los bloques ```bash: la de ejecutar comandos del catálogo. */
+function shellOf(entries: readonly CatalogEntry[]): FencedShell | undefined {
+  for (const entry of entries) {
+    const command = commandParameterOf(entry);
+    if (!command) continue;
+    const others = entry.parameters.filter(
+      (parameter) => parameter.required && parameter !== command,
+    );
+    const defaults: Record<string, unknown> = {};
+    const describedBy: string[] = [];
+    for (const parameter of others) {
+      if (parameter.enumValues.length > 0) defaults[parameter.name] = parameter.enumValues[0];
+      else if (parameter.type === "string") describedBy.push(parameter.name);
+      else if (parameter.type === "boolean") defaults[parameter.name] = false;
+      else if (parameter.type === "integer" || parameter.type === "number")
+        defaults[parameter.name] = 0;
+      else if (parameter.type.startsWith("array")) defaults[parameter.name] = [];
+      else defaults[parameter.name] = {};
+    }
+    return { name: entry.name, commandParam: command.name, defaults, describedBy };
+  }
+  return undefined;
+}
+
+/** Una llamada ya hecha, como la escribiría el modelo: así la imita al leer el historial. */
+export function renderCallFor(
+  catalog: Pick<ToolCatalog, "fenced">,
+  name: string,
+  input: unknown,
+): string | undefined {
+  const spec = catalog.fenced.specs.get(name);
+  return spec && input && typeof input === "object"
+    ? renderFencedCall(spec, input as Record<string, unknown>)
+    : undefined;
+}
+
 /**
  * Marca como secundaria cada herramienta que duplica la capacidad de una del
- * otro origen. No se elimina: si la preferida falla (p. ej. una nativa que
- * exige rutas absolutas en un workspace remoto), el modelo aún tiene la otra.
+ * otro origen. No entra en el prompt, pero sigue siendo invocable: si la
+ * preferida falla (p. ej. una nativa que exige rutas absolutas en un workspace
+ * remoto), el modelo aún puede usar la otra.
  */
 function markDuplicates(entries: readonly CatalogEntry[], policy: DuplicatePolicy): CatalogEntry[] {
   if (policy === "both") return [...entries];
@@ -432,35 +470,31 @@ function capabilityRank(entry: CatalogEntry): number {
  * dejarla pasar siempre no le quita sitio a nada que de verdad lo necesite.
  */
 function selectionRank(entry: CatalogEntry, order: ReadonlyMap<string, number>): number {
-  if (entry.name === M365_TOOL_NAMES.spawnAgents) return -1;
-  const duplicatePenalty = entry.preferInstead ? 100_000 : 0;
-  return duplicatePenalty + capabilityRank(entry) + (order.get(entry.name) ?? 0);
-}
-
-/** Orden de lectura: agrupadas por capacidad, la preferida antes que su duplicada. */
-function displayRank(entry: CatalogEntry, order: ReadonlyMap<string, number>): number {
-  return capabilityRank(entry) + (entry.preferInstead ? 500 : 0) + (order.get(entry.name) ?? 0);
+  return capabilityRank(entry) + rankWithinCapability(entry) + (order.get(entry.name) ?? 0);
 }
 
 /**
- * Coste aproximado en caracteres de describir esta herramienta en el prompt.
- * Una duplicada se describe en una línea (nombre, a quién sustituye y su
- * firma sin descripciones; ver `renderCatalogEntry` en toolProtocol.ts).
+ * Cuál va primero dentro de su capacidad. Entre las de editar, la de buscar y
+ * reemplazar: es la que mejor se escribe como bloque, y la de parches pide un
+ * formato propio que estos modelos no conocen (`protocol.rule.sameEditor` manda
+ * usar la primera). Entre las de terminal, la que ejecuta comandos, no sus
+ * ayudantes (leer la salida, cerrar el terminal…).
  */
+function rankWithinCapability(entry: CatalogEntry): number {
+  if (entry.capability === "terminal") return commandParameterOf(entry) ? 0 : 300;
+  if (entry.capability !== "edit") return 0;
+  if (entry.spec.editPair || entry.spec.batchEdits) return 0;
+  return /patch/i.test(entry.name) ? 400 : 200;
+}
+
+/** Coste aproximado en caracteres de describir esta herramienta en el prompt. */
 function entryWeight(entry: CatalogEntry): number {
-  const duplicate = entry.preferInstead !== null;
   const params = entry.parameters.reduce(
     (total, parameter) =>
-      total +
-      parameter.name.length +
-      parameter.type.length +
-      (duplicate ? 0 : parameter.description.length) +
-      8,
+      total + parameter.name.length + parameter.type.length + parameter.description.length + 8,
     0,
   );
-  if (duplicate) return entry.name.length + (entry.preferInstead?.length ?? 0) + params + 64;
-  const example = entry.example ? JSON.stringify(entry.example).length : 0;
-  return entry.name.length + entry.description.length + params + example + 48;
+  return entry.name.length * 2 + entry.description.length + params + 48;
 }
 
 // ------------------------------------------------------------- JSON Schema

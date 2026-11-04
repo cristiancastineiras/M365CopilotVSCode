@@ -171,7 +171,7 @@
       {
         "name": "m365_apply_edits",
         "displayName": "%tool.m365ApplyEdits.displayName%",
-        "modelDescription": "Apply a reversible batch of exact workspace edits. Changes land in the editor immediately (unsaved), highlighted, with Keep/Undo actions on the change for the user to accept or revert — so never assume they are final. Fields per operation: replace needs oldText (exact and unique in the file) plus newText; create needs content (NOT newText); delete needs only path. Prefer several small calls over one huge batch when creating many files.",
+        "modelDescription": "Apply a reversible batch of exact workspace edits. Changes are applied and saved right away, and the user reviews them with Keep/Undo and can still revert them — so they are not final. Fields per operation: replace needs oldText (exact and unique in the file) plus newText; create needs content (NOT newText); delete needs only path. Prefer several small calls over one huge batch when creating many files.",
         "userDescription": "%tool.m365ApplyEdits.userDescription%",
         "toolReferenceName": "m365ApplyEdits",
         "canBeReferencedInPrompt": true,
@@ -641,7 +641,7 @@
         },
         "m365copilot.tools.maxAdvertised": {
           "type": "number",
-          "default": 48,
+          "default": 20,
           "minimum": 4,
           "maximum": 200,
           "markdownDescription": "%config.tools.maxAdvertised%"
