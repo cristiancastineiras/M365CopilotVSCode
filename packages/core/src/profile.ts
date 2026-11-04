@@ -31,4 +31,10 @@ export interface CopilotProfile {
    * aún no conoce. Opcional: los perfiles antiguos no lo traen.
    */
   observedTones?: string[];
+  /**
+   * El servicio rechazó este token con un 401: ya no sirve, diga lo que diga su
+   * `exp`, y es la única forma de saberlo con uno cifrado, que no lo dice. Lo pone
+   * quien lo usa, nunca llega del navegador.
+   */
+  tokenRejected?: boolean;
 }

@@ -1,12 +1,21 @@
 import * as vscode from "vscode";
+import { accountKind } from "@m365copilot/core";
 import {
   describeProfile,
   parsePastedProfile,
   type CopilotProfile,
   debug,
 } from "@m365copilot/core/bizchat";
+import { t } from "./i18n";
 
 const SECRET_KEY = "m365copilot.profile.v1";
+
+/** What to do about a token that cannot be used, which depends on the kind of account. */
+export function unusableTokenMessage(profile: CopilotProfile): string {
+  return t(
+    accountKind(profile) === "personal" ? "watcher.rejectedPersonal" : "participant.tokenExpired",
+  );
+}
 
 /**
  * Stores the captured Copilot profile in VS Code SecretStorage (encrypted,
@@ -51,9 +60,23 @@ export class ProfileStore {
     return (await this.get()) !== null;
   }
 
-  /** Parse and store a pasted profile/token. Returns the normalized profile. */
+  /**
+   * Store what the browser pushed. Returns the normalized profile. The browser
+   * also sends the same token again (a model it saw, its retries), which does
+   * not bring a rejected one back to life.
+   */
   async setFromPaste(pasted: string): Promise<CopilotProfile> {
-    return this.set(parsePastedProfile(pasted));
+    const profile = parsePastedProfile(pasted);
+    const current = await this.get();
+    const stillRejected = current?.tokenRejected && current.accessToken === profile.accessToken;
+    return this.set(stillRejected ? { ...profile, tokenRejected: true } : profile);
+  }
+
+  /** The service refused this token: from now on it counts as expired. */
+  async markRejected(accessToken: string): Promise<void> {
+    const current = await this.get();
+    if (!current || current.accessToken !== accessToken || current.tokenRejected) return;
+    await this.set({ ...current, tokenRejected: true });
   }
 
   /** Store an already parsed profile (see {@link parsePastedProfile}). */

@@ -43,8 +43,8 @@ import {
   type TurnImage,
   debug,
 } from "@m365copilot/core/bizchat";
-import type { ProfileStore } from "./secrets";
-import { MAX_TASK_WALL_CLOCK_MS, runToolLoop } from "./subagentCore";
+import { unusableTokenMessage, type ProfileStore } from "./secrets";
+import { runToolLoop } from "./subagentCore";
 import { retrievalText } from "./transcript";
 import { configuredWallClockMs, toolResultToText } from "./subagents";
 import { chatReviewOf, type WorkspaceEditManager } from "../tools/writeFile";
@@ -112,7 +112,7 @@ async function handleRequest(
   const profile = await deps.store.get();
   if (!profile || !isTokenUsable(profile)) {
     deps.log(t("log.participantNoToken", command ?? "-"));
-    stream.markdown(t(profile ? "participant.tokenExpired" : "participant.noToken"));
+    stream.markdown(profile ? unusableTokenMessage(profile) : t("participant.noToken"));
     stream.button({ command: "m365copilot.pasteProfile", title: t("participant.button.paste") });
     return { metadata };
   }

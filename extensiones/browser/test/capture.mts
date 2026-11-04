@@ -14,6 +14,7 @@ import {
   SCAN_MISSING_MAX_MS,
   SCAN_MISSING_MS,
   acceptToken,
+  accountKind,
   areClaimsUsable,
   claimsInSocketUrl,
   connectionArtSvg,
@@ -28,7 +29,9 @@ import {
   nextScan,
   normalizeEndpoint,
   profileFromCapture,
+  rejectedByVSCode,
   sameCapture,
+  supersedesCapture,
   tokenInSocketUrl,
   tokensInStorageValue,
   tokenStamp,
@@ -405,8 +408,63 @@ function testEncryptedToken() {
   );
 }
 
+/** Lo que distingue los dos tipos de cuenta y lo que pasa con varios frames a la vez. */
+function testAccountsAndFrames() {
+  const jwe = `${b64url({ alg: "dir" })}..aXY.${"x".repeat(40)}.dGFn`;
+  const account = { oid: "o", tid: "84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa" };
+  const token = jwt({ exp: inMinutes(60) });
+
+  assert.equal(accountKind(null), null);
+  assert.equal(accountKind({}), null);
+  assert.equal(accountKind({ accessToken: jwe, claims: account }), "personal");
+  assert.equal(
+    accountKind({ accessToken: token, claims: { tid: "9188040D-6C67-4C5B-B112-36A304B66DAD" } }),
+    "personal",
+    "un JWT también puede ser de una cuenta personal",
+  );
+  assert.equal(accountKind({ accessToken: token, claims: { tid: "contoso" } }), "enterprise");
+
+  for (const answered of ["HTTP 400", "HTTP 400: Bad Request"])
+    assert.equal(rejectedByVSCode(answered), true, answered);
+  for (const other of ["unreachable", "token-expired", "Failed to fetch", null, undefined])
+    assert.equal(rejectedByVSCode(other), false, String(other));
+
+  const earlier = new Date(NOW - 60_000).toISOString();
+  const later = new Date(NOW + 60_000).toISOString();
+  const personal = { accessToken: jwe, claims: account, capturedAt: new Date(NOW).toISOString() };
+  assert.equal(supersedesCapture(null, personal), true);
+  assert.equal(supersedesCapture({}, personal), true);
+  assert.equal(supersedesCapture(personal, { capturedAt: later }), false, "sin token no pisa");
+  assert.equal(supersedesCapture(personal, { ...personal, observedTones: ["x"] }), true);
+  const cached = { accessToken: token, claims: { exp: inMinutes(60) }, capturedAt: later };
+  for (const tokenSource of ["msal-cache", "fetch-header", "xhr-header"]) {
+    assert.equal(supersedesCapture(personal, { ...cached, tokenSource }), false, tokenSource);
+  }
+  assert.equal(
+    supersedesCapture(personal, { ...cached, tokenSource: "websocket-url" }),
+    true,
+    "el hub del chat dice que se ha cambiado de cuenta",
+  );
+  const otherJwe = `${b64url({ alg: "dir" })}..aXY.${"y".repeat(40)}.dGFn`;
+  assert.equal(supersedesCapture(personal, { accessToken: otherJwe, capturedAt: earlier }), false);
+  assert.equal(supersedesCapture(personal, { accessToken: otherJwe, capturedAt: later }), true);
+  const older = { accessToken: jwt({ exp: inMinutes(10) }), claims: { exp: inMinutes(10) } };
+  assert.equal(supersedesCapture(cached, older), false, "un JWT más viejo de otro origen");
+  assert.equal(supersedesCapture(older, cached), true);
+
+  // El endpoint es lo que dice el escenario: las variants se sacrifican antes que él.
+  const hub = "wss://substrate.office.com/m365Copilot/Chathub/o@t";
+  assert.equal(
+    normalizeEndpoint(`${hub}?scenario=S&variants=${"v".repeat(3000)}`),
+    `${hub}?scenario=S`,
+  );
+  assert.equal(normalizeEndpoint(`${hub}?scenario=S&variants=v`), `${hub}?scenario=S&variants=v`);
+  console.log("  ✓ tipo de cuenta, rechazo de VS Code y varios frames publicando a la vez");
+}
+
 testTokenValidation();
 testEncryptedToken();
+testAccountsAndFrames();
 testDiagnosis();
 testSources();
 testFrames();

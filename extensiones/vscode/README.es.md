@@ -56,11 +56,14 @@ navegador y VS Code lo usa.
      anteriores.
    - _Suscripciones personales de Microsoft 365 (Personal, Familia):_ su token va
      cifrado, así que sólo se captura del propio chat: envía un mensaje en
-     <https://m365.cloud.microsoft/chat/> o <https://copilot.com>. A mano, pega la
-     URL de arriba o **Copiar perfil**: el token solo no dice de quién es. Nada
-     puede saber cuándo caduca, así que nada avisa ni lo renueva: cuando un
-     mensaje falle con un 401, envía otro en el chat de la web. Todavía sin probar
-     de principio a fin con una cuenta personal real.
+     <https://m365.cloud.microsoft/chat/> o <https://copilot.com>, y la extensión
+     de navegador o el userscript lo envían solos a VS Code, como con cualquier otra
+     cuenta. Ambos muestran qué tipo de cuenta han detectado, y avisan si VS Code
+     rechaza el token (actualiza la extensión: antes de la 4.0.0 no entiende este
+     token). A mano, pega la URL de arriba o **Copiar perfil**: el token solo no dice
+     de quién es. Nada puede saber de antemano cuándo caduca: el primer mensaje que
+     rechace lo marca como caducado en VS Code, que te pide enviar un mensaje en el
+     chat web. El token nuevo llega solo.
 2. **Chatea**: escribe **`@m365`** en el chat, o elige uno de los modelos **M365
    Copilot** (`Auto`, `Quick response`, `Think deeper`, `GPT 5.6 Think deeper`,
    `GPT 5.5`, `Claude Sonnet`…) en el selector de modelos.
@@ -434,15 +437,12 @@ funcionan.
 | `m365copilot.models.updateFromCatalog` | `true`      | Descargar `models.json` (un GET a GitHub; no se envía nada). |
 | `m365copilot.models.detectFromBrowser` | `true`      | Añadir los modelos que usa la web.                           |
 | `m365copilot.models.custom`            | `[]`        | Modelos adicionales por `tone` (o `{ "tone", "name" }`).     |
-
-Los ajustes de modelo de los sub-agentes, del autocompletado y de las respuestas
-en el editor (`*.model`) ofrecen los modelos de serie.
 | `m365copilot.models.maxInputTokens`    | `128000`    | Tamaño de contexto de cada modelo (ver abajo).               |
 | `m365copilot.models.maxOutputTokens`   | `16000`     | Tamaño de respuesta que ve VS Code en cada modelo.           |
 
-## Límites y rechazos de M365 Copilot
+Los ajustes de modelo de los sub-agentes, del autocompletado y de las respuestas
+en el editor (`*.model`) ofrecen los modelos de serie.
 
-M365 Copilot también puede rechazar un turno por motivos que no tienen nada que
 Los dos ajustes de tokens se aplican a todos los modelos a la vez. `maxInputTokens`
 también fija cuánto de la conversación llega al modelo en Copilot Chat: la extensión
 la encaja en un mensaje de BizChat a unos 3,5 caracteres por token (unos 448.000
@@ -461,6 +461,9 @@ conversación larga, que es tu petición: medido igual, conservó los 419.000 ca
 enteros y sólo los últimos 600.000 de 2.000.000. Por eso una tarea que llega a 400.000
 caracteres sigue en una conversación nueva, con la petición y los pasos hechos.
 
+## Límites y rechazos de M365 Copilot
+
+M365 Copilot también puede rechazar un turno por motivos que no tienen nada que
 ver con el modelo. La extensión los reconoce, dice qué ha pasado con palabras
 claras (con el mensaje del propio servicio) y no reintenta: la misma petición
 recibiría la misma respuesta.

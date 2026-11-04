@@ -11,6 +11,7 @@ import type { en } from "./en";
 export const zh: Readonly<Partial<Record<keyof typeof en, string>>> = {
   // ------------------------------------------------------------ 账户
   "account.unknownUser": "M365 Copilot 用户",
+  "account.personal": "Microsoft 个人帐户",
 
   // ------------------------------------------------------------ 客户端（BizChat）
   "client.error.401":

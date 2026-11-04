@@ -28,6 +28,15 @@ export function tokenStamp(
   return Number.isNaN(capturedAt) ? null : Math.floor(capturedAt / 1000);
 }
 
+/**
+ * VS Code contestó y no aceptó el perfil, según el `lastError` del último envío
+ * (`HTTP 400`). No es lo mismo que no contestar: hay conexión, pero el token no
+ * llega, y lo típico es una extensión de VS Code que no entiende este token.
+ */
+export function rejectedByVSCode(lastError: string | null | undefined): boolean {
+  return /^HTTP \d/.test(lastError ?? "");
+}
+
 /** No martillear al servidor local de VS Code cuando está apagado. */
 export const RESYNC_COOLDOWN_MS = 30 * 1000;
 

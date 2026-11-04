@@ -531,6 +531,15 @@ export function onModelOutcome(listener: ModelOutcomeListener | undefined): void
   modelOutcomeListener = listener;
 }
 
+/** Told when the service refuses a token (401): nothing else can tell it has died. */
+export type TokenRejectedListener = (accessToken: string) => void;
+let tokenRejectedListener: TokenRejectedListener | undefined;
+
+/** Set (or clear, with undefined) the one listener for rejected tokens. */
+export function onTokenRejected(listener: TokenRejectedListener | undefined): void {
+  tokenRejectedListener = listener;
+}
+
 /** A rejection that says nothing about the model: retry later instead of flagging it. */
 const TRANSIENT_REJECTION = /thrott|rate.?limit|too many|capacity|busy|timeout|try again|429|503/i;
 
@@ -544,7 +553,11 @@ function describeUpgradeFailure(
   // than "expired": the fix is copying the right one, not re-capturing.
   const audience = status === 401 || status === 403 ? foreignAudience(token) : null;
   if (audience) return new CopilotAuthError(t("client.error.foreignAudience", audience), status);
-  if (status === 401) return new CopilotAuthError(t("client.error.401"), status);
+  if (status === 401) {
+    // A personal account's next token only comes from chatting, and by itself.
+    const message = isEncryptedToken(token) ? "client.error.401.personal" : "client.error.401";
+    return new CopilotAuthError(t(message), status);
+  }
   if (status === 403) return new CopilotAuthError(t("client.error.403"), status);
   if (status === 429) return new CopilotClientError(t("client.error.429"));
   return new CopilotClientError(
@@ -775,6 +788,8 @@ export async function streamCopilotTurn(options: {
           wsReadyState: ws.readyState,
         }),
       );
+      if (error instanceof CopilotAuthError && error.statusCode === 401)
+        tokenRejectedListener?.(profile.accessToken);
       if (error instanceof CopilotModelUnavailableError)
         modelOutcomeListener?.(error.tone, false, error.serverReply);
       if (error instanceof CopilotQuotaExhaustedError && error.tone) {

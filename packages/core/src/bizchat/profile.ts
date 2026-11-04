@@ -13,6 +13,7 @@
  * pegado, que es específico de los clientes de BizChat.
  */
 import {
+  accountKind,
   claimsInSocketUrl,
   decodeJwtPayload,
   extractClaims,
@@ -194,7 +195,8 @@ export function accountOf(profile: CopilotProfile | null | undefined): ProfileAc
   return {
     sessionId: `${claims.tid ?? "tenant"}/${accountId}`,
     accountId,
-    label: upn || t("account.unknownUser"),
+    label:
+      upn || t(accountKind(profile) === "personal" ? "account.personal" : "account.unknownUser"),
   };
 }
 
@@ -217,6 +219,7 @@ export function describeProfile(
   }
   const exp = profile.claims?.exp;
   return {
+    accountKind: accountKind(profile),
     user: profile.claims?.upn,
     tenant: profile.claims?.tid,
     objectId: profile.claims?.oid,

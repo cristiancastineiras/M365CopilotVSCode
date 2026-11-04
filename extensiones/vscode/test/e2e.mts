@@ -27,6 +27,7 @@ import {
   syntheticWebTemplate,
   type TurnImage,
   onModelOutcome,
+  onTokenRejected,
   buildWebInvocationArgs,
   capturedVariants,
   isAccountLevelError,
@@ -135,12 +136,12 @@ import {
 } from "../src/reviewPrompt.ts";
 import { buildInlineEditPrompt, extractEditedCode, reindent } from "../src/inlineEditPrompt.ts";
 import {
-  renderTranscript,
   isTurnRefusal,
+  renderTranscript,
   retrievalText,
   TRANSCRIPT_LIMITS,
-  type TranscriptMessage,
   transcriptLimitsFor,
+  type TranscriptMessage,
 } from "../src/transcript.ts";
 import { describeShell, localDate, renderEnvironment } from "../src/environment.ts";
 import { renderSkills } from "../src/skills.ts";
@@ -316,10 +317,25 @@ function testProfileParsing() {
   assert.equal(foreignAudience(FAKE_JWE), null, "cifrado no es de otro servicio");
   assert.equal(isTokenUsable(personal), true, "no dice cuándo caduca: vale hasta que lo rechacen");
   assert.equal(minutesUntilExpiry(personal), null);
+  assert.equal(
+    isTokenUsable({ ...personal, tokenRejected: true }),
+    false,
+    "el servicio lo rechazó",
+  );
+  assert.equal(
+    parsePastedProfile(JSON.stringify({ ...personal, tokenRejected: true })).tokenRejected,
+    undefined,
+    "esa marca no llega de fuera",
+  );
   assert.equal(accountOf(personal)?.sessionId, "msa-tid/zero-oid");
   assert.equal(looksLikeProfile(`${hub}?access_token=${FAKE_JWE}`), true);
   assert.equal(looksLikeProfile(FAKE_JWE), true);
   assert.equal(looksLikeProfile(`Bearer ${FAKE_JWE}`), true);
+  assert.match(
+    accountOf(personal)?.label ?? "",
+    /personal/i,
+    "sin upn, dice qué tipo de cuenta es",
+  );
 
   // Lo que envía el navegador (y «Copiar perfil») conserva la cuenta y el origen.
   const pushed = parsePastedProfile(
@@ -1215,22 +1231,6 @@ function testTranscript() {
   );
   assert.match(squeezed, /result 11 y/, "el último resultado sigue ahí");
 
-  // Retrieval: a short follow-up brings the previous request along.
-  const long = "explain how the token server validates incoming profiles before storing them";
-  assert.equal(retrievalText([long, "something else"]), long);
-  assert.equal(
-    retrievalText(["ahora en el otro", "refactoriza parseStatus en autoCommitGit"]),
-    "ahora en el otro\nrefactoriza parseStatus en autoCommitGit",
-  );
-  assert.equal(
-    retrievalText([
-      "<userRequest>y en este?</userRequest>",
-      "<context>x</context><userRequest>arregla el login</userRequest>",
-    ]),
-    "y en este?\narregla el login",
-    "del prompt del modo agente sólo cuenta <userRequest>",
-  );
-  assert.equal(retrievalText(["solo"]), "solo");
   // The context VS Code was told a model has also reaches the model, within what was measured.
   const atDefault = transcriptLimitsFor(128_000);
   assert.equal(atDefault.maxContextChars, 448_000);
@@ -1258,6 +1258,22 @@ function testTranscript() {
   assert.ok(!isTurnRefusal(new CopilotClientError("__CANCELLED__")));
   assert.ok(!isTurnRefusal(new Error("not from the client")));
 
+  // Retrieval: a short follow-up brings the previous request along.
+  const long = "explain how the token server validates incoming profiles before storing them";
+  assert.equal(retrievalText([long, "something else"]), long);
+  assert.equal(
+    retrievalText(["ahora en el otro", "refactoriza parseStatus en autoCommitGit"]),
+    "ahora en el otro\nrefactoriza parseStatus en autoCommitGit",
+  );
+  assert.equal(
+    retrievalText([
+      "<userRequest>y en este?</userRequest>",
+      "<context>x</context><userRequest>arregla el login</userRequest>",
+    ]),
+    "y en este?\narregla el login",
+    "del prompt del modo agente sólo cuenta <userRequest>",
+  );
+  assert.equal(retrievalText(["solo"]), "solo");
   assert.equal(retrievalText([]), "");
   console.log(
     "  ✓ transcript: petición fijada, resultados antiguos recortados y repetidos resumidos, y búsqueda con la petición anterior",
@@ -1957,6 +1973,12 @@ function startScriptedServer(
           }
           if (frame.target !== "chat") continue;
           onChatFrame?.(frame);
+          if (refuse?.(String(frame.arguments[0].message.text))) {
+            const result = { value: "InternalError", message: "Sorry" };
+            socket.send(JSON.stringify({ type: 2, invocationId: "0", item: { result } }) + RS);
+            socket.send(JSON.stringify({ type: 3, invocationId: "0" }) + RS);
+            continue;
+          }
           setTimeout(() => {
             socket.send(botUpdate([{ author: "bot", text: getReply(index) }]));
             socket.send(botUpdate([{ author: "bot", messageType: "EndOfRequest" }]));
@@ -1973,12 +1995,6 @@ async function testSubagentLoop() {
       ? `<m365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</m365_tool_call>`
       : "Resumen: encontré 2 coincidencias de foo.",
   );
-          if (refuse?.(String(frame.arguments[0].message.text))) {
-            const result = { value: "InternalError", message: "Sorry" };
-            socket.send(JSON.stringify({ type: 2, invocationId: "0", item: { result } }) + RS);
-            socket.send(JSON.stringify({ type: 3, invocationId: "0" }) + RS);
-            continue;
-          }
   const calls: { name: string; input: Record<string, unknown> }[] = [];
   const offeredTools: OfferedTool[] = [{ name: M365_TOOL_NAMES.searchText }];
 
@@ -2137,22 +2153,6 @@ async function testSubagentLoopWallClock() {
   console.log("  ✓ runSubagentTask corta por tiempo máximo total aunque queden pasos disponibles");
 }
 
-/**
- * Regresión: `clip()` recortaba a ciegas — si el corte caía a media valla de
- * código ```, el resto del texto (la nota de "caracteres omitidos" y, tras
- * ella, lo que el llamador concatene tras el recorte) quedaba renderizado
- * como si fuera parte del bloque de código. Con el informe combinado de
- * varios sub-agentes es fácil que el recorte caiga dentro de un bloque de
- * código que un sub-agente incluyó en su resumen.
- */
-function testClipClosesDanglingFence() {
-  const text =
-    'Intro breve.\n```ts\nconst greeting = "hola";\nconsole.log(greeting);\n```\n' +
-    "Texto después de la valla, que el agente principal también necesita leer sin que se lo trague el bloque.";
-
-  const cutInsideFence = text.indexOf("console.log") + 5;
-  const clippedInsideFence = clip(text, cutInsideFence);
-  assert.equal(
 /**
  * `m365copilot.chat.maxDurationMinutes: 0` quita el techo, no lo pone a cero:
  * con un presupuesto de 0 ms el bucle se cortaría nada más terminar el primer
@@ -2332,6 +2332,22 @@ async function testToolLoopShortensRefusedPrompt() {
   console.log("  ✓ si el servicio rechaza un mensaje largo, el bucle sigue con mensajes cortos");
 }
 
+/**
+ * Regresión: `clip()` recortaba a ciegas — si el corte caía a media valla de
+ * código ```, el resto del texto (la nota de "caracteres omitidos" y, tras
+ * ella, lo que el llamador concatene tras el recorte) quedaba renderizado
+ * como si fuera parte del bloque de código. Con el informe combinado de
+ * varios sub-agentes es fácil que el recorte caiga dentro de un bloque de
+ * código que un sub-agente incluyó en su resumen.
+ */
+function testClipClosesDanglingFence() {
+  const text =
+    'Intro breve.\n```ts\nconst greeting = "hola";\nconsole.log(greeting);\n```\n' +
+    "Texto después de la valla, que el agente principal también necesita leer sin que se lo trague el bloque.";
+
+  const cutInsideFence = text.indexOf("console.log") + 5;
+  const clippedInsideFence = clip(text, cutInsideFence);
+  assert.equal(
     (clippedInsideFence.match(/```/g) ?? []).length % 2,
     0,
     "un recorte a media valla de código debe cerrarla, si no el resto del informe queda dentro del bloque",
@@ -2374,6 +2390,32 @@ async function test401FastFail() {
   );
   const elapsed = Date.now() - startedAt;
   assert.ok(elapsed < 5000, `expected a fast fail, took ${elapsed}ms`);
+
+  // Quien guarda el token se entera del rechazo: con uno cifrado es la única forma
+  // de saber que ha muerto, y lo que toca es chatear en la web, no pegar nada.
+  const rejected: string[] = [];
+  onTokenRejected((token) => rejected.push(token));
+  await assert.rejects(
+    streamCopilotTurn({
+      profile: {
+        ...makeProfile(server.port),
+        accessToken: FAKE_JWE,
+        claims: { oid: "o", tid: "t" },
+      },
+      endpointBase: mockBase(server.port),
+      prompt: "PROMPT",
+      tone: null,
+      signal: new AbortController().signal,
+      callbacks: { onText: () => {} },
+    }),
+    (err: unknown) => {
+      assert.ok(err instanceof CopilotAuthError);
+      assert.match(err.message, /personal/i);
+      return true;
+    },
+  );
+  onTokenRejected(undefined);
+  assert.deepEqual(rejected, [FAKE_JWE]);
 
   // Con un token de otro servicio (pegado a mano) el error dice cuál es, en
   // vez de «ha caducado»: recapturar no lo arreglaría.
@@ -6753,6 +6795,11 @@ async function main() {
   await testSubagentConversationIsolation();
   await testSubagentLoopStepLimit();
   await testSubagentLoopWallClock();
+  await testSubagentLoopWithoutWallClock();
+  await testToolLoopPicksUpRenewedToken();
+  await testToolLoopContextBudget();
+  await testToolLoopMovesToNewConversation();
+  await testToolLoopShortensRefusedPrompt();
   testClipClosesDanglingFence();
   await testToolLoopStreamsProse();
   await testToolLoopStopsAfterCall();
@@ -6795,11 +6842,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  await testSubagentLoopWithoutWallClock();
-  await testToolLoopPicksUpRenewedToken();
-  await testToolLoopContextBudget();
-  await testToolLoopMovesToNewConversation();
-  await testToolLoopShortensRefusedPrompt();
   console.error("\nTEST FAILURE:", err);
   process.exit(1);
 });

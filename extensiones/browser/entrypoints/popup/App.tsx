@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { connectionState, M365_CHAT_URL } from "@m365copilot/core";
+import {
+  connectionState,
+  M365_CHAT_URL,
+  rejectedByVSCode,
+  type AccountKind,
+} from "@m365copilot/core";
 import { ext } from "@/utils/api";
 import { sendMessage } from "@/utils/messaging";
 import { getLocale, t, type MessageKey } from "@/utils/i18n";
@@ -12,6 +17,9 @@ interface ProfileState {
   capturedAt: string | null;
   /** Última acción del auto-renovador (ver utils/refreshPolicy.ts). */
   refreshAction: string | null;
+  kind: AccountKind | null;
+  /** VS Code contesta, pero no aceptó el último envío. */
+  rejected: boolean;
 }
 
 const EMPTY: ProfileState = {
@@ -19,6 +27,8 @@ const EMPTY: ProfileState = {
   minutesLeft: null,
   capturedAt: null,
   refreshAction: null,
+  kind: null,
+  rejected: false,
 };
 
 /** Qué está haciendo el auto-renovador, en un par de palabras, y con qué color. */
@@ -53,6 +63,8 @@ export default function App() {
         minutesLeft: status.minutesLeft,
         capturedAt: store.capturedAt || null,
         refreshAction: status.refreshState.lastAction,
+        kind: status.accountKind,
+        rejected: rejectedByVSCode(status.syncState.lastError),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -83,10 +95,15 @@ export default function App() {
     }
   };
 
-  const copyToken = () =>
+  // El token de una cuenta personal va cifrado y no dice de quién es: VS Code
+  // necesita el perfil entero.
+  const copyCredentials = () =>
     run(async () => {
-      const { token } = await sendMessage("COPY_TOKEN", undefined);
-      await navigator.clipboard.writeText(token);
+      const text =
+        profile.kind === "personal"
+          ? (await sendMessage("COPY_PROFILE", undefined)).text
+          : (await sendMessage("COPY_TOKEN", undefined)).token;
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     });
@@ -135,16 +152,25 @@ export default function App() {
 
   const expired = profile.minutesLeft !== null && profile.minutesLeft <= 0;
   const needsUser = profile.refreshAction === "needsUser";
-  const hero = deriveHero(profile.hasToken, expired, vscode, needsUser);
+  const rejected = profile.rejected && vscode === "connected" && profile.hasToken && !expired;
+  const hero = rejected
+    ? { title: t("hero.rejected.title"), sub: t("hero.rejected.sub"), busy: false }
+    : deriveHero(profile.hasToken, expired, vscode, needsUser, profile.kind);
   const artState = connectionState({
     hasToken: profile.hasToken,
     expired,
     vscodeConnected: vscode === "connected",
-    needsUser,
+    needsUser: needsUser || rejected,
   });
   const token = tokenStatus(profile.hasToken, expired, profile.minutesLeft);
-  const vsc = vscodeStatus(vscode);
-  const renewal = REFRESH[profile.refreshAction ?? "none"] ?? REFRESH.none!;
+  const vsc = rejected
+    ? { tone: "bad" as const, label: t("vscode.rejected") }
+    : vscodeStatus(vscode);
+  // Una cuenta personal no se renueva sola: el token nuevo llega cuando se chatea.
+  const renewal: { label: MessageKey; tone: Tone } =
+    profile.kind === "personal"
+      ? { label: "refresh.personal", tone: "neutral" }
+      : (REFRESH[profile.refreshAction ?? "none"] ?? REFRESH.none!);
   // El botón grande es siempre el paso siguiente: sin token o sin sesión,
   // abrir M365 Copilot; con el token caducado, renovarlo (enviarlo fallaría);
   // si no, enviarlo. El secundario no repite el principal.
@@ -161,6 +187,17 @@ export default function App() {
       </section>
 
       <dl className="list">
+        <StatusRow
+          label={t("row.account")}
+          tone={profile.kind ? "ok" : "neutral"}
+          value={t(
+            profile.kind === "personal"
+              ? "account.personal"
+              : profile.kind === "enterprise"
+                ? "account.enterprise"
+                : "account.none",
+          )}
+        />
         <StatusRow label={t("row.token")} tone={token.tone} value={token.label} />
         <StatusRow label={t("row.vscode")} tone={vsc.tone} value={vsc.label} />
         <StatusRow label={t("row.renewal")} tone={renewal.tone} value={t(renewal.label)} />
@@ -193,9 +230,15 @@ export default function App() {
           <button
             className={`button ${copied ? "done" : ""}`}
             disabled={!profile.hasToken || expired || busy}
-            onClick={copyToken}
+            onClick={copyCredentials}
           >
-            {t(copied ? "button.copied" : "button.copyToken")}
+            {t(
+              copied
+                ? "button.copied"
+                : profile.kind === "personal"
+                  ? "button.copyProfile"
+                  : "button.copyToken",
+            )}
           </button>
           {primary === "renew" ? (
             <button className="button" disabled={busy} onClick={openM365}>
@@ -240,6 +283,7 @@ function deriveHero(
   expired: boolean,
   vscode: VSCode,
   needsUser: boolean,
+  kind: AccountKind | null,
 ): { title: string; sub: string; busy: boolean } {
   // El auto-renovador agotó sus intentos: esto sí necesita al usuario.
   if (needsUser)
@@ -248,7 +292,11 @@ function deriveHero(
   if (expired) return { title: t("hero.expired.title"), sub: t("hero.expired.sub"), busy: true };
   if (vscode !== "connected")
     return { title: t("hero.noVSCode.title"), sub: t("hero.noVSCode.sub"), busy: false };
-  return { title: t("hero.ok.title"), sub: t("hero.ok.sub"), busy: false };
+  return {
+    title: t("hero.ok.title"),
+    sub: t(kind === "personal" ? "hero.ok.subPersonal" : "hero.ok.sub"),
+    busy: false,
+  };
 }
 
 function tokenStatus(

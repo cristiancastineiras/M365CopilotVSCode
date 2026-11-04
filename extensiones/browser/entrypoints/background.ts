@@ -3,8 +3,11 @@ import {
   TOKEN_ENDPOINT_PATH,
   HEALTH_ENDPOINT_PATH,
   SIGNOUT_ENDPOINT_PATH,
+  accountKind,
   isTokenUsable,
   profileFromCapture,
+  rejectedByVSCode,
+  supersedesCapture,
   tokenStamp,
   type CopilotProfile,
 } from "@m365copilot/core";
@@ -195,6 +198,7 @@ export default defineBackground(() => {
         profile,
         lastSyncedAt: await getStorage("lastSyncedAt"),
         minutesLeft: describeMinutesLeft(profile),
+        accountKind: accountKind(profile),
         refreshState: await getStorage("refreshState"),
         syncState: await getStorage("syncState"),
         autoOpenTab: await getStorage("autoOpenTab"),
@@ -218,6 +222,10 @@ export default defineBackground(() => {
 
     PROFILE_UPDATED: async (data: any) => {
       const previous = await getStorage("currentProfile");
+      if (!supersedesCapture(previous, data)) {
+        logger.debug("Un frame publicó una captura que no mejora la guardada; se ignora");
+        return { status: "ok" as const };
+      }
       await setStorage("currentProfile", data);
 
       const isNewToken = Boolean(data?.accessToken) && data.accessToken !== previous?.accessToken;
@@ -275,7 +283,9 @@ export default defineBackground(() => {
           t(
             lastError === TOKEN_EXPIRED_SYNC_ERROR
               ? "error.tokenExpired"
-              : "error.vscodeUnreachable",
+              : rejectedByVSCode(lastError)
+                ? "hero.rejected.sub"
+                : "error.vscodeUnreachable",
           ),
         );
       }

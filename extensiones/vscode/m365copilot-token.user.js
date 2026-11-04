@@ -102,7 +102,18 @@
 
 //#endregion
 //#region ../../packages/core/dist/token.js
-/** ¿Es un token de Substrate/Sydney, el que usa Copilot? */
+/** El tenant de las cuentas personales de Microsoft y el que usa para ellas el hub del chat. */
+	const PERSONAL_TENANTS = /* @__PURE__ */ new Set(["9188040d-6c67-4c5b-b112-36a304b66dad", "84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa"]);
+	/**
+	* ¿De qué tipo de cuenta es el token? Sólo el de las personales va cifrado, pero
+	* una de ellas también puede traer un JWT: ahí lo dice el tenant. null sin token.
+	*/
+	function accountKind(profile) {
+		if (!profile?.accessToken) return null;
+		if (isEncryptedToken(profile.accessToken)) return "personal";
+		return PERSONAL_TENANTS.has(profile.claims?.tid?.toLowerCase() ?? "") ? "personal" : "enterprise";
+	}
+	/** ¿Es un token de Substrate/Sydney, el que usa Copilot? */
 	function isSydneyToken(token) {
 		const claims = decodeJwtPayload(token);
 		if (!claims) return false;
@@ -114,15 +125,15 @@
 //#endregion
 //#region ../../packages/core/dist/capture.js
 /** Un token de verdad (un JWE envuelve un JWT) no se acerca a esto; algo mayor no es un token. */
-	const _MAX_JWT_CHARS = 16384;
+	const MAX_JWT_CHARS = 16384;
 	/** Frames SignalR salientes que se llegan a inspeccionar. */
-	const _MAX_FRAME_CHARS = 1048576;
+	const MAX_FRAME_CHARS = 1048576;
 	/** Plantilla de invocación que merece la pena guardar. */
-	const _MAX_TEMPLATE_CHARS = 65536;
+	const MAX_TEMPLATE_CHARS = 65536;
 	const MAX_ENDPOINT_CHARS = 2048;
 	/** Tres partes base64url y un tamaño razonable. */
 	function isValidJwt(token) {
-		if (typeof token !== "string" || token.length > 16384) return false;
+		if (typeof token !== "string" || token.length > MAX_JWT_CHARS) return false;
 		const parts = token.split(".");
 		return parts.length === 3 && parts.every((part) => /^[A-Za-z0-9_-]+$/.test(part));
 	}
@@ -165,7 +176,7 @@
 		const candidate = token.trim();
 		const chatAccount = socketUrl ? claimsInSocketUrl(socketUrl) : null;
 		if (isEncryptedToken(candidate)) {
-			if (candidate.length > 16384 || !chatAccount) return { diagnosis: "not-sydney" };
+			if (candidate.length > MAX_JWT_CHARS || !chatAccount) return { diagnosis: "not-sydney" };
 			if (current.accessToken === candidate) return { diagnosis: "duplicate" };
 			return {
 				diagnosis: "accepted",
@@ -267,8 +278,9 @@
 				"clientrequestid",
 				"X-SessionId"
 			]) url.searchParams.delete(param);
-			const endpoint = url.toString().replace(/^http/i, "ws");
-			return endpoint.length > MAX_ENDPOINT_CHARS ? "" : endpoint;
+			const endpoint = () => url.toString().replace(/^http/i, "ws");
+			if (endpoint().length > MAX_ENDPOINT_CHARS) url.searchParams.delete("variants");
+			return endpoint().length > MAX_ENDPOINT_CHARS ? "" : endpoint();
 		} catch {
 			return "";
 		}
@@ -280,7 +292,7 @@
 	* que es el hub del chat)? Si la lleva, devuelve también su plantilla.
 	*/
 	function inspectOutgoingFrames(data) {
-		if (typeof data !== "string" || data.length > 1048576) return { sawChat: false };
+		if (typeof data !== "string" || data.length > MAX_FRAME_CHARS) return { sawChat: false };
 		let found = { sawChat: false };
 		for (const chunk of data.split(RS)) {
 			if (!chunk) continue;
@@ -293,7 +305,7 @@
 			if (frame.type !== 4 && frame.type !== 1 || frame.target !== "chat") continue;
 			found = { sawChat: true };
 			const args = Array.isArray(frame.arguments) ? frame.arguments[0] : null;
-			if (args && typeof args === "object" && JSON.stringify(args).length <= 65536) found = {
+			if (args && typeof args === "object" && JSON.stringify(args).length <= MAX_TEMPLATE_CHARS) found = {
 				sawChat: true,
 				template: args,
 				invocationType: frame.type
@@ -359,7 +371,7 @@
 	const SCAN_FRESH_MS = 6e4;
 	const SCAN_EXPIRING_MS = 5e3;
 	/** A partir de aquí la web ya suele haber renovado su propio token. */
-	const _EXPIRY_WATCH_MS = 9e5;
+	const EXPIRY_WATCH_MS = 9e5;
 	/**
 	* Cuándo volver a escanear la caché de MSAL. Se escanea SIEMPRE, haya token o
 	* no: el token nuevo que la web renueva sola cada ~50 min sólo se recoge así.
@@ -375,7 +387,7 @@
 		const exp = store.claims?.exp;
 		const left = typeof exp === "number" ? exp * 1e3 - now : null;
 		return {
-			delay: left !== null && left <= 9e5 ? SCAN_EXPIRING_MS : SCAN_FRESH_MS,
+			delay: left !== null && left <= EXPIRY_WATCH_MS ? SCAN_EXPIRING_MS : SCAN_FRESH_MS,
 			missingDelay: SCAN_MISSING_MS
 		};
 	}
@@ -392,8 +404,16 @@
 		const capturedAt = Date.parse(profile?.capturedAt ?? "");
 		return Number.isNaN(capturedAt) ? null : Math.floor(capturedAt / 1e3);
 	}
+	/**
+	* VS Code contestó y no aceptó el perfil, según el `lastError` del último envío
+	* (`HTTP 400`). No es lo mismo que no contestar: hay conexión, pero el token no
+	* llega, y lo típico es una extensión de VS Code que no entiende este token.
+	*/
+	function rejectedByVSCode(lastError) {
+		return /^HTTP \d/.test(lastError ?? "");
+	}
 	/** No martillear al servidor local de VS Code cuando está apagado. */
-	const _RESYNC_COOLDOWN_MS = 3e4;
+	const RESYNC_COOLDOWN_MS = 3e4;
 	/**
 	* ¿Hay que (re)enviar el perfil a VS Code? Cubre el caso más molesto: VS Code
 	* arranca DESPUÉS de que el navegador capturara el token, y sin esto nadie se lo
@@ -401,7 +421,7 @@
 	*/
 	function needsResync(context) {
 		if (!context.hasToken) return false;
-		if (context.lastSyncAttemptAt !== null && context.now - context.lastSyncAttemptAt >= 0 && context.now - context.lastSyncAttemptAt < 3e4) return false;
+		if (context.lastSyncAttemptAt !== null && context.now - context.lastSyncAttemptAt >= 0 && context.now - context.lastSyncAttemptAt < RESYNC_COOLDOWN_MS) return false;
 		if (context.syncedTokenExp === null) return true;
 		if (context.currentTokenExp === null) return true;
 		return context.currentTokenExp !== context.syncedTokenExp;
@@ -676,8 +696,15 @@
 			capturedSub: "VS Code is not answering. Open it with the M365 Copilot extension enabled.",
 			connectedTitle: "Connected to VS Code",
 			connectedSub: "The token is sent automatically whenever it is renewed.",
+			connectedSubPersonal: "The token is sent automatically each time you chat here.",
 			warningTitle: "Token expired",
 			warningSub: "Reload this page or sign in again to renew it.",
+			rejectedTitle: "VS Code rejected the token",
+			rejectedSub: "Update the M365 Copilot extension in VS Code and reload the window.",
+			account: "Account",
+			accountNone: "—",
+			accountPersonal: "personal",
+			accountEnterprise: "work or school",
 			token: "Token",
 			tokenNone: "not captured",
 			tokenLeft: "{0} min left",
@@ -685,6 +712,7 @@
 			vscode: "VS Code",
 			vscodeOk: "connected",
 			vscodeDown: "not answering",
+			vscodeRejected: "rejected the token",
 			vscodeChecking: "checking…",
 			sync: "Last sync",
 			syncNever: "never",
@@ -715,8 +743,15 @@
 			capturedSub: "VS Code no responde. Ábrelo con la extensión M365 Copilot activa.",
 			connectedTitle: "Conectado con VS Code",
 			connectedSub: "El token se envía solo cada vez que se renueva.",
+			connectedSubPersonal: "El token se envía solo cada vez que chateas aquí.",
 			warningTitle: "Token caducado",
 			warningSub: "Recarga esta página o vuelve a iniciar sesión para renovarlo.",
+			rejectedTitle: "VS Code rechazó el token",
+			rejectedSub: "Actualiza la extensión M365 Copilot en VS Code y recarga la ventana.",
+			account: "Cuenta",
+			accountNone: "—",
+			accountPersonal: "personal",
+			accountEnterprise: "profesional",
 			token: "Token",
 			tokenNone: "sin capturar",
 			tokenLeft: "quedan {0} min",
@@ -724,6 +759,7 @@
 			vscode: "VS Code",
 			vscodeOk: "conectado",
 			vscodeDown: "no responde",
+			vscodeRejected: "rechazó el token",
 			vscodeChecking: "comprobando…",
 			sync: "Última sincronización",
 			syncNever: "nunca",
@@ -809,13 +845,13 @@
 	function captureSocket(url, socket) {
 		const raw = String(url);
 		if (!isCopilotSocketUrl(raw)) return;
-		offerToken(tokenInSocketUrl(raw), "websocket-url", raw);
 		const endpoint = normalizeEndpoint(raw);
 		if (endpoint && !readStore().endpointConfirmed) writeStore({
 			endpoint,
 			origin: location.origin,
 			userAgent: navigator.userAgent
 		});
+		offerToken(tokenInSocketUrl(raw), "websocket-url", raw);
 		const originalSend = socket.send;
 		socket.send = function(...args) {
 			try {
@@ -901,7 +937,7 @@
 			}
 			for (let index = 0; index < length; index += 1) try {
 				const key = store.key(index);
-				if (!key || key === "m365copilot.capture.v1") continue;
+				if (!key || key === CAPTURE_STORE_KEY) continue;
 				for (const token of tokensInStorageValue(store.getItem(key))) offerToken(token, "msal-cache");
 			} catch {}
 		}
@@ -1095,6 +1131,7 @@ button:focus-visible { outline: 2px solid #242424; outline-offset: 1px; }
 			"<div class=\"status\"><div class=\"status-title\"></div><div class=\"status-sub\"></div></div>",
 			"<dl class=\"rows\">",
 			...[
+				"account",
 				"token",
 				"vscode",
 				"sync"
@@ -1132,20 +1169,24 @@ button:focus-visible { outline: 2px solid #242424; outline-offset: 1px; }
 			const sync = readSync();
 			const hasToken = Boolean(store.accessToken);
 			const usable = isCapturedTokenUsable(store);
+			const expired = hasToken && !usable;
+			const kind = accountKind(store);
+			const rejected = usable && sync.vscodeReachable !== false && rejectedByVSCode(sync.lastError);
 			const state = connectionState({
 				hasToken,
-				expired: hasToken && !usable,
-				vscodeConnected: sync.vscodeReachable === true
+				expired,
+				vscodeConnected: sync.vscodeReachable === true,
+				needsUser: rejected
 			});
 			panel.dataset.state = state;
 			mini.dataset.state = state;
 			const { minimized } = readUi();
 			panel.classList.toggle("hidden", minimized);
 			mini.classList.toggle("hidden", !minimized);
-			const [title, sub] = {
+			const [title, sub] = rejected ? [T.rejectedTitle, T.rejectedSub] : {
 				waiting: [T.waitingTitle, T.waitingSub],
 				captured: [T.capturedTitle, T.capturedSub],
-				connected: [T.connectedTitle, T.connectedSub],
+				connected: [T.connectedTitle, kind === "personal" ? T.connectedSubPersonal : T.connectedSub],
 				warning: [T.warningTitle, T.warningSub]
 			}[state];
 			q(".status-title").textContent = title;
@@ -1153,18 +1194,20 @@ button:focus-visible { outline: 2px solid #242424; outline-offset: 1px; }
 			q(".status-sub").textContent = sub;
 			const exp = store.claims?.exp;
 			const minutes = typeof exp === "number" ? Math.round((exp * 1e3 - Date.now()) / 6e4) : null;
+			q("[data-value=\"account\"]").textContent = !kind ? T.accountNone : kind === "personal" ? T.accountPersonal : T.accountEnterprise;
 			q("[data-value=\"token\"]").textContent = !hasToken ? T.tokenNone : !usable ? T.tokenExpired : minutes === null ? "✓" : fill(T.tokenLeft, minutes);
-			q("[data-value=\"vscode\"]").textContent = sync.vscodeReachable === null ? T.vscodeChecking : sync.vscodeReachable ? T.vscodeOk : T.vscodeDown;
+			q("[data-value=\"vscode\"]").textContent = rejected ? T.vscodeRejected : sync.vscodeReachable === null ? T.vscodeChecking : sync.vscodeReachable ? T.vscodeOk : T.vscodeDown;
 			const ago = sync.lastSyncedAt ? Math.floor((Date.now() - sync.lastSyncedAt) / 6e4) : null;
 			q("[data-value=\"sync\"]").textContent = ago === null ? T.syncNever : ago < 1 ? T.syncJustNow : fill(T.syncAgo, ago);
 			const tones = {
+				account: kind ? "ok" : "neutral",
 				token: !hasToken ? "neutral" : usable ? "ok" : "warn",
-				vscode: sync.vscodeReachable === null ? "neutral" : sync.vscodeReachable ? "ok" : "bad",
+				vscode: sync.vscodeReachable === null ? "neutral" : sync.vscodeReachable && !rejected ? "ok" : "bad",
 				sync: ago === null ? "neutral" : "ok"
 			};
 			for (const [row, tone] of Object.entries(tones)) q(`[data-dot="${row}"]`).dataset.tone = tone;
-			if (!sendButton.dataset.flashing) sendButton.textContent = state === "warning" ? T.renew : T.send;
-			sendButton.disabled = !hasToken && state !== "warning";
+			if (!sendButton.dataset.flashing) sendButton.textContent = expired ? T.renew : T.send;
+			sendButton.disabled = !hasToken;
 			tokenButton.disabled = !usable;
 			profileButton.disabled = !usable;
 		}
@@ -1178,14 +1221,15 @@ button:focus-visible { outline: 2px solid #242424; outline-offset: 1px; }
 			render();
 		});
 		sendButton.addEventListener("click", async () => {
-			if (panel.dataset.state === "warning") {
+			if (!isCapturedTokenUsable(readStore())) {
 				location.reload();
 				return;
 			}
 			sendButton.dataset.flashing = "1";
 			const ok = await syncToVSCode(true);
 			render();
-			flash(sendButton, ok ? T.sent : T.sendFailed, () => {
+			const failure = rejectedByVSCode(readSync().lastError) ? T.rejectedTitle : T.sendFailed;
+			flash(sendButton, ok ? T.sent : failure, () => {
 				delete sendButton.dataset.flashing;
 				render();
 			});

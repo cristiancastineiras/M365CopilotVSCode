@@ -103,8 +103,10 @@ export function diagnoseToken(
   const candidate = token.trim();
   const chatAccount = socketUrl ? claimsInSocketUrl(socketUrl) : null;
   if (isEncryptedToken(candidate)) {
-    // La web guarda otros JWE (Designer…): lo único que prueba que éste es el
-    // de Copilot es venir en la URL del hub del chat, que da además la cuenta.
+    // La web guarda otros JWE (Designer, OfficeHome…) y el de Copilot va cifrado
+    // en la caché de MSAL (`msal.3`), que no se puede leer: lo único que prueba
+    // que éste es el de Copilot es venir en la URL del hub del chat, que da
+    // además la cuenta.
     if (candidate.length > MAX_JWT_CHARS || !chatAccount) return { diagnosis: "not-sydney" };
     if (current.accessToken === candidate) return { diagnosis: "duplicate" };
     return { diagnosis: "accepted", accepted: { accessToken: candidate, claims: chatAccount } };
@@ -214,8 +216,11 @@ export function normalizeEndpoint(raw: string): string {
       url.searchParams.delete(param);
     }
     // El tope se mira sin el token: uno cifrado ya pasaría de largo él solo.
-    const endpoint = url.toString().replace(/^http/i, "ws");
-    return endpoint.length > MAX_ENDPOINT_CHARS ? "" : endpoint;
+    const endpoint = () => url.toString().replace(/^http/i, "ws");
+    // Las `variants` pueden ser enormes y lo que importa es el `scenario`, que
+    // dice qué cuenta es: se sacrifican ellas antes que el endpoint entero.
+    if (endpoint().length > MAX_ENDPOINT_CHARS) url.searchParams.delete("variants");
+    return endpoint().length > MAX_ENDPOINT_CHARS ? "" : endpoint();
   } catch {
     return "";
   }
@@ -305,6 +310,35 @@ function stripCaptureTimestamp(store: CaptureStore): string {
 /** Misma forma ignorando el sello temporal: sólo se escribe si algo cambió de verdad. */
 export function sameCapture(a: CaptureStore, b: CaptureStore): boolean {
   return stripCaptureTimestamp(a) === stripCaptureTimestamp(b);
+}
+
+/**
+ * ¿Lo que publica un frame debe sustituir a lo guardado? En la extensión de
+ * navegador cada origen tiene su propio store (`localStorage`), así que
+ * {@link diagnoseToken} sólo protege dentro de cada uno: sin esto, un iframe de
+ * otro dominio con un JWT viejo, o sin token, pisaría el que se está usando.
+ */
+export function supersedesCapture(
+  current: CaptureStore | null | undefined,
+  incoming: CaptureStore,
+): boolean {
+  if (!current?.accessToken) return true;
+  if (!incoming.accessToken) return false;
+  if (incoming.accessToken === current.accessToken) return true;
+  // La misma regla que en la captura: sólo el hub del chat cambia a un JWT.
+  if (
+    isEncryptedToken(current.accessToken) &&
+    !isEncryptedToken(incoming.accessToken) &&
+    incoming.tokenSource !== "websocket-url"
+  ) {
+    return false;
+  }
+  const currentExp = current.claims?.exp;
+  const incomingExp = incoming.claims?.exp;
+  if (typeof currentExp === "number" && typeof incomingExp === "number")
+    return incomingExp >= currentExp;
+  // Alguno no dice cuándo caduca: manda el último capturado.
+  return Date.parse(incoming.capturedAt ?? "") >= Date.parse(current.capturedAt ?? "");
 }
 
 /** El perfil que se envía a VS Code, o null si todavía no hay token. */

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { M365_CHAT_URL } from "@m365copilot/core";
+import { accountKind, M365_CHAT_URL } from "@m365copilot/core";
 import { isTokenUsable, minutesUntilExpiry, debug } from "@m365copilot/core/bizchat";
 import type { ProfileStore } from "./secrets";
 import { t } from "./i18n";
@@ -30,6 +30,8 @@ export class TokenWatcher implements vscode.Disposable {
   /** `exp` of the token we already warned about, so each warning shows once per token. */
   private warnedSoonFor: number | undefined;
   private warnedExpiredFor: number | undefined;
+  /** The token we already said the service refused. */
+  private warnedRejected: string | undefined;
 
   constructor(
     private readonly store: ProfileStore,
@@ -59,7 +61,18 @@ export class TokenWatcher implements vscode.Disposable {
     this.onTick();
 
     const exp = profile?.claims?.exp;
-    if (!profile || exp === undefined || !notificationsEnabled()) return;
+    if (!profile || !notificationsEnabled()) return;
+
+    // Refused by the service: for an encrypted token, the only way to find out.
+    if (profile.tokenRejected) {
+      if (this.warnedRejected === profile.accessToken) return;
+      this.warnedRejected = profile.accessToken;
+      debug("token", "notifying: the service refused the stored token");
+      const personal = accountKind(profile) === "personal";
+      void this.notify(t(personal ? "watcher.rejectedPersonal" : "watcher.expired"), "warning");
+      return;
+    }
+    if (exp === undefined) return;
 
     if (!usable) {
       // Only an expiry seen happening in this session: a token that was
