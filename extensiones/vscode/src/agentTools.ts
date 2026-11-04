@@ -7,6 +7,7 @@ import {
   type SearchTextInput,
 } from "../tools/listFiles";
 import { readWorkspaceFile, type ReadFileInput } from "../tools/readFile";
+import { sensitivePaths } from "../tools/editFields";
 import type { WorkspaceEditManager, ApplyWorkspaceEditsInput } from "../tools/writeFile";
 import { getWorkspaceDiagnostics, type GetDiagnosticsInput } from "../tools/diagnostics";
 import { getGitInfo, type GitInfoInput } from "../tools/git";
@@ -44,16 +45,23 @@ export function registerM365WorkspaceTools(manager: WorkspaceEditManager): vscod
       invoke: (options, token) => toolResult(() => readWorkspaceFile(options.input, token)),
     }),
     registerTracedTool<ApplyWorkspaceEditsInput>(M365_TOOL_NAMES.applyWorkspaceEdits, {
-      prepareInvocation: (options) => ({
-        invocationMessage: t(
-          "tool.preparingEdits",
-          Array.isArray(options.input.edits) ? options.input.edits.length : 0,
-        ),
-        confirmationMessages: {
-          title: t("tool.edits.confirmTitle"),
-          message: t("tool.edits.confirmMessage"),
-        },
-      }),
+      prepareInvocation: (options) => {
+        const edits = Array.isArray(options.input.edits) ? options.input.edits : [];
+        // Edits are reviewed afterwards, like Copilot's, and only what can run
+        // code or hold secrets is asked about before they land.
+        const sensitive = sensitivePaths(edits);
+        return {
+          invocationMessage: t("tool.preparingEdits", edits.length),
+          ...(sensitive.length > 0
+            ? {
+                confirmationMessages: {
+                  title: t("tool.edits.confirmTitle"),
+                  message: t("tool.edits.confirmMessage", sensitive.join(", ")),
+                },
+              }
+            : {}),
+        };
+      },
       invoke: (options, token) => toolResult(() => manager.stageEdits(options.input, token)),
     }),
     registerTracedTool<GetDiagnosticsInput>(M365_TOOL_NAMES.getDiagnostics, {

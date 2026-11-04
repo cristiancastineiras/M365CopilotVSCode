@@ -21,7 +21,7 @@ import {
 import { currentEnvironment, currentSkills } from "./editorContext";
 import { MarkdownStreamFormatter } from "./markdown";
 import { flattenMessages, imagesOf, recentUserTexts } from "./messages";
-import { looksLikeRemoteSandbox, ProseHold, toolFreeProblem } from "./giveUp";
+import { FORCE_NOTE_KEYS, looksLikeRemoteSandbox, ProseHold, toolFreeProblem } from "./giveUp";
 import { retrievalText } from "./transcript";
 import { webSearchEnabled } from "./webSearch";
 import { sourcesMarkdown } from "./webSearchPrompt";
@@ -46,7 +46,7 @@ function readToolSettings(): {
   return {
     includeEditorTools: config.get<boolean>("includeEditorTools", true),
     duplicates: config.get<DuplicatePolicy>("duplicates", "preferEditor"),
-    maxTools: config.get<number>("maxAdvertised", 48),
+    maxTools: config.get<number>("maxAdvertised", 20),
     singleRoot: (vscode.workspace.workspaceFolders?.length ?? 0) <= 1,
   };
 }
@@ -237,6 +237,7 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
           );
           finishTurn.abort();
         },
+        catalog.fenced,
       );
       const run = (mode: TurnMode) => {
         debug(scope, `starting the BizChat turn in "${mode}" mode`);
@@ -295,25 +296,22 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
 
     try {
       let turn = await attempt(prompt, toolsOffered);
-      // No tool call although tools were offered, and the reply gave up or
-      // worked in M365's own sandbox: once more, with a note that says what is
-      // true. What it wrote is dropped unseen (it was still held back).
+      // No tool call although tools were offered, and the reply gave up, worked
+      // in M365's own sandbox or claims changes nothing could have made: once
+      // more, with a note that says what is true. What it wrote is dropped
+      // unseen (it was still held back).
+      const toolsRan = messages.some((message) =>
+        message.content.some((part) => part instanceof vscode.LanguageModelToolResultPart),
+      );
       const problem =
         toolsOffered && !turn.called && turn.held.holding
-          ? toolFreeProblem(turn.prose, turn.remoteWork)
+          ? toolFreeProblem(turn.prose, turn.remoteWork, toolsRan)
           : null;
       if (problem) {
         const dropped = turn.held.discard();
         log(t("log.forcedRetry", problem));
-        debug(
-          scope,
-          `no tool call and the reply ${problem === "sandbox" ? "worked in its own sandbox" : "gave up"}: retrying once`,
-          dropped,
-        );
-        turn = await attempt(
-          `${prompt}\n\n${t(problem === "sandbox" ? "protocol.force.sandbox" : "protocol.force.giveUp")}`,
-          false,
-        );
+        debug(scope, `no tool call and the reply looks like "${problem}": retrying once`, dropped);
+        turn = await attempt(`${prompt}\n\n${t(FORCE_NOTE_KEYS[problem])}`, false);
       }
       turn.held.flush();
       // Still in its sandbox: say plainly that nothing happened here.

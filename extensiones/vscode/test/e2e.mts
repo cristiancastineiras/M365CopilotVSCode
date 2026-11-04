@@ -50,6 +50,7 @@ import {
   minutesUntilExpiry,
   parsePastedProfile,
   M365_TOOL_NAMES,
+  renderCallFor,
   NEAR_OUTPUT_LIMIT_CHARS,
   OUTPUT_LIMIT_CHARS,
   ToolCallDecoder,
@@ -144,6 +145,7 @@ import { renderSkills } from "../src/skills.ts";
 import { ConcurrencyLimiter, clip, runSubagentTask, runToolLoop } from "../src/subagentCore.ts";
 import { replaceTextOnce } from "../tools/replaceText.ts";
 import {
+  looksLikeFakeCompletion,
   looksLikeGiveUp,
   looksLikeRemoteSandbox,
   ProseHold,
@@ -217,6 +219,7 @@ import {
   type Hunk,
   type LineEdit,
 } from "../tools/lineDiff.ts";
+import { sensitivePaths } from "../tools/editFields.ts";
 
 const RS = String.fromCharCode(0x1e);
 const b64url = (o: unknown) =>
@@ -607,6 +610,23 @@ const EDITOR_TOOLS = [
   },
 ];
 
+/** Ours with their real parameters: the blocks are derived from them. */
+const M365_TOOLS_WITH_SCHEMAS = [
+  {
+    name: M365_TOOL_NAMES.readFile,
+    inputSchema: { type: "object", required: ["path"], properties: { path: { type: "string" } } },
+  },
+  { name: M365_TOOL_NAMES.applyWorkspaceEdits, inputSchema: { type: "object" } },
+  {
+    name: M365_TOOL_NAMES.runCommand,
+    inputSchema: {
+      type: "object",
+      required: ["command"],
+      properties: { command: { type: "string" }, cwd: { type: "string" } },
+    },
+  },
+];
+
 const M365_TOOLS = Object.values(M365_TOOL_NAMES).map((name) => ({
   name,
   description: `Descripción de package.json para ${name}.`,
@@ -627,11 +647,8 @@ function testToolCatalog() {
   // que las nuestras — antes se descartaban y el modo agente se quedaba ciego.
   for (const tool of offered) {
     assert.ok(catalog.callable.has(tool.name), `${tool.name} debe ser invocable`);
-    assert.ok(
-      catalog.entries.some((candidate) => candidate.name === tool.name),
-      `${tool.name} debe describirse en el prompt`,
-    );
   }
+  for (const tool of EDITOR_TOOLS) entry(catalog, tool.name);
   assert.equal(catalog.m365Count, M365_TOOLS.length);
   assert.equal(catalog.editorCount, EDITOR_TOOLS.length);
 
@@ -645,26 +662,26 @@ function testToolCatalog() {
   // «github» no es «git»: si no, la herramienta MCP competiría con la nuestra.
   assert.notEqual(entry(catalog, "mcp_github_create_issue").capability, "git");
 
-  // Duplicados: por defecto gana la nativa, pero la nuestra sigue disponible.
-  assert.equal(entry(catalog, M365_TOOL_NAMES.readFile).preferInstead, "read_file");
-  assert.equal(
-    entry(catalog, M365_TOOL_NAMES.applyWorkspaceEdits).preferInstead,
-    "replace_string_in_file",
-  );
-  assert.equal(entry(catalog, M365_TOOL_NAMES.runCommand).preferInstead, "run_in_terminal");
-  assert.equal(entry(catalog, "read_file").preferInstead, null);
-  // Sin equivalente nativo, la nuestra no se marca como secundaria.
-  assert.equal(entry(catalog, M365_TOOL_NAMES.gitInfo).preferInstead, null);
+  // Duplicados: por defecto gana la nativa. La nuestra no se describe (gastaría
+  // prompt, y editar con ella llevaría a otra revisión), pero se puede invocar.
+  const described = (candidate: ToolCatalog) => candidate.entries.map((tool) => tool.name);
+  for (const name of [
+    M365_TOOL_NAMES.readFile,
+    M365_TOOL_NAMES.applyWorkspaceEdits,
+    M365_TOOL_NAMES.runCommand,
+  ]) {
+    assert.ok(!described(catalog).includes(name), `${name} es un duplicado`);
+    assert.ok(catalog.omitted.includes(name));
+  }
+  // Sin equivalente nativo, la nuestra se describe.
+  entry(catalog, M365_TOOL_NAMES.gitInfo);
 
   const reversed = buildToolCatalog(offered, { duplicates: "preferM365" });
-  assert.equal(entry(reversed, "read_file").preferInstead, M365_TOOL_NAMES.readFile);
-  assert.equal(entry(reversed, M365_TOOL_NAMES.readFile).preferInstead, null);
+  assert.ok(!described(reversed).includes("read_file"));
+  entry(reversed, M365_TOOL_NAMES.readFile);
 
   const neutral = buildToolCatalog(offered, { duplicates: "both" });
-  assert.equal(
-    neutral.entries.every((candidate) => candidate.preferInstead === null),
-    true,
-  );
+  assert.equal(neutral.entries.length, offered.length);
 
   // El interruptor de escape: volver a describir sólo las nuestras.
   const onlyOurs = buildToolCatalog(offered, { includeEditorTools: false });
@@ -680,15 +697,72 @@ function testToolCatalog() {
   assert.equal(trimmed.entries.length, 3);
   assert.equal(trimmed.omitted.length, offered.length - 3);
   assert.equal(trimmed.callable.size, offered.length);
-  // Y lo primero que se cae son los duplicados, no las herramientas únicas.
-  assert.equal(
-    trimmed.entries.every((candidate) => candidate.preferInstead === null),
-    true,
+
+  // Un catálogo corto por defecto: decenas de herramientas son lo que M365 filtra.
+  const many = Array.from({ length: 60 }, (_, index) => ({
+    name: `mcp_tool_${index}`,
+    description: "Does something.",
+  }));
+  const lean = buildToolCatalog(many);
+  assert.ok(lean.entries.length <= 20, `catálogo corto (${lean.entries.length})`);
+  assert.equal(lean.callable.size, 60);
+
+  // Copilot's real editing tools: search-and-replace first, not the patch tool that
+  // comes first in its list and needs a format of its own, nor its notebook tools.
+  const copilot = buildToolCatalog([
+    { name: "copilot_applyPatch", inputSchema: schemaOf(["input", "explanation"]) },
+    { name: "copilot_editFiles" },
+    { name: "copilot_insertEdit", inputSchema: schemaOf(["explanation", "filePath", "code"]) },
+    { name: "copilot_editNotebook", inputSchema: schemaOf(["filePath", "cellId", "editType"]) },
+    {
+      name: "copilot_replaceString",
+      inputSchema: schemaOf(["filePath", "oldString", "newString"]),
+    },
+  ]);
+  assert.deepEqual(
+    copilot.entries.filter((tool) => tool.capability === "edit").map((tool) => tool.name),
+    ["copilot_replaceString", "copilot_insertEdit", "copilot_applyPatch"],
   );
 
+  // VS Code's terminal helpers take a `command` too: a shell block goes to the one
+  // that runs it, and that one is what counts as the terminal capability.
+  const helpers = [
+    { name: "vscode_get_terminal_confirmation", inputSchema: schemaOf(["command", "goal"]) },
+    { name: "send_to_terminal", inputSchema: schemaOf(["id", "command"]) },
+    { name: "get_terminal_output", inputSchema: schemaOf(["id"]) },
+  ];
+  const terminal = buildToolCatalog([
+    ...helpers,
+    { name: "run_in_terminal", inputSchema: schemaOf(["command", "goal"]) },
+  ]);
+  assert.equal(terminal.fenced.shell?.name, "run_in_terminal");
+  assert.equal(terminal.entries[0]?.name, "run_in_terminal");
+  assert.equal(buildToolCatalog(helpers).fenced.shell, undefined);
+
+  // However many tools of one kind there are, one of each basic capability gets in.
+  const crowded = buildToolCatalog([
+    ...Array.from({ length: 40 }, (_, index) => ({
+      name: `search_thing_${index}`,
+      description: "x".repeat(300),
+    })),
+    { name: "read_file", inputSchema: schemaOf(["filePath"]) },
+    { name: "run_in_terminal", inputSchema: schemaOf(["command"]) },
+  ]);
+  entry(crowded, "read_file");
+  entry(crowded, "run_in_terminal");
+  assert.ok(crowded.entries.length < 42, "(sanity) el presupuesto recorta algo");
+
   console.log(
-    "  ✓ el catálogo describe las herramientas nativas/MCP, las clasifica y marca duplicados",
+    "  ✓ el catálogo describe las herramientas nativas/MCP, las clasifica y deja fuera los duplicados",
   );
+}
+
+function schemaOf(required: readonly string[]) {
+  return {
+    type: "object",
+    required,
+    properties: Object.fromEntries(required.map((name) => [name, { type: "string" }])),
+  };
 }
 
 /**
@@ -729,34 +803,35 @@ function testToolPromptRendering() {
   const catalog = buildToolCatalog([...M365_TOOLS, ...EDITOR_TOOLS]);
   const prompt = buildToolProtocolInstructions(catalog);
 
-  assert.match(prompt, /read_file \(nativa de VS Code\)/);
-  assert.match(prompt, new RegExp(`${M365_TOOL_NAMES.readFile} \\(de esta extensión\\)`));
-  // La firma de entrada viaja al modelo: sin ella pasaría rutas relativas a
-  // herramientas nativas que piden rutas absolutas.
-  assert.match(prompt, /filePath\*: string — The absolute path of the file to read\./);
-  assert.match(prompt, /run_in_terminal/);
-  assert.match(prompt, /<m365_tool_call>/);
-
-  // A duplicate goes in one line: which tool it stands in for and its bare
-  // signature, no description or example — enough to call it if the other fails.
+  // Cada herramienta con el bloque que hay que enviar para usarla; la firma viaja
+  // al modelo: sin ella pasaría rutas relativas a las que piden rutas absolutas.
   assert.match(
     prompt,
-    /\n- m365_read_file \(de esta extensión\): duplicada de read_file; úsala sólo si esa falla\. Entrada: path: string\n/,
+    /read_file: Read the contents of a file in the workspace\.\n```read_file\nfilePath: <The absolute path of the file to read\.>\nstartLine: <First line to read\., opcional>\n```/,
   );
-  assert.doesNotMatch(prompt, /m365_read_file \(de esta extensión\): Lee/);
-  // When the native editor wins, m365_apply_edits' own rules and example go,
-  // and neither the block example nor the worked example teaches a duplicate.
-  assert.doesNotMatch(
+  assert.match(
     prompt,
-    /En m365_apply_edits es OBLIGATORIO|En m365_apply_edits cada operación/,
+    /```replace_string_in_file\nfilePath: <string>\n<<<<<<< SEARCH\n<string>\n=======\n<string>\n>>>>>>> REPLACE\n```/,
   );
-  assert.match(prompt, /Ejemplo:\n<m365_tool_call>\{"name":"replace_string_in_file"/);
-  assert.match(prompt, /Asistente: [^\n]*\n<m365_tool_call>\{"name":"read_file"/);
+  assert.match(prompt, /```run_in_terminal\nisBackground: <boolean, opcional>\n\n<string>\n```/);
+  assert.match(prompt, /```bash o ```powershell/, "hay shell: se puede usar un bloque de shell");
+  // A duplicate is not described, and when the native editor wins nothing teaches ours.
+  assert.doesNotMatch(prompt, /m365_read_file|m365_apply_edits/);
   assert.doesNotMatch(buildToolProtocolReminder(catalog), /m365_apply_edits/);
-  // With only ours (the @m365 participant), they are the editor: rules and example stay.
+  // With only ours (the @m365 participant), they are the editor.
   const oursOnly = buildToolProtocolInstructions(buildToolCatalog(M365_TOOLS));
-  assert.match(oursOnly, /En m365_apply_edits es OBLIGATORIO/);
-  assert.match(oursOnly, /Asistente: [^\n]*\n<m365_tool_call>\{"name":"m365_read_file"/);
+  assert.match(
+    oursOnly,
+    /```m365_apply_edits\npath: <ruta relativa al proyecto>\n<<<<<<< SEARCH\n<texto exacto que se reemplaza>\n=======\n<texto nuevo>\n>>>>>>> REPLACE\n```/,
+  );
+  assert.doesNotMatch(oursOnly, /rutas absolutas/);
+  // Without a tool to run commands, no shell block is offered.
+  assert.doesNotMatch(
+    buildToolProtocolInstructions(
+      buildToolCatalog(M365_TOOLS.filter((tool) => tool.name !== M365_TOOL_NAMES.runCommand)),
+    ),
+    /```bash o/,
+  );
 
   // Single-folder workspace: our "only for multi-root" parameter is noise.
   const withFolder = [
@@ -780,20 +855,260 @@ function testToolPromptRendering() {
     ["path"],
   );
 
-  // El ejemplo del formato de bloques tiene que usar los campos DE la
-  // herramienta que nombra: sin las nuestras se sintetiza con los parámetros
-  // de la nativa de edición, no con la forma de `m365_apply_edits`.
-  const nativeOnly = buildToolProtocolInstructions(buildToolCatalog(EDITOR_TOOLS));
-  assert.match(
-    nativeOnly,
-    /"name":"replace_string_in_file","input":\{"filePath":"[^"]+","oldString":"@@block:1@@","newString":"@@block:2@@"\}/,
-  );
-  assert.doesNotMatch(nativeOnly, /"name":"replace_string_in_file","input":\{"edits"/);
-
   // Sin herramientas no hay protocolo que explicar.
   assert.equal(buildToolProtocolInstructions(buildToolCatalog([])), "");
 
-  console.log("  ✓ el prompt describe cada herramienta con su origen, firma y preferencia");
+  console.log("  ✓ el prompt describe cada herramienta con el bloque que hay que enviar");
+}
+
+/** Reads a whole reply through the decoder, cut into pieces of `size`: a block can arrive in any. */
+function decodeBlocks(catalog: ToolCatalog, reply: string, size = 7) {
+  let text = "";
+  const calls: { name: string; input: Record<string, unknown> }[] = [];
+  const decoder = new ToolCallDecoder(
+    catalog.callable,
+    (delta) => (text += delta),
+    (call) => calls.push(call),
+    catalog.fenced,
+  );
+  for (let at = 0; at < reply.length; at += size) decoder.push(reply.slice(at, at + size));
+  decoder.finish();
+  return { text, calls };
+}
+
+function testFencedToolCalls() {
+  const ours = buildToolCatalog(M365_TOOLS_WITH_SCHEMAS);
+  const native = buildToolCatalog([...EDITOR_TOOLS]);
+
+  // Arguments as `key: value` lines, typed by the tool's schema, in any cut of the stream.
+  for (const size of [1, 3, 7, 1000]) {
+    const { text, calls } = decodeBlocks(
+      native,
+      "I'll check it.\n```read_file\nfilePath: /w/a.ts\nstartLine: 3\n```\nAnd then it says this.",
+      size,
+    );
+    assert.equal(text, "I'll check it.\n", `el texto antes del bloque (${size})`);
+    assert.deepEqual(calls, [{ name: "read_file", input: { filePath: "/w/a.ts", startLine: 3 } }]);
+  }
+
+  // Nothing after the closing fence, not even a line break.
+  assert.deepEqual(decodeBlocks(native, "```read_file\nfilePath: /w/a.ts\n```").calls, [
+    { name: "read_file", input: { filePath: "/w/a.ts" } },
+  ]);
+  // The opening fence stuck to a sentence.
+  assert.deepEqual(decodeBlocks(native, "Reading it: ```read_file\nfilePath: /a\n```").calls, [
+    { name: "read_file", input: { filePath: "/a" } },
+  ]);
+  // The tool's name with the slips models make.
+  assert.equal(decodeBlocks(native, "```readFile\nfilePath: /a\n```").calls[0]?.name, "read_file");
+  // A value that does not parse stays as written: the tool rejects it, the model corrects it.
+  assert.deepEqual(
+    decodeBlocks(native, "```read_file\nfilePath: /a\nstartLine: the top\n```").calls[0]?.input,
+    { filePath: "/a", startLine: "the top" },
+  );
+  // Arguments as JSON, from a model used to native function calling…
+  assert.deepEqual(
+    decodeBlocks(native, '```read_file\n{"filePath": "/a", "startLine": 2}\n```').calls[0]?.input,
+    { filePath: "/a", startLine: 2 },
+  );
+  assert.deepEqual(
+    decodeBlocks(
+      ours,
+      '```m365_apply_edits\n{"edits": [{"path": "a", "operation": "delete"}]}\n```',
+    ).calls[0]?.input,
+    { edits: [{ path: "a", operation: "delete" }] },
+  );
+  // …but a body that merely is JSON stays the body.
+  assert.deepEqual(
+    decodeBlocks(native, '```run_in_terminal\n{"not": "an argument"}\n```').calls[0]?.input,
+    { command: '{"not": "an argument"}' },
+  );
+  // What a model used to native function calling closes a block with is not the command.
+  assert.equal(
+    decodeBlocks(native, "```run_in_terminal\nnpm test\n</parameter>\n</invoke>\n```").calls[0]
+      ?.input.command,
+    "npm test",
+  );
+
+  // An old/new pair, with fences and quotes inside: nothing to escape, and it does not close the block.
+  const pair = [
+    "```replace_string_in_file",
+    "filePath: /w/a.md",
+    "<<<<<<< SEARCH",
+    'say "hi" \\ there',
+    "```",
+    "=======",
+    "```ts",
+    "const a = 1;",
+    ">>>>>>> REPLACE",
+    "```",
+  ].join("\n");
+  assert.deepEqual(decodeBlocks(native, pair).calls[0]?.input, {
+    filePath: "/w/a.md",
+    oldString: 'say "hi" \\ there\n```',
+    newString: "```ts\nconst a = 1;",
+  });
+
+  // m365_apply_edits: several files in one block, a new file and a deletion.
+  const batch = [
+    "```m365_apply_edits",
+    "path: src/a.ts",
+    "<<<<<<< SEARCH",
+    "one",
+    "=======",
+    "uno",
+    ">>>>>>> REPLACE",
+    "<<<<<<< SEARCH",
+    "two",
+    "=======",
+    "dos",
+    ">>>>>>> REPLACE",
+    "path: src/gone.ts",
+    "operation: delete",
+    "path: src/new.md",
+    "",
+    "# Title",
+    "```ts",
+    "const inner = 1;",
+    "```",
+    "path: this line is text",
+    "```",
+  ].join("\n");
+  assert.deepEqual(decodeBlocks(ours, batch).calls[0]?.input, {
+    edits: [
+      { path: "src/a.ts", operation: "replace", oldText: "one", newText: "uno" },
+      { path: "src/a.ts", operation: "replace", oldText: "two", newText: "dos" },
+      { path: "src/gone.ts", operation: "delete" },
+      {
+        path: "src/new.md",
+        operation: "create",
+        content: "# Title\n```ts\nconst inner = 1;\n```\npath: this line is text\n",
+      },
+    ],
+  });
+  // A longer fence holds unnamed ``` pairs.
+  assert.match(
+    String(
+      (
+        decodeBlocks(ours, "````m365_apply_edits\npath: r.md\n\n```\ncode\n```\n````").calls[0]
+          ?.input.edits as { content: string }[]
+      )[0]?.content,
+    ),
+    /^```\ncode\n```\n$/,
+  );
+
+  // Code in the answer stays code, byte for byte: only a tool's name makes it a call…
+  const answer = "Use this:\n```ts\nconst read_file = 1;\n```\nDone.\n";
+  assert.deepEqual(decodeBlocks(native, answer), { text: answer, calls: [] });
+  // …and not inside another block, where it is an example.
+  const example = "````md\n```read_file\nfilePath: /a\n```\n````\nThat is the format.\n";
+  assert.deepEqual(decodeBlocks(native, example), { text: example, calls: [] });
+
+  // A reply that opens with a shell block is asking for it to run, on the tool for that…
+  const shell = decodeBlocks(native, "```powershell\nGet-ChildItem\n```");
+  assert.deepEqual(shell.calls, [{ name: "run_in_terminal", input: { command: "Get-ChildItem" } }]);
+  assert.equal(
+    decodeBlocks(native, "Let me look.\n```bash\nls -la```\n").calls[0]?.input.command,
+    "ls -la",
+    "con el cierre pegado al comando",
+  );
+  // …with the tool's other required arguments filled in…
+  const strict = buildToolCatalog([
+    {
+      name: "run_in_terminal",
+      inputSchema: {
+        type: "object",
+        required: ["command", "explanation", "isBackground", "mode"],
+        properties: {
+          command: { type: "string" },
+          explanation: { type: "string" },
+          isBackground: { type: "boolean" },
+          mode: { type: "string", enum: ["sync", "async"] },
+        },
+      },
+    },
+  ]);
+  assert.deepEqual(decodeBlocks(strict, "```bash\nnpm test\n```").calls[0]?.input, {
+    isBackground: false,
+    mode: "sync",
+    explanation: "npm test",
+    command: "npm test",
+  });
+  // …but one in the middle of an explanation or a document is an example…
+  for (const document of [
+    "# Setup\n\n```bash\nnpm install\n```\n",
+    "First:\n```ts\nconst a = 1;\n```\nThen:\n```bash\nnpm test\n```\n",
+    "This explains the whole thing at length. ".repeat(6) + "\n```bash\nnpm test\n```\n",
+  ]) {
+    assert.deepEqual(decodeBlocks(native, document), { text: document, calls: [] });
+  }
+  // …and without a tool to run it (/explain) it is only code.
+  const readOnly = buildToolCatalog(
+    M365_TOOLS_WITH_SCHEMAS.filter((tool) => tool.name !== M365_TOOL_NAMES.runCommand),
+  );
+  assert.deepEqual(decodeBlocks(readOnly, "```bash\nls\n```\n").calls, []);
+
+  // The reply ends inside a block: a read still runs; an edit is not applied half-written.
+  assert.deepEqual(decodeBlocks(ours, "```m365_read_file\npath: a.ts\n").calls[0]?.input, {
+    path: "a.ts",
+  });
+  const cut = decodeBlocks(ours, "```m365_apply_edits\npath: big.ts\n\nfirst half of the file");
+  assert.deepEqual(cut.calls, []);
+  assert.match(cut.text, /m365_apply_edits/);
+  assert.doesNotMatch(cut.text, /first half/);
+  // A block that holds no usable call stays in the answer: nothing is lost.
+  const broken = "```replace_string_in_file\nfilePath: /a\nno sections here\n```\n";
+  assert.deepEqual(decodeBlocks(native, broken), { text: broken, calls: [] });
+
+  // The older marker still works next to them.
+  assert.deepEqual(
+    decodeBlocks(
+      native,
+      '<m365_tool_call>{"name":"read_file","input":{"filePath":"/a"}}</m365_tool_call>',
+    ).calls,
+    [{ name: "read_file", input: { filePath: "/a" } }],
+  );
+
+  // The transcript shows past calls as blocks, and they read back as the same call.
+  for (const [catalog, name, input] of [
+    [native, "read_file", { filePath: "/a", startLine: 3 }],
+    [native, "replace_string_in_file", { filePath: "/a", oldString: "x\ny", newString: "z" }],
+    [native, "run_in_terminal", { isBackground: true, command: "npm test" }],
+    [
+      ours,
+      M365_TOOL_NAMES.applyWorkspaceEdits,
+      { edits: [{ path: "a", operation: "replace", oldText: "x", newText: "y" }] },
+    ],
+  ] as const) {
+    const block = renderCallFor(catalog, name, input);
+    assert.ok(block, name);
+    assert.deepEqual(decodeBlocks(catalog, block).calls[0], { name, input });
+  }
+  assert.equal(renderCallFor(native, "unknown_tool", {}), undefined);
+
+  assert.deepEqual(
+    sensitivePaths([
+      { path: "src/a.ts" },
+      { path: ".vscode/tasks.json" },
+      { path: "sub/.github/workflows/ci.yml" },
+      { path: ".env.local" },
+      { path: "web/package.json" },
+      { path: "docs/package.json.md" },
+      { path: "certs/server.pem" },
+      { path: ".vscode/tasks.json" },
+      null,
+    ]),
+    [
+      ".vscode/tasks.json",
+      "sub/.github/workflows/ci.yml",
+      ".env.local",
+      "web/package.json",
+      "certs/server.pem",
+    ],
+  );
+  console.log(
+    "  ✓ bloques de herramienta: argumentos, SEARCH/REPLACE, lotes, shell, código en la respuesta y cortes",
+  );
 }
 
 function testTranscript() {
@@ -852,7 +1167,7 @@ function testTranscript() {
     prompt,
     /\[older result shortened: \d+ more characters; call the tool again if you need them\]/,
   );
-  assert.match(prompt, /Tool results:\n\[result of tool read_file\]\n\/\/ file 1\n/);
+  assert.match(prompt, /Tool results:\n<tool_response tool="read_file">\n\/\/ file 1\n/);
   assert.doesNotMatch(prompt, /earlier turns omitted/);
   assert.ok(prompt.length < 40_000, `cabe holgado (${prompt.length})`);
 
@@ -867,7 +1182,7 @@ function testTranscript() {
   assert.equal(repeated.split("same text").length - 1, 1);
   assert.match(
     repeated,
-    /\[result of tool read_file\]\n\[same result as a later call below\][\s\S]*\[result of tool read_file\]\nsame text/,
+    /<tool_response tool="read_file">\n\[same result as a later call below\]\n<\/tool_response>[\s\S]*<tool_response tool="read_file">\nsame text\n<\/tool_response>/,
   );
 
   // Under pressure the request stays; what goes is the oldest, with a note per gap.
@@ -916,10 +1231,10 @@ function testSkills() {
   setLocale("en");
   assert.equal(renderSkills({ ponytail: false, agentSkills: false, graphify: false }), "");
   const all = renderSkills({ ponytail: true, agentSkills: true, graphify: true });
-  assert.match(all, /^WORKING STYLE[\s\S]*ENGINEERING DISCIPLINE[\s\S]*graphify query/);
+  assert.match(all, /^Working style[\s\S]*Engineering discipline[\s\S]*graphify query/);
   assert.doesNotMatch(
     renderSkills({ ponytail: true, agentSkills: false, graphify: false }),
-    /DISCIPLINE|graphify/,
+    /discipline|graphify/,
   );
   setLocale("es");
   console.log(
@@ -3085,8 +3400,27 @@ function testGiveUpDetection() {
     "No tengo acceso al repositorio, así que no puedo ejecutar los tests.",
     "¿Puedes compartirme el archivo para revisarlo?",
     "Las herramientas no están disponibles en esta sesión.",
+    "I don't have a functioning shell tool in this conversation.",
+    "This session does not expose the local repository filesystem.",
+    "No puedo usar herramientas en este chat.",
+    "No dispongo de terminal aquí, así que no puedo ejecutarlo.",
+    "Esta sesión no me da acceso a tu equipo.",
   ];
   for (const text of giveUps) assert.equal(looksLikeGiveUp(text), true, text);
+
+  // A claim of having changed something only means trouble if nothing has run.
+  for (const text of [
+    "I've updated src/a.ts and the tests pass.",
+    "He modificado el archivo y ya funciona.",
+    "El archivo ha sido actualizado.",
+  ]) {
+    assert.equal(looksLikeFakeCompletion(text), true, text);
+    assert.equal(toolFreeProblem(text, false, false), "fakeCompletion", text);
+    assert.equal(toolFreeProblem(text, false, true), null, `${text} (con herramientas ejecutadas)`);
+    assert.equal(toolFreeProblem(text), null, "por defecto se da por hecho que hubo herramientas");
+  }
+  assert.equal(looksLikeFakeCompletion("The function returns the updated list."), false);
+  assert.equal(looksLikeFakeCompletion("Para arreglarlo, cambia la línea 3."), false);
   const answers = [
     "Copy the code below into src/a.ts:\n\n```ts\nexport const a = 1;\n```",
     "I can't see any error in this code: the loop ends at length - 1 on purpose.",
@@ -3172,6 +3506,60 @@ async function testToolLoopForcedRetry() {
     send(botFrame({ messageType: "EndOfRequest" }));
   };
   const call = `<m365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</m365_tool_call>`;
+
+  // It can lose heart again half-way through: each time is retried, and the calls
+  // can come as code blocks. Claiming work with no tool run yet gets a note too.
+  const block = `\`\`\`${M365_TOOL_NAMES.searchText}\nquery: foo\n\`\`\``;
+  const again = [
+    reply("Ya he actualizado a.ts."),
+    reply(block),
+    reply("No puedo usar herramientas en este chat."),
+    reply(block),
+    reply("Hecho: he actualizado a.ts."),
+  ];
+  const rethinking = await startProtocolServer((send, connection) =>
+    again[connection.index]?.(send),
+  );
+  const againProse: string[] = [];
+  let executed = 0;
+  try {
+    const result = await runToolLoop({
+      framing: "Busca foo.",
+      profile: makeProfile(rethinking.port),
+      tone: null,
+      maxSteps: 4,
+      signal: new AbortController().signal,
+      offeredTools: [
+        {
+          name: M365_TOOL_NAMES.searchText,
+          inputSchema: { type: "object", properties: { query: { type: "string" } } },
+        },
+      ],
+      endpointBase: mockBase(rethinking.port),
+      executeTool: async () => {
+        executed += 1;
+        return "a.ts:1: foo";
+      },
+      onProse: (delta) => againProse.push(delta),
+    });
+    assert.equal(result.outcome, "done");
+    assert.equal(executed, 2, "los dos bloques se ejecutan");
+    assert.equal(result.steps, 3, "los reintentos no cuentan como pasos");
+  } finally {
+    rethinking.close();
+  }
+  assert.equal(
+    againProse.join(""),
+    "Hecho: he actualizado a.ts.",
+    "ni las rendiciones ni lo inventado llegan al usuario; con herramientas ya ejecutadas, sí lo que dice",
+  );
+  assert.ok(promptOf(rethinking.connections[1]).endsWith(t("protocol.force.fakeCompletion")));
+  assert.ok(promptOf(rethinking.connections[3]).endsWith(t("protocol.force.giveUp")));
+  assert.match(
+    promptOf(rethinking.connections[2]),
+    /```m365_search_text\nfoo\n```[\s\S]*<tool_response tool="m365_search_text">\na\.ts:1: foo\n<\/tool_response>/,
+    "el modelo ve sus llamadas como bloques, y el resultado etiquetado",
+  );
 
   // Gives up, then calls the tool: the give-up never reaches the user, and the retry is not a step.
   const giveUp =
@@ -3517,8 +3905,8 @@ function testI18nLayers() {
     setCoreLocale("zh");
     assert.match(translate("client.error.idle"), /[一-鿿]/, "the layer's Chinese");
     assert.equal(
-      translate("protocol.important"),
-      translateIn("en", "protocol.important"),
+      translate("protocol.relay"),
+      translateIn("en", "protocol.relay"),
       "the layer has no Chinese for the model prompts: English",
     );
     assert.equal(translate("layers.englishOnly"), "only in English");
@@ -3564,23 +3952,29 @@ function testPromptsFollowLocale() {
   const english = render("en");
   const spanish = render("es");
 
-  assert.match(english, /IMPORTANT: you DO have real access/);
-  assert.match(english, /read_file \(native to VS Code\)/);
-  assert.match(english, new RegExp(`${M365_TOOL_NAMES.readFile} \\(from this extension\\)`));
+  assert.match(english, /a note on how we'll work/);
   assert.doesNotMatch(
     english,
-    /herramienta|IMPORTANTE|de esta extensión/,
+    /herramienta|nota sobre|sandbox en la nube/,
     "no debe quedar español en el prompt inglés",
   );
-  assert.match(spanish, /IMPORTANTE: SÍ tienes acceso real/);
-  assert.match(spanish, /read_file \(nativa de VS Code\)/);
-  // The protocol markers themselves never change with the language.
+  assert.match(spanish, /una nota sobre cómo vamos a trabajar/);
   for (const prompt of [english, spanish]) {
-    assert.match(prompt, /<m365_tool_call>/);
-    assert.match(prompt, /@@block:1@@/);
+    // The blocks themselves never change with the language…
+    assert.match(prompt, /```read_file\n/);
+    assert.match(prompt, /<tool_response>/);
+    // …and nothing is shaped like an override: that reads as a jailbreak to M365's
+    // filter, and as a claim to check against its own system prompt to the model.
+    assert.doesNotMatch(
+      prompt,
+      /\b(?:IMPORTANT|IMPORTANTE|NEVER|NUNCA|MANDATORY|OBLIGATORIO|MUST)\b/,
+    );
+    assert.doesNotMatch(prompt, /<system>|m365_tool_call|@@block/);
+    // The user's voice, not "you have access".
+    assert.doesNotMatch(prompt, /you do have|tienes acceso/i);
   }
   console.log(
-    "  ✓ el prompt de herramientas sale entero en el idioma activo; los marcadores no cambian",
+    "  ✓ el prompt de herramientas sale entero en el idioma activo, en la voz del usuario",
   );
 }
 
@@ -3629,7 +4023,7 @@ function testParticipantPrompts() {
     ],
     attachedPaths: ["src/b.ts"],
   });
-  assert.match(framing, /invoked from the chat as @m365/);
+  assert.match(framing, /I call you as @m365/);
   assert.match(framing, /Find and fix the problems/);
   assert.match(framing, /Code context — src\/a\.ts, lines 10-12 \(typescript\):/);
   assert.match(framing, /````typescript\nfunction f\(\) \{/);
@@ -6099,6 +6493,7 @@ async function main() {
   testToolCatalog();
   testSpawnAgentsNeverTrimmed();
   testToolPromptRendering();
+  testFencedToolCalls();
   console.log("transcript.ts / environment.ts");
   testTranscript();
   testEnvironment();

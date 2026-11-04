@@ -14,6 +14,20 @@ export function pickText(record: Record<string, unknown>, ...keys: readonly stri
   return undefined;
 }
 
+/**
+ * Files an edit can use to run code or that may hold secrets: the ones VS Code
+ * itself asks about before a chat edit (`chat.tools.edits.autoApprove`).
+ */
+const SENSITIVE_PATH =
+  /(?:^|[\\/])(?:\.vscode|\.github|\.devcontainer|\.husky)[\\/]|(?:^|[\\/])(?:\.env(?:\..*)?|\.npmrc|\.gitattributes|\.gitmodules|package\.json|Cargo\.toml|build\.rs|web\.config|server\.xml)$|\.(?:pem|key)$/i;
+
+/** The sensitive paths in a batch of edits. */
+export function sensitivePaths(edits: readonly unknown[]): string[] {
+  const paths = edits.map((edit) => (edit as { path?: unknown } | null)?.path);
+  const named = paths.filter((path): path is string => typeof path === "string");
+  return [...new Set(named.filter((path) => SENSITIVE_PATH.test(path)))];
+}
+
 /** Text a `create` should write: `content`, or the usual mix-ups. */
 export function createContentOf(record: Record<string, unknown>): unknown {
   return pickText(record, "content", "newText", "text");

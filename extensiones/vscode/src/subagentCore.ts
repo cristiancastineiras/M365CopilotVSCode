@@ -14,12 +14,19 @@ import {
   buildToolCatalog,
   buildToolProtocolInstructions,
   buildToolProtocolReminder,
+  renderCallFor,
   ToolCallDecoder,
   type DecodedToolCall,
   type OfferedTool,
   type ToolCatalog,
 } from "@m365copilot/core/bizchat";
-import { looksLikeRemoteSandbox, ProseHold, toolFreeProblem, type ToolFreeProblem } from "./giveUp";
+import {
+  FORCE_NOTE_KEYS,
+  looksLikeRemoteSandbox,
+  ProseHold,
+  toolFreeProblem,
+  type ToolFreeProblem,
+} from "./giveUp";
 import { condenseToolResult, toolResultBudgets } from "./transcript";
 import { t } from "./i18n";
 
@@ -145,6 +152,7 @@ const MAX_OLD_STEP_RESULT_CHARS = 800;
 const MAX_CALL_PREVIEW_CHARS = 600;
 const MAX_TRANSCRIPT_CHARS = 24_000;
 const MAX_LAST_RESULT_PREVIEW_CHARS = 2_000;
+const MAX_FORCED_RETRIES = 3;
 
 /**
  * Techo de tiempo TOTAL de un sub-agente, independiente de `maxSteps`. Cada
@@ -194,10 +202,13 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
   let lastResultText = "";
   const startedAt = Date.now();
   const toolsOffered = catalog.callable.size > 0;
-  // One forced retry per loop when a step gives up or works in M365's own
-  // sandbox instead of calling a tool (giveUp.ts); its note goes after the prompt.
+  // A forced retry when a step gives up, works in M365's own sandbox or claims
+  // work it did not do, instead of calling a tool (giveUp.ts); its note goes after
+  // the prompt. One per step: the model can also lose heart half-way through a
+  // task ("I no longer have the tools"). Capped, because each one costs a turn.
   let forced: ToolFreeProblem | null = null;
   let forcedNote = "";
+  let forcedRetries = 0;
   const wallClockBudgetMs = params.maxWallClockMs ?? MAX_TASK_WALL_CLOCK_MS;
 
   for (let step = 1; step <= maxSteps; step += 1) {
@@ -220,7 +231,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
     // While a step's reply is short and has not called a tool, its prose is
     // held back: a give-up is then retried before anyone sees it.
     const held = new ProseHold((delta) => params.onProse?.(delta));
-    if (!toolsOffered || forced) held.flush();
+    if (!toolsOffered || forced || forcedRetries >= MAX_FORCED_RETRIES) held.flush();
     // The step's turn ends as soon as its tool call is complete: what the
     // model writes after it is ignored anyway, and can run for minutes.
     const finishTurn = new AbortController();
@@ -235,6 +246,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
         held.flush();
         finishTurn.abort();
       },
+      catalog.fenced,
     );
 
     params.onStepStart?.(step);
@@ -285,13 +297,17 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
     }
 
     if (!call) {
-      // Gave up, or worked in its own sandbox: the same step once more, with
-      // a note that says what is true (the dropped reply was never shown).
+      // Gave up, worked in its own sandbox or claims work it did not do: the
+      // same step once more, with a note that says what is true (the dropped
+      // reply was never shown).
       const problem: ToolFreeProblem | null =
-        toolsOffered && !forced && held.holding ? toolFreeProblem(text, remoteWork) : null;
+        toolsOffered && !forced && forcedRetries < MAX_FORCED_RETRIES && held.holding
+          ? toolFreeProblem(text, remoteWork, steps.length > 0)
+          : null;
       if (problem) {
         forced = problem;
-        forcedNote = `\n\n${t(problem === "sandbox" ? "protocol.force.sandbox" : "protocol.force.giveUp")}`;
+        forcedRetries += 1;
+        forcedNote = `\n\n${t(FORCE_NOTE_KEYS[problem])}`;
         log(t("log.forcedRetry", problem));
         held.discard();
         step -= 1;
@@ -307,6 +323,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
       onStep({ step, kind: "done", detail: summary });
       return { ok: true, outcome: "done", summary, steps: step };
     }
+    forced = null;
     forcedNote = "";
 
     // `call` is mutated inside the decoder's closures; a type assertion
@@ -322,7 +339,7 @@ export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResul
     const resultText = await executeTool(finishedCall.name, finishedCall.input);
     lastResultText = resultText;
     steps.push({
-      call: renderCallBlock(step, finishedCall),
+      call: renderCallBlock(catalog, step, finishedCall),
       name: finishedCall.name,
       result: resultText,
     });
@@ -415,8 +432,13 @@ function compactBlocks(blocks: readonly string[]): string {
   return kept.join("\n\n");
 }
 
-function renderCallBlock(step: number, call: DecodedToolCall): string {
-  return t("subagent.prompt.callBlock", step, call.name, safeJsonPreview(call.input));
+function renderCallBlock(catalog: ToolCatalog, step: number, call: DecodedToolCall): string {
+  const block = renderCallFor(catalog, call.name, call.input);
+  return t(
+    "subagent.prompt.callBlock",
+    step,
+    block ? clip(block, MAX_CALL_PREVIEW_CHARS) : `${call.name}(${safeJsonPreview(call.input)})`,
+  );
 }
 
 function safeJsonPreview(input: Record<string, unknown>): string {
