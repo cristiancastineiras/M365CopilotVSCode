@@ -54,11 +54,14 @@ browser and VS Code uses it.
      needs one of the two captures above.
    - _Personal Microsoft 365 subscriptions (Personal, Family):_ their token is
      encrypted, so it is captured only from the chat itself: send a message at
-     <https://m365.cloud.microsoft/chat/> or <https://copilot.com>. By hand, paste
-     the URL above or **Copy profile**: the token alone does not say whose it is.
-     Nothing can tell when it expires, so nothing warns you or renews it: when
-     a message fails with a 401, send another one in the web chat. Not yet
-     tested end to end with a real personal account.
+     <https://m365.cloud.microsoft/chat/> or <https://copilot.com>, and the browser
+     extension or the userscript send it to VS Code by themselves, as with any
+     other account. Both show which kind of account they detected, and say so if
+     VS Code rejects the token (update the extension: before 4.0.0 it does not
+     understand this one). By hand, paste the URL above or **Copy profile**: the
+     token alone does not say whose it is. Nothing can tell beforehand when it
+     expires: the first message it refuses marks it as expired in VS Code, which
+     tells you to send a message in the web chat. The new token arrives by itself.
 2. **Chat**: type **`@m365`** in the chat, or pick one of the **M365 Copilot**
    models (`Auto`, `Quick response`, `Think deeper`, `GPT 5.6 Think deeper`,
    `GPT 5.5`, `Claude Sonnet`…) in the model picker.
@@ -425,9 +428,6 @@ to each model, one conversation each, and lists which ones work for you.
 The model settings of sub-agents, inline completions and editor answers
 (`*.model`) offer the built-in models.
 
-## Limits and refusals from M365 Copilot
-
-M365 Copilot can also refuse a turn for reasons that have nothing to do with
 The two token settings apply to all models at once. `maxInputTokens` also sets how
 much of the conversation reaches the model in Copilot Chat: the extension fits it
 into one BizChat message at about 3.5 characters per token (about 448,000
@@ -445,6 +445,9 @@ measured the same way, it kept all of 419,000 characters and only the last 600,0
 of 2,000,000. So a task that reaches 400,000 characters continues in a new
 conversation, with the request and the steps so far.
 
+## Limits and refusals from M365 Copilot
+
+M365 Copilot can also refuse a turn for reasons that have nothing to do with
 the model. The extension recognises them, says what happened in plain words
 (with the service's own message) and does not retry: the same request would get
 the same answer.

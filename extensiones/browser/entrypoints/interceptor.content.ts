@@ -137,19 +137,19 @@ export default defineContentScript({
       diag("WebSocket:", String(url).split("?")[0], copilot ? "(copilot)" : "(ignorado)");
       if (!copilot) return;
 
-      // El token viaja en la query: se extrae ANTES de normalizar la URL.
-      const token = tokenInSocketUrl(url);
-      diag("socket de copilot; token en la URL:", Boolean(token));
-      if (token) offerToken(token, "websocket-url", String(url));
-
       // Substrate abre varios WebSockets (presencia, notificaciones…). Guardamos
       // éste sólo de forma tentativa hasta que veamos que envía un frame `chat`,
       // que es la prueba definitiva de que es el hub del chat. Un endpoint ya
-      // confirmado no se pisa con un socket cualquiera.
+      // confirmado no se pisa con un socket cualquiera. Va antes que el token
+      // para que su primer envío a VS Code salga completo.
       const endpoint = normalizeEndpoint(String(url));
       if (endpoint && !readStore().endpointConfirmed) {
         writeStore({ endpoint, origin: location.origin, userAgent: navigator.userAgent });
       }
+
+      const token = tokenInSocketUrl(url);
+      diag("socket de copilot; token en la URL:", Boolean(token));
+      if (token) offerToken(token, "websocket-url", String(url));
 
       const originalSend = ws.send;
       ws.send = function (data: any) {

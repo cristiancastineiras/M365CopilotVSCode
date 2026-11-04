@@ -37,6 +37,8 @@ export const es: Record<keyof typeof en, string> = {
     "Claude Sonnet pensando más a fondo. Tu administrador tiene que tener activados los modelos de Anthropic. Más lento.",
 
   // ------------------------------------------------------------ cliente (BizChat)
+  "client.error.401.personal":
+    "M365 Copilot ya no acepta tu token. Con una cuenta personal se captura uno nuevo al chatear: envía un mensaje en m365.cloud.microsoft/chat y llegará solo a VS Code.",
   "client.error.401":
     "M365 Copilot ha rechazado tu token: ha caducado o Microsoft lo ha invalidado antes de tiempo. Vuelve a " +
     "capturarlo en m365.cloud.microsoft y pégalo con «M365 Copilot: Pegar perfil o token».",
@@ -212,4 +214,5 @@ export const es: Record<keyof typeof en, string> = {
     "Busca en internet (Bing, a través de Microsoft 365 Copilot) y devuelve una respuesta actualizada con sus fuentes. Úsala para documentación actual, versiones, APIs, mensajes de error o cualquier cosa de fuera del workspace.",
   // ------------------------------------------------------------ cuenta
   "account.unknownUser": "Usuario de M365 Copilot",
+  "account.personal": "Cuenta personal de Microsoft",
 };

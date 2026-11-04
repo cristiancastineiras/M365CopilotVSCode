@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { accountKind } from "@m365copilot/core";
 import {
   isTokenUsable,
   minutesUntilExpiry,
@@ -119,8 +120,16 @@ export class M365StatusBar implements CompletionBusySink, vscode.Disposable {
     const lines = [`**${t("statusbar.tooltip.title")}**`, ""];
     if (profile?.claims?.upn)
       lines.push(`$(account) ${t("statusbar.tooltip.account", profile.claims.upn)}`);
+    const kind = accountKind(profile);
+    if (kind) {
+      lines.push(
+        `$(${kind === "personal" ? "person" : "organization"}) ${t(`statusbar.tooltip.${kind}`)}`,
+      );
+    }
     if (!profile) {
       lines.push(`$(key) ${t("statusbar.tooltip.tokenMissing")}`);
+    } else if (profile.tokenRejected) {
+      lines.push(`$(warning) ${t("statusbar.tooltip.tokenRejected")}`);
     } else if (!usable) {
       lines.push(`$(warning) ${t("statusbar.tooltip.tokenExpired", Math.abs(minutes ?? 0))}`);
     } else {

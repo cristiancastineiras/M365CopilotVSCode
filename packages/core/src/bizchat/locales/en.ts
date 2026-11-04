@@ -33,6 +33,8 @@ export const en = {
     "Claude Sonnet thinking deeper. Your admin must have Anthropic models enabled. Slower.",
 
   // ------------------------------------------------------------ client (BizChat)
+  "client.error.401.personal":
+    "M365 Copilot no longer accepts your token. With a personal account a new one is captured when you chat: send a message at m365.cloud.microsoft/chat and it reaches VS Code by itself.",
   "client.error.401":
     "M365 Copilot did not accept your token: it has expired, or Microsoft revoked it early. Capture it again at " +
     "m365.cloud.microsoft and paste it with “M365 Copilot: Paste profile or token”.",
@@ -201,4 +203,5 @@ export const en = {
     "Searches the internet (Bing, through Microsoft 365 Copilot) and returns an up-to-date answer with its sources. Use it for current documentation, versions, APIs, error messages or anything outside the workspace.",
   // ------------------------------------------------------------ account
   "account.unknownUser": "M365 Copilot user",
+  "account.personal": "Personal Microsoft account",
 } satisfies Record<string, string>;

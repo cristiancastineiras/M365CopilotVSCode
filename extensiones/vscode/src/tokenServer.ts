@@ -113,10 +113,13 @@ export class TokenAutoRefreshServer implements vscode.Disposable {
   /**
    * @param onTokenReceived called after a profile pushed by the browser has
    * been stored, so the editor can confirm the silent renewal (status bar).
+   * @param onTokenRejected called when a pushed profile cannot be used: the
+   * browser retries in silence, so without this only the log would say so.
    */
   constructor(
     private readonly store: ProfileStore,
     private readonly onTokenReceived?: (profile: CopilotProfile) => void,
+    private readonly onTokenRejected?: (reason: string) => void,
   ) {}
 
   /**
@@ -226,6 +229,7 @@ export class TokenAutoRefreshServer implements vscode.Disposable {
           } catch (error) {
             log(t("log.server.processError", String(error)));
             debug(traces.get(res)?.scope ?? "http", "the body could not be processed", error);
+            this.onTokenRejected?.(error instanceof Error ? error.message : String(error));
             respond(res, 400, { success: false, error: String(error) });
           }
         });

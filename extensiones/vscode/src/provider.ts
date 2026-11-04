@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { randomUUID } from "node:crypto";
+import { accountKind } from "@m365copilot/core";
 import {
   streamCopilotTurnWithRetry,
   CopilotClientError,
@@ -33,7 +34,7 @@ import {
 import { webSearchEnabled } from "./webSearch";
 import { sourcesMarkdown } from "./webSearchPrompt";
 import { allModels, findModel, modelRegistry, toChatInformation, type TokenState } from "./models";
-import type { ProfileStore } from "./secrets";
+import { unusableTokenMessage, type ProfileStore } from "./secrets";
 import { t } from "./i18n";
 
 /** Numbers each chat request in the deep trace (`chat#3`), so interleaved requests can be told apart. */
@@ -62,9 +63,9 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
   private readonly changeEmitter = new vscode.EventEmitter<void>();
   readonly onDidChangeLanguageModelChatInformation = this.changeEmitter.event;
   private readonly storeListener: vscode.Disposable;
-
   /** The service refused a long message that a shorter one got past: keep to short ones. */
   private shortPromptsOnly = false;
+
   constructor(
     private readonly store: ProfileStore,
     private readonly projectContext?: ProjectContextSource,
@@ -120,7 +121,14 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
       debug(scope, `refused: the stored token expired (${mins} min)`);
       this.changeEmitter.fire();
       throw userError(
-        t("provider.tokenExpired", mins !== null ? t("provider.expiredAgo", Math.abs(mins)) : ""),
+        accountKind(profile) === "personal"
+          ? unusableTokenMessage(profile)
+          : t(
+              "provider.tokenExpired",
+              mins !== null && !profile.tokenRejected
+                ? t("provider.expiredAgo", Math.abs(mins))
+                : "",
+            ),
       );
     }
 
@@ -207,6 +215,7 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
     const cancelListener = token.onCancellationRequested(() => controller.abort());
     const sources: WebSource[] = [];
     const toolsOffered = catalog.callable.size > 0;
+    let emitted = false;
     // What could not be attached is said once, before the answer.
     const skippedImages = new Set<string>();
     const onImageSkipped = (reason: string) => {
@@ -215,7 +224,6 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
       progress.report(new vscode.LanguageModelTextPart(t("provider.imageSkipped", reason)));
     };
 
-    let emitted = false;
     /**
      * One BizChat turn. With tools offered, the start of the reply is held back
      * (giveUp.ts) until it is long or reaches its tool call, so that a reply
@@ -298,14 +306,6 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
       return { held, prose, called, remoteWork };
     };
 
-    try {
-      let turn = await firstAttempt();
-      // No tool call although tools were offered, and the reply gave up, worked
-      // in M365's own sandbox or claims changes nothing could have made: once
-      // more, with a note that says what is true. What it wrote is dropped
-      // unseen (it was still held back).
-      const toolsRan = messages.some((message) =>
-        message.content.some((part) => part instanceof vscode.LanguageModelToolResultPart),
     /**
      * The first try, with a shorter message if the service refuses this one
      * before answering: only a tenant's real limit tells how long is too long.
@@ -328,6 +328,14 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
       }
     };
 
+    try {
+      let turn = await firstAttempt();
+      // No tool call although tools were offered, and the reply gave up, worked
+      // in M365's own sandbox or claims changes nothing could have made: once
+      // more, with a note that says what is true. What it wrote is dropped
+      // unseen (it was still held back).
+      const toolsRan = messages.some((message) =>
+        message.content.some((part) => part instanceof vscode.LanguageModelToolResultPart),
       );
       const problem =
         toolsOffered && !turn.called && turn.held.holding

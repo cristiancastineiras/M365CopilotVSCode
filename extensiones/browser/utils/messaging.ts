@@ -3,6 +3,7 @@
  * Evita strings mágicos y respuestas sin validar.
  */
 
+import type { AccountKind } from "@m365copilot/core";
 import { ext } from "./api";
 import type { HardResetReport } from "./hardReset";
 import type { RefreshState, SyncState } from "./storage";
@@ -13,6 +14,8 @@ export interface RefreshStatus {
   lastSyncedAt: string | null;
   /** Minutos hasta la caducidad del token guardado, o null si no se sabe. */
   minutesLeft: number | null;
+  /** Personal o de empresa, según el token guardado; null sin token. */
+  accountKind: AccountKind | null;
   refreshState: RefreshState;
   syncState: SyncState;
   autoOpenTab: boolean;

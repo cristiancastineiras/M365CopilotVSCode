@@ -104,9 +104,12 @@ export const en = {
   // ------------------------------------------------------------ status bar
   "statusbar.tooltip.title": "M365 Copilot",
   "statusbar.tooltip.account": "Account: {0}",
+  "statusbar.tooltip.personal": "Personal Microsoft account",
+  "statusbar.tooltip.enterprise": "Work or school account",
   "statusbar.tooltip.tokenValid": "Token valid · {0} min left",
   "statusbar.tooltip.tokenValidNoExpiry": "Token valid",
   "statusbar.tooltip.tokenExpired": "Token expired {0} min ago",
+  "statusbar.tooltip.tokenRejected": "M365 Copilot no longer accepts this token",
   "statusbar.tooltip.tokenMissing": "No token yet — paste one to start",
   "statusbar.tooltip.completionsOn": "Inline completions: on",
   "statusbar.tooltip.completionsOff": "Inline completions: off",
@@ -117,6 +120,8 @@ export const en = {
   "statusbar.tooltip.pendingEdits": "Agent changes awaiting review: {0}",
   "statusbar.tooltip.click": "Click to open the M365 Copilot menu.",
   "statusbar.renewed": "M365 Copilot: token renewed automatically ({0} min left).",
+  "statusbar.received": "M365 Copilot: token received from the browser.",
+  "server.tokenRejected": "M365 Copilot: the browser sent a token that cannot be used. {0}",
 
   // ------------------------------------------------------------ quick menu
   "menu.title": "M365 Copilot",
@@ -154,6 +159,8 @@ export const en = {
   "watcher.expiringSoon": "M365 Copilot: the token expires in {0} min and has not been renewed.",
   "watcher.expired":
     "M365 Copilot: the token has expired. Capture a new one to keep using the models.",
+  "watcher.rejectedPersonal":
+    "M365 Copilot no longer accepts the token. Send a message in the web chat and the new one reaches VS Code by itself.",
   "watcher.pasteToken": "Paste token",
   "watcher.openM365": "Open M365 Copilot",
 
@@ -245,13 +252,6 @@ export const en = {
   "log.completionThrottled":
     "inline completion skipped: M365 Copilot is limiting the account until {0}",
   "log.forcedRetry": "the reply called no tool ({0}): retrying the turn once with a note",
-  "log.subagentStep": "[sub-agent {0}] step {1} ({2}): {3}",
-  "log.participantRequest": "@m365 request: command={0}, tone={1}, context={2}",
-  "log.participantNoToken": "@m365 request (command={0}) without a usable token",
-  "log.commitMessage": "commit message generated: {0} chars from a {1}-char diff",
-  "log.commitMessageRetry": "commit message rejected ({0}); asking again",
-  "log.autoCommit": "auto-commit {0}: {1}",
-  "log.server.listening": "✅ Auto-refresh server listening on http://localhost:{0}",
   "log.loopTokenRenewed": "the token was renewed during the task: the next step uses the new one",
   "log.loopNewConversation":
     "the conversation reached {0} characters: the task continues in a new one with the request and the steps so far",
@@ -259,6 +259,13 @@ export const en = {
     "the service refused a message of {0} characters: this task continues with shorter ones",
   "log.promptShortened":
     "the service refused a message of {0} characters and took one of {1}: keeping to that size until the window reloads",
+  "log.subagentStep": "[sub-agent {0}] step {1} ({2}): {3}",
+  "log.participantRequest": "@m365 request: command={0}, tone={1}, context={2}",
+  "log.participantNoToken": "@m365 request (command={0}) without a usable token",
+  "log.commitMessage": "commit message generated: {0} chars from a {1}-char diff",
+  "log.commitMessageRetry": "commit message rejected ({0}); asking again",
+  "log.autoCommit": "auto-commit {0}: {1}",
+  "log.server.listening": "✅ Auto-refresh server listening on http://localhost:{0}",
   "log.server.portInUse": "⚠️ Port {0} already in use. The auto-refresh server is not available.",
   "log.server.error": "❌ Auto-refresh server error: {0}",
   "log.server.stopped": "🔌 Auto-refresh server stopped",

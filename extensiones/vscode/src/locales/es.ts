@@ -107,9 +107,12 @@ export const es: Record<keyof typeof en, string> = {
   // ------------------------------------------------------------ barra de estado
   "statusbar.tooltip.title": "M365 Copilot",
   "statusbar.tooltip.account": "Cuenta: {0}",
+  "statusbar.tooltip.personal": "Cuenta personal de Microsoft",
+  "statusbar.tooltip.enterprise": "Cuenta profesional o educativa",
   "statusbar.tooltip.tokenValid": "Token válido · quedan {0} min",
   "statusbar.tooltip.tokenValidNoExpiry": "Token válido",
   "statusbar.tooltip.tokenExpired": "Token caducado hace {0} min",
+  "statusbar.tooltip.tokenRejected": "M365 Copilot ya no acepta este token",
   "statusbar.tooltip.tokenMissing": "Sin token todavía — pega uno para empezar",
   "statusbar.tooltip.completionsOn": "Autocompletado en línea: activado",
   "statusbar.tooltip.completionsOff": "Autocompletado en línea: desactivado",
@@ -120,6 +123,8 @@ export const es: Record<keyof typeof en, string> = {
   "statusbar.tooltip.pendingEdits": "Cambios del agente pendientes de revisar: {0}",
   "statusbar.tooltip.click": "Clic para abrir el menú de M365 Copilot.",
   "statusbar.renewed": "M365 Copilot: token renovado automáticamente (quedan {0} min).",
+  "statusbar.received": "M365 Copilot: token recibido del navegador.",
+  "server.tokenRejected": "M365 Copilot: el navegador envió un token que no se puede usar. {0}",
 
   // ------------------------------------------------------------ menú rápido
   "menu.title": "M365 Copilot",
@@ -158,6 +163,8 @@ export const es: Record<keyof typeof en, string> = {
   "watcher.expiringSoon": "M365 Copilot: el token caduca en {0} min y no se ha renovado.",
   "watcher.expired":
     "M365 Copilot: el token ha caducado. Captura uno nuevo para seguir usando los modelos.",
+  "watcher.rejectedPersonal":
+    "M365 Copilot ya no acepta el token. Envía un mensaje en el chat web y el nuevo llegará solo a VS Code.",
   "watcher.pasteToken": "Pegar token",
   "watcher.openM365": "Abrir M365 Copilot",
 
@@ -251,13 +258,6 @@ export const es: Record<keyof typeof en, string> = {
   "log.completionThrottled": "autocompletado omitido: M365 Copilot limita la cuenta hasta {0}",
   "log.forcedRetry":
     "la respuesta no llamó a ninguna herramienta ({0}): se repite el turno una vez con una nota",
-  "log.subagentStep": "[sub-agente {0}] paso {1} ({2}): {3}",
-  "log.participantRequest": "petición a @m365: comando={0}, tone={1}, contexto={2}",
-  "log.participantNoToken": "petición a @m365 (comando={0}) sin un token utilizable",
-  "log.commitMessage": "mensaje de commit generado: {0} chars a partir de un diff de {1} chars",
-  "log.commitMessageRetry": "mensaje de commit rechazado ({0}); se vuelve a pedir",
-  "log.autoCommit": "autocommit {0}: {1}",
-  "log.server.listening": "✅ Servidor de auto-renovación escuchando en http://localhost:{0}",
   "log.loopTokenRenewed": "el token se renovó durante la tarea: el siguiente paso usa el nuevo",
   "log.loopNewConversation":
     "la conversación llegó a {0} caracteres: la tarea sigue en otra nueva con la petición y los pasos hechos",
@@ -265,6 +265,13 @@ export const es: Record<keyof typeof en, string> = {
     "el servicio rechazó un mensaje de {0} caracteres: esta tarea sigue con mensajes más cortos",
   "log.promptShortened":
     "el servicio rechazó un mensaje de {0} caracteres y aceptó uno de {1}: se mantiene ese tamaño hasta recargar la ventana",
+  "log.subagentStep": "[sub-agente {0}] paso {1} ({2}): {3}",
+  "log.participantRequest": "petición a @m365: comando={0}, tone={1}, contexto={2}",
+  "log.participantNoToken": "petición a @m365 (comando={0}) sin un token utilizable",
+  "log.commitMessage": "mensaje de commit generado: {0} chars a partir de un diff de {1} chars",
+  "log.commitMessageRetry": "mensaje de commit rechazado ({0}); se vuelve a pedir",
+  "log.autoCommit": "autocommit {0}: {1}",
+  "log.server.listening": "✅ Servidor de auto-renovación escuchando en http://localhost:{0}",
   "log.server.portInUse":
     "⚠️ Puerto {0} ya en uso. El servidor de auto-renovación no está disponible.",
   "log.server.error": "❌ Error en servidor de auto-renovación: {0}",
