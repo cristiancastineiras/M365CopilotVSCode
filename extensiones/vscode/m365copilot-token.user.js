@@ -114,11 +114,11 @@
 //#endregion
 //#region ../../packages/core/dist/capture.js
 /** Un token de verdad (un JWE envuelve un JWT) no se acerca a esto; algo mayor no es un token. */
-	const MAX_JWT_CHARS = 16384;
+	const _MAX_JWT_CHARS = 16384;
 	/** Frames SignalR salientes que se llegan a inspeccionar. */
-	const MAX_FRAME_CHARS = 1048576;
+	const _MAX_FRAME_CHARS = 1048576;
 	/** Plantilla de invocación que merece la pena guardar. */
-	const MAX_TEMPLATE_CHARS = 65536;
+	const _MAX_TEMPLATE_CHARS = 65536;
 	const MAX_ENDPOINT_CHARS = 2048;
 	/** Tres partes base64url y un tamaño razonable. */
 	function isValidJwt(token) {
@@ -328,14 +328,14 @@
 		delete cleaned.claims;
 		return cleaned;
 	}
+	function stripCaptureTimestamp(store) {
+		const normalized = { ...store };
+		delete normalized.capturedAt;
+		return JSON.stringify(normalized);
+	}
 	/** Misma forma ignorando el sello temporal: sólo se escribe si algo cambió de verdad. */
 	function sameCapture(a, b) {
-		const strip = (store) => {
-			const copy = { ...store };
-			delete copy.capturedAt;
-			return JSON.stringify(copy);
-		};
-		return strip(a) === strip(b);
+		return stripCaptureTimestamp(a) === stripCaptureTimestamp(b);
 	}
 	/** El perfil que se envía a VS Code, o null si todavía no hay token. */
 	function profileFromCapture(store, fallbackUserAgent) {
@@ -359,7 +359,7 @@
 	const SCAN_FRESH_MS = 6e4;
 	const SCAN_EXPIRING_MS = 5e3;
 	/** A partir de aquí la web ya suele haber renovado su propio token. */
-	const EXPIRY_WATCH_MS = 9e5;
+	const _EXPIRY_WATCH_MS = 9e5;
 	/**
 	* Cuándo volver a escanear la caché de MSAL. Se escanea SIEMPRE, haya token o
 	* no: el token nuevo que la web renueva sola cada ~50 min sólo se recoge así.
@@ -393,7 +393,7 @@
 		return Number.isNaN(capturedAt) ? null : Math.floor(capturedAt / 1e3);
 	}
 	/** No martillear al servidor local de VS Code cuando está apagado. */
-	const RESYNC_COOLDOWN_MS = 3e4;
+	const _RESYNC_COOLDOWN_MS = 3e4;
 	/**
 	* ¿Hay que (re)enviar el perfil a VS Code? Cubre el caso más molesto: VS Code
 	* arranca DESPUÉS de que el navegador capturara el token, y sin esto nadie se lo
@@ -744,7 +744,13 @@
 		}
 	};
 	const T = /^es\b/i.test(navigator.language || "") ? TEXTS.es : TEXTS.en;
-	const fill = (template, value) => template.replace("{0}", String(value));
+	function fill(template, value) {
+		return template.replace("{0}", String(value));
+	}
+	function flash(button, text, restore) {
+		button.textContent = text;
+		setTimeout(restore, 1600);
+	}
 	function readJson(key, fallback) {
 		try {
 			const raw = GM_getValue(key, "");
@@ -1121,10 +1127,6 @@ button:focus-visible { outline: 2px solid #242424; outline-offset: 1px; }
 		root.appendChild(panel);
 		root.appendChild(mini);
 		(document.body || document.documentElement).appendChild(host);
-		const flash = (button, text, restore) => {
-			button.textContent = text;
-			setTimeout(restore, 1600);
-		};
 		function render() {
 			const store = readStore();
 			const sync = readSync();
