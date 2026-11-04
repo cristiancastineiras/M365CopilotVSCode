@@ -1,5 +1,23 @@
 # @m365copilot/core
 
+## 4.0.0
+
+### Major Changes
+
+- Mejora en uso de tools y agregado captura de tokens personales en la extension
+
+### Minor Changes
+
+- 2827a29: `@m365` edits now use VS Code's own review of chat edits, the one GitHub Copilot's have: red and green inline, Keep/Undo on each change, "files changed" next to the chat input, and checkpoints. Edits are saved as they land, so the next command the model runs sees them, and only files that can run code or hold secrets ask for confirmation first.
+
+  The review that remains for inline edits and quick fixes no longer leaves files marked as modified after Undo, removes the tab of a created file, follows Ctrl+Z and Ctrl+Y on disk, and shows the previous text when hovering over a change.
+
+  The model is less likely to say it cannot use tools: the prompt now asks for a way of working in the user's voice instead of claiming it has access, tools are called with code blocks instead of JSON, the catalog is shorter and always includes one tool for each basic capability, a shell block runs through the terminal tool when the reply opens with it, and a reply that gives up or claims work no tool did is retried at any step of a task. Based on measurements published by github.com/cramt/m365-copilot-proxy.
+
+### Patch Changes
+
+- 4c01307: Support personal Microsoft 365 subscriptions (Personal, Family), whose Copilot token is an encrypted 5-part JWE: the browser extension and the userscript capture it from the chat WebSocket (also on copilot.com), and the paste command accepts it in the chat URL or in a copied profile. Its account comes from the URL, the turn uses the scenario the web app used, and logs hide all five parts. The token's expiry cannot be read, so it stays usable until Microsoft rejects it with a 401. The browser extension now asks for access to copilot.com. Also updates `@vscode/vsce` and its dependencies to clear six security alerts.
+
 ## 3.0.6
 
 ## 3.0.5
