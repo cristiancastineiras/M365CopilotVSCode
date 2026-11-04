@@ -15,6 +15,19 @@ export interface SyncContext {
   readonly now: number;
 }
 
+/**
+ * Lo que distingue al token guardado para saber si VS Code ya lo tiene: su
+ * `exp`, o la hora de captura si está cifrado y no lo dice.
+ */
+export function tokenStamp(
+  profile: { claims?: { exp?: number } | null; capturedAt?: string | null } | null | undefined,
+): number | null {
+  const exp = profile?.claims?.exp;
+  if (typeof exp === "number") return exp;
+  const capturedAt = Date.parse(profile?.capturedAt ?? "");
+  return Number.isNaN(capturedAt) ? null : Math.floor(capturedAt / 1000);
+}
+
 /** No martillear al servidor local de VS Code cuando está apagado. */
 export const RESYNC_COOLDOWN_MS = 30 * 1000;
 
@@ -32,8 +45,8 @@ export function needsResync(context: SyncContext): boolean {
   ) {
     return false;
   }
-  // Nunca se sincronizó, o lo que VS Code tiene es un token distinto (más viejo).
+  // Nunca se sincronizó, o lo que VS Code tiene es otro token.
   if (context.syncedTokenExp === null) return true;
   if (context.currentTokenExp === null) return true;
-  return context.currentTokenExp > context.syncedTokenExp;
+  return context.currentTokenExp !== context.syncedTokenExp;
 }

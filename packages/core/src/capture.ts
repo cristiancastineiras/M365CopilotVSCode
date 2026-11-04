@@ -10,11 +10,11 @@
  * pasa el estado y el reloj, y se puede probar fuera del navegador.
  */
 import type { CopilotProfile, TokenClaims } from "./profile";
-import { extractClaims } from "./jwt";
+import { extractClaims, isEncryptedToken } from "./jwt";
 import { isSydneyToken } from "./token";
 
-/** Un JWT de verdad no se acerca a esto; algo mayor no es un token. */
-export const MAX_JWT_CHARS = 8 * 1024;
+/** Un token de verdad (un JWE envuelve un JWT) no se acerca a esto; algo mayor no es un token. */
+export const MAX_JWT_CHARS = 16 * 1024;
 /** Frames SignalR salientes que se llegan a inspeccionar. */
 export const MAX_FRAME_CHARS = 1024 * 1024;
 /** Plantilla de invocación que merece la pena guardar. */
@@ -54,6 +54,26 @@ export function areClaimsUsable(claims: TokenClaims | null | undefined, now = Da
 }
 
 /**
+ * ¿Sirve el token guardado? Uno cifrado no dice cuándo caduca: vale hasta que
+ * el servidor lo rechace.
+ */
+export function isCapturedTokenUsable(store: CaptureStore, now = Date.now()): boolean {
+  if (!store.accessToken) return false;
+  return isEncryptedToken(store.accessToken) || areClaimsUsable(store.claims, now);
+}
+
+/** La cuenta (`{oid}@{tid}`) de la URL del hub del chat, si es de un host de Microsoft. */
+export function claimsInSocketUrl(url: string): TokenClaims | null {
+  try {
+    const { hostname, pathname } = new URL(String(url).replace(/^ws/i, "http"));
+    const account = /\/chathub\w*\/([\w-]+)@([\w-]+)\/?$/i.exec(decodeURIComponent(pathname));
+    return account && isMicrosoftHost(hostname) ? { oid: account[1], tid: account[2] } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Por qué un token candidato se aceptó o se descartó. Sirve para diagnosticar
  * «no captura y no dice nada»: el interceptor puede registrar el motivo exacto
  * en vez de un silencio (p. ej. «el socket traía un token, pero era de Graph,
@@ -71,14 +91,28 @@ export type TokenDiagnosis =
 /**
  * Diagnostica un token candidato contra el store actual. `accepted` sólo viene
  * cuando `diagnosis === 'accepted'`. Es la lógica de decisión única: tanto el
- * sí/no (`acceptToken`) como el motivo salen de aquí.
+ * sí/no (`acceptToken`) como el motivo salen de aquí. `socketUrl` es el
+ * WebSocket donde viajaba el token, si salió de uno.
  */
 export function diagnoseToken(
   current: CaptureStore,
   token: string,
   now = Date.now(),
+  socketUrl?: string,
 ): { diagnosis: TokenDiagnosis; accepted?: { accessToken: string; claims: TokenClaims } } {
   const candidate = token.trim();
+  const chatAccount = socketUrl ? claimsInSocketUrl(socketUrl) : null;
+  if (isEncryptedToken(candidate)) {
+    // La web guarda otros JWE (Designer…): lo único que prueba que éste es el
+    // de Copilot es venir en la URL del hub del chat, que da además la cuenta.
+    if (candidate.length > MAX_JWT_CHARS || !chatAccount) return { diagnosis: "not-sydney" };
+    if (current.accessToken === candidate) return { diagnosis: "duplicate" };
+    return { diagnosis: "accepted", accepted: { accessToken: candidate, claims: chatAccount } };
+  }
+  // Sin `exp` que comparar, un JWT de la caché de MSAL (otra cuenta del mismo
+  // navegador) no pisa al cifrado con el que se está chateando.
+  if (current.accessToken && isEncryptedToken(current.accessToken) && !chatAccount)
+    return { diagnosis: "older-than-current" };
   if (!isValidJwt(candidate)) return { diagnosis: "not-a-jwt" };
   if (!isSydneyToken(candidate)) return { diagnosis: "not-sydney" };
   const claims = extractClaims(candidate);
@@ -94,14 +128,16 @@ export function diagnoseToken(
 /**
  * Lo que hay que guardar si `token` merece sustituir al actual, o null: debe
  * ser un JWT válido, de Substrate/Sydney (el de Copilot, no cualquier token de
- * Office), sin caducar, distinto del guardado y no más viejo que él.
+ * Office), sin caducar, distinto del guardado y no más viejo que él; o un JWE
+ * del hub del chat.
  */
 export function acceptToken(
   current: CaptureStore,
   token: string,
   now = Date.now(),
+  socketUrl?: string,
 ): { accessToken: string; claims: TokenClaims } | null {
-  return diagnoseToken(current, token, now).accepted ?? null;
+  return diagnoseToken(current, token, now, socketUrl).accepted ?? null;
 }
 
 /**
@@ -164,7 +200,7 @@ export function isMicrosoftHost(hostname: string): boolean {
  * un token caducado dentro del endpoint. '' si no es un host de Microsoft.
  */
 export function normalizeEndpoint(raw: string): string {
-  if (typeof raw !== "string" || raw.length > MAX_ENDPOINT_CHARS) return "";
+  if (typeof raw !== "string") return "";
   try {
     const url = new URL(raw.replace(/^ws/i, "http"));
     if (!isMicrosoftHost(url.hostname)) return "";
@@ -177,7 +213,9 @@ export function normalizeEndpoint(raw: string): string {
     ]) {
       url.searchParams.delete(param);
     }
-    return url.toString().replace(/^http/i, "ws");
+    // El tope se mira sin el token: uno cifrado ya pasaría de largo él solo.
+    const endpoint = url.toString().replace(/^http/i, "ws");
+    return endpoint.length > MAX_ENDPOINT_CHARS ? "" : endpoint;
   } catch {
     return "";
   }

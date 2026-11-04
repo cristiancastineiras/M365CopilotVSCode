@@ -92,6 +92,8 @@ Si prefieres elegir M365 Copilot como modelo (por ejemplo en modo Agente), prime
 
 {{< note >}}
 El token de Copilot viaja como `access_token` dentro de esa URL, no en una cabecera `Authorization: Bearer`. Un bearer copiado de otra petición es de otro servicio y falla con un 401.
+
+Las suscripciones personales de Microsoft 365 (Personal, Familia) tienen el token cifrado: pega la URL entera, porque el token solo no dice de quién es. Nada puede saber cuándo caduca: cuando un mensaje falle con un 401, envía otro en el chat de la web y vuelve a capturarlo.
 {{< /note >}}
 
 La búsqueda web necesita la sesión capturada por la extensión de navegador o el userscript; un token pegado solo no la incluye.

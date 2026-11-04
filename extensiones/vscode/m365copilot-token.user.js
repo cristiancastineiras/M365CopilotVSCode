@@ -16,6 +16,8 @@
 // @match          https://www.office.com/*
 // @match          https://outlook.office.com/*
 // @match          https://teams.microsoft.com/*
+// @match          https://copilot.com/*
+// @match          https://*.copilot.com/*
 // @grant          GM_getValue
 // @grant          GM_setValue
 // @grant          GM_addValueChangeListener
@@ -77,6 +79,14 @@
 			return null;
 		}
 	}
+	/**
+	* ¿Es un JWE compacto (RFC 7516)? Es el token de las cuentas personales de
+	* Microsoft 365: cinco partes, la segunda vacía con `alg: dir`, y los claims
+	* cifrados, así que no se puede saber su audiencia, su cuenta ni cuándo caduca.
+	*/
+	function isEncryptedToken(token) {
+		return /^ey[\w-]+\.[\w-]*\.[\w-]+\.[\w-]+\.[\w-]+$/.test(token);
+	}
 	/** Extrae los claims relevantes, normalizando el nombre de usuario (upn). */
 	function extractClaims(token) {
 		const raw = decodeJwtPayload(token);
@@ -103,8 +113,8 @@
 
 //#endregion
 //#region ../../packages/core/dist/capture.js
-/** Un JWT de verdad no se acerca a esto; algo mayor no es un token. */
-	const MAX_JWT_CHARS = 8192;
+/** Un token de verdad (un JWE envuelve un JWT) no se acerca a esto; algo mayor no es un token. */
+	const MAX_JWT_CHARS = 16384;
 	/** Frames SignalR salientes que se llegan a inspeccionar. */
 	const MAX_FRAME_CHARS = 1048576;
 	/** Plantilla de invocación que merece la pena guardar. */
@@ -112,7 +122,7 @@
 	const MAX_ENDPOINT_CHARS = 2048;
 	/** Tres partes base64url y un tamaño razonable. */
 	function isValidJwt(token) {
-		if (typeof token !== "string" || token.length > 8192) return false;
+		if (typeof token !== "string" || token.length > 16384) return false;
 		const parts = token.split(".");
 		return parts.length === 3 && parts.every((part) => /^[A-Za-z0-9_-]+$/.test(part));
 	}
@@ -125,12 +135,47 @@
 		return true;
 	}
 	/**
+	* ¿Sirve el token guardado? Uno cifrado no dice cuándo caduca: vale hasta que
+	* el servidor lo rechace.
+	*/
+	function isCapturedTokenUsable(store, now = Date.now()) {
+		if (!store.accessToken) return false;
+		return isEncryptedToken(store.accessToken) || areClaimsUsable(store.claims, now);
+	}
+	/** La cuenta (`{oid}@{tid}`) de la URL del hub del chat, si es de un host de Microsoft. */
+	function claimsInSocketUrl(url) {
+		try {
+			const { hostname, pathname } = new URL(String(url).replace(/^ws/i, "http"));
+			const account = /\/chathub\w*\/([\w-]+)@([\w-]+)\/?$/i.exec(decodeURIComponent(pathname));
+			return account && isMicrosoftHost(hostname) ? {
+				oid: account[1],
+				tid: account[2]
+			} : null;
+		} catch {
+			return null;
+		}
+	}
+	/**
 	* Diagnostica un token candidato contra el store actual. `accepted` sólo viene
 	* cuando `diagnosis === 'accepted'`. Es la lógica de decisión única: tanto el
-	* sí/no (`acceptToken`) como el motivo salen de aquí.
+	* sí/no (`acceptToken`) como el motivo salen de aquí. `socketUrl` es el
+	* WebSocket donde viajaba el token, si salió de uno.
 	*/
-	function diagnoseToken(current, token, now = Date.now()) {
+	function diagnoseToken(current, token, now = Date.now(), socketUrl) {
 		const candidate = token.trim();
+		const chatAccount = socketUrl ? claimsInSocketUrl(socketUrl) : null;
+		if (isEncryptedToken(candidate)) {
+			if (candidate.length > 16384 || !chatAccount) return { diagnosis: "not-sydney" };
+			if (current.accessToken === candidate) return { diagnosis: "duplicate" };
+			return {
+				diagnosis: "accepted",
+				accepted: {
+					accessToken: candidate,
+					claims: chatAccount
+				}
+			};
+		}
+		if (current.accessToken && isEncryptedToken(current.accessToken) && !chatAccount) return { diagnosis: "older-than-current" };
 		if (!isValidJwt(candidate)) return { diagnosis: "not-a-jwt" };
 		if (!isSydneyToken(candidate)) return { diagnosis: "not-sydney" };
 		const claims = extractClaims(candidate);
@@ -150,10 +195,11 @@
 	/**
 	* Lo que hay que guardar si `token` merece sustituir al actual, o null: debe
 	* ser un JWT válido, de Substrate/Sydney (el de Copilot, no cualquier token de
-	* Office), sin caducar, distinto del guardado y no más viejo que él.
+	* Office), sin caducar, distinto del guardado y no más viejo que él; o un JWE
+	* del hub del chat.
 	*/
-	function acceptToken(current, token, now = Date.now()) {
-		return diagnoseToken(current, token, now).accepted ?? null;
+	function acceptToken(current, token, now = Date.now(), socketUrl) {
+		return diagnoseToken(current, token, now, socketUrl).accepted ?? null;
 	}
 	/**
 	* Tokens candidatos dentro de un valor de localStorage/sessionStorage: MSAL
@@ -210,7 +256,7 @@
 	* un token caducado dentro del endpoint. '' si no es un host de Microsoft.
 	*/
 	function normalizeEndpoint(raw) {
-		if (typeof raw !== "string" || raw.length > MAX_ENDPOINT_CHARS) return "";
+		if (typeof raw !== "string") return "";
 		try {
 			const url = new URL(raw.replace(/^ws/i, "http"));
 			if (!isMicrosoftHost(url.hostname)) return "";
@@ -221,7 +267,8 @@
 				"clientrequestid",
 				"X-SessionId"
 			]) url.searchParams.delete(param);
-			return url.toString().replace(/^http/i, "ws");
+			const endpoint = url.toString().replace(/^http/i, "ws");
+			return endpoint.length > MAX_ENDPOINT_CHARS ? "" : endpoint;
 		} catch {
 			return "";
 		}
@@ -335,7 +382,17 @@
 
 //#endregion
 //#region ../../packages/core/dist/sync.js
-/** No martillear al servidor local de VS Code cuando está apagado. */
+/**
+	* Lo que distingue al token guardado para saber si VS Code ya lo tiene: su
+	* `exp`, o la hora de captura si está cifrado y no lo dice.
+	*/
+	function tokenStamp(profile) {
+		const exp = profile?.claims?.exp;
+		if (typeof exp === "number") return exp;
+		const capturedAt = Date.parse(profile?.capturedAt ?? "");
+		return Number.isNaN(capturedAt) ? null : Math.floor(capturedAt / 1e3);
+	}
+	/** No martillear al servidor local de VS Code cuando está apagado. */
 	const RESYNC_COOLDOWN_MS = 3e4;
 	/**
 	* ¿Hay que (re)enviar el perfil a VS Code? Cubre el caso más molesto: VS Code
@@ -347,7 +404,7 @@
 		if (context.lastSyncAttemptAt !== null && context.now - context.lastSyncAttemptAt >= 0 && context.now - context.lastSyncAttemptAt < 3e4) return false;
 		if (context.syncedTokenExp === null) return true;
 		if (context.currentTokenExp === null) return true;
-		return context.currentTokenExp > context.syncedTokenExp;
+		return context.currentTokenExp !== context.syncedTokenExp;
 	}
 
 //#endregion
@@ -731,10 +788,10 @@
 		cleaned.capturedAt = (/* @__PURE__ */ new Date()).toISOString();
 		GM_setValue(CAPTURE_STORE_KEY, JSON.stringify(cleaned));
 	}
-	function offerToken(token, source) {
+	function offerToken(token, source, socketUrl) {
 		if (!token) return;
 		try {
-			const accepted = acceptToken(readStore(), token);
+			const accepted = acceptToken(readStore(), token, void 0, socketUrl);
 			if (!accepted) return;
 			writeStore({
 				...accepted,
@@ -746,7 +803,7 @@
 	function captureSocket(url, socket) {
 		const raw = String(url);
 		if (!isCopilotSocketUrl(raw)) return;
-		offerToken(tokenInSocketUrl(raw), "websocket-url");
+		offerToken(tokenInSocketUrl(raw), "websocket-url", raw);
 		const endpoint = normalizeEndpoint(raw);
 		if (endpoint && !readStore().endpointConfirmed) writeStore({
 			endpoint,
@@ -868,9 +925,9 @@
 	* which only exists not to hammer a VS Code that is not running.
 	*/
 	function hasUnsentToken() {
-		const exp = readStore().claims?.exp;
+		const stamp = tokenStamp(readStore());
 		const sync = readSync();
-		return typeof exp === "number" && (sync.syncedTokenExp === null || exp > sync.syncedTokenExp) && sync.vscodeReachable !== false;
+		return stamp !== null && stamp !== sync.syncedTokenExp && sync.vscodeReachable !== false;
 	}
 	/**
 	* The web app used a model (`tone`) VS Code has not been told about. The chat
@@ -890,13 +947,13 @@
 	async function syncToVSCode(force = false) {
 		const store = readStore();
 		const profile = profileFromCapture(store, navigator.userAgent);
-		if (!profile || !areClaimsUsable(store.claims) || syncing) return false;
+		if (!profile || !isCapturedTokenUsable(store) || syncing) return false;
 		const sync = readSync();
 		const now = Date.now();
 		if (!force && !needsResync({
 			capturedAt: store.capturedAt ?? null,
 			syncedTokenExp: sync.syncedTokenExp,
-			currentTokenExp: store.claims?.exp ?? null,
+			currentTokenExp: tokenStamp(store),
 			hasToken: true,
 			lastSyncAttemptAt: sync.lastSyncAttemptAt,
 			now
@@ -907,7 +964,7 @@
 			const status = await request("POST", TOKEN_ENDPOINT_PATH, JSON.stringify(profile));
 			if (status >= 200 && status < 300) {
 				writeSync({
-					syncedTokenExp: store.claims?.exp ?? null,
+					syncedTokenExp: tokenStamp(store),
 					syncedTones: profile.observedTones ?? [],
 					lastSyncedAt: Date.now(),
 					lastError: null,
@@ -940,7 +997,7 @@
 		if (!IS_TOP || !readUi().autoReload || document.visibilityState !== "hidden") return;
 		const store = readStore();
 		const hadSession = Boolean(store.endpoint || store.invocationTemplate);
-		const expired = !store.accessToken || !areClaimsUsable(store.claims);
+		const expired = !isCapturedTokenUsable(store);
 		if (!hadSession || !expired || Date.now() - LOADED_AT < MIN_PAGE_AGE_MS) return;
 		const { lastReloadAt } = readSync();
 		if (lastReloadAt && Date.now() - lastReloadAt < RELOAD_EVERY_MS) return;
@@ -1072,7 +1129,7 @@ button:focus-visible { outline: 2px solid #242424; outline-offset: 1px; }
 			const store = readStore();
 			const sync = readSync();
 			const hasToken = Boolean(store.accessToken);
-			const usable = hasToken && areClaimsUsable(store.claims);
+			const usable = isCapturedTokenUsable(store);
 			const state = connectionState({
 				hasToken,
 				expired: hasToken && !usable,

@@ -24,10 +24,10 @@ import {
   TOKEN_ENDPOINT_PATH,
   TOKEN_SERVER_URL,
   acceptToken,
-  areClaimsUsable,
   connectionArtSvg,
   connectionState,
   inspectOutgoingFrames,
+  isCapturedTokenUsable,
   isCopilotSocketUrl,
   needsResync,
   nextScan,
@@ -35,6 +35,7 @@ import {
   profileFromCapture,
   sameCapture,
   tokenInSocketUrl,
+  tokenStamp,
   tokensInStorageValue,
   toneOfTemplate,
   withObservedTone,
@@ -211,10 +212,10 @@ function pruneExpiredToken(): void {
   GM_setValue(CAPTURE_STORE_KEY, JSON.stringify(cleaned));
 }
 
-function offerToken(token: string | null, source: string): void {
+function offerToken(token: string | null, source: string, socketUrl?: string): void {
   if (!token) return;
   try {
-    const accepted = acceptToken(readStore(), token);
+    const accepted = acceptToken(readStore(), token, undefined, socketUrl);
     if (!accepted) return;
     writeStore({ ...accepted, tokenSource: source });
     if (IS_TOP) void syncToVSCode(hasUnsentChanges());
@@ -228,7 +229,7 @@ function offerToken(token: string | null, source: string): void {
 function captureSocket(url: unknown, socket: WebSocket): void {
   const raw = String(url);
   if (!isCopilotSocketUrl(raw)) return;
-  offerToken(tokenInSocketUrl(raw), "websocket-url");
+  offerToken(tokenInSocketUrl(raw), "websocket-url", raw);
 
   // Substrate opens several sockets (presence, notifications…): keep this one
   // only tentatively, until it sends a `chat` frame — the proof it is the hub.
@@ -386,13 +387,9 @@ let syncing = false;
  * which only exists not to hammer a VS Code that is not running.
  */
 function hasUnsentToken(): boolean {
-  const exp = readStore().claims?.exp;
+  const stamp = tokenStamp(readStore());
   const sync = readSync();
-  return (
-    typeof exp === "number" &&
-    (sync.syncedTokenExp === null || exp > sync.syncedTokenExp) &&
-    sync.vscodeReachable !== false
-  );
+  return stamp !== null && stamp !== sync.syncedTokenExp && sync.vscodeReachable !== false;
 }
 
 /**
@@ -418,7 +415,7 @@ const hasUnsentChanges = () => hasUnsentToken() || hasUnsentTone();
 async function syncToVSCode(force = false): Promise<boolean> {
   const store = readStore();
   const profile = profileFromCapture(store, navigator.userAgent);
-  if (!profile || !areClaimsUsable(store.claims) || syncing) return false;
+  if (!profile || !isCapturedTokenUsable(store) || syncing) return false;
   const sync = readSync();
   const now = Date.now();
   if (
@@ -426,7 +423,7 @@ async function syncToVSCode(force = false): Promise<boolean> {
     !needsResync({
       capturedAt: store.capturedAt ?? null,
       syncedTokenExp: sync.syncedTokenExp,
-      currentTokenExp: store.claims?.exp ?? null,
+      currentTokenExp: tokenStamp(store),
       hasToken: true,
       lastSyncAttemptAt: sync.lastSyncAttemptAt,
       now,
@@ -441,7 +438,7 @@ async function syncToVSCode(force = false): Promise<boolean> {
     const status = await request("POST", TOKEN_ENDPOINT_PATH, JSON.stringify(profile));
     if (status >= 200 && status < 300) {
       writeSync({
-        syncedTokenExp: store.claims?.exp ?? null,
+        syncedTokenExp: tokenStamp(store),
         syncedTones: profile.observedTones ?? [],
         lastSyncedAt: Date.now(),
         lastError: null,
@@ -478,7 +475,7 @@ function maybeReloadToRenew(): void {
   if (!IS_TOP || !readUi().autoReload || document.visibilityState !== "hidden") return;
   const store = readStore();
   const hadSession = Boolean(store.endpoint || store.invocationTemplate);
-  const expired = !store.accessToken || !areClaimsUsable(store.claims);
+  const expired = !isCapturedTokenUsable(store);
   if (!hadSession || !expired || Date.now() - LOADED_AT < MIN_PAGE_AGE_MS) return;
   const { lastReloadAt } = readSync();
   if (lastReloadAt && Date.now() - lastReloadAt < RELOAD_EVERY_MS) return;
@@ -631,7 +628,7 @@ function mountUi(): void {
     const store = readStore();
     const sync = readSync();
     const hasToken = Boolean(store.accessToken);
-    const usable = hasToken && areClaimsUsable(store.claims);
+    const usable = isCapturedTokenUsable(store);
     const state = connectionState({
       hasToken,
       expired: hasToken && !usable,

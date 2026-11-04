@@ -34,7 +34,9 @@ function isAllowedOrigin(origin: string): boolean {
     if (protocol === "chrome-extension:" || protocol === "moz-extension:") return true;
     return (
       protocol === "https:" &&
-      (hostname === "cloud.microsoft" || hostname.endsWith(".cloud.microsoft"))
+      ["cloud.microsoft", "copilot.com"].some(
+        (domain) => hostname === domain || hostname.endsWith(`.${domain}`),
+      )
     );
   } catch {
     return false;

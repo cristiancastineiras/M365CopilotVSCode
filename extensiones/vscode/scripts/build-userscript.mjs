@@ -31,6 +31,8 @@ const MATCHES = [
   "https://www.office.com/*",
   "https://outlook.office.com/*",
   "https://teams.microsoft.com/*",
+  "https://copilot.com/*",
+  "https://*.copilot.com/*",
 ];
 const GRANTS = [
   "GM_getValue",

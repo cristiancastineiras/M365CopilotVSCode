@@ -19,6 +19,15 @@ export function decodeJwtPayload(token: string): Record<string, unknown> | null 
   }
 }
 
+/**
+ * ¿Es un JWE compacto (RFC 7516)? Es el token de las cuentas personales de
+ * Microsoft 365: cinco partes, la segunda vacía con `alg: dir`, y los claims
+ * cifrados, así que no se puede saber su audiencia, su cuenta ni cuándo caduca.
+ */
+export function isEncryptedToken(token: string): boolean {
+  return /^ey[\w-]+\.[\w-]*\.[\w-]+\.[\w-]+\.[\w-]+$/.test(token);
+}
+
 /** Extrae los claims relevantes, normalizando el nombre de usuario (upn). */
 export function extractClaims(token: string): TokenClaims | null {
   const raw = decodeJwtPayload(token);

@@ -1,3 +1,7 @@
 packages:
   - "extensiones/*"
   - "packages/*"
+
+overrides:
+  # GHSA-g3hv-75wg-m249: sólo está corregido en la 11 y @vscode/vsce 4.1.0 pide ^10.2.6.
+  minimatch: ^11.0.4
