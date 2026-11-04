@@ -60,6 +60,23 @@ inline completions — and keep its token in sync. Everything is available in
 | VS Code extension | [README](extensiones/vscode/README.md) · [guide](extensiones/vscode/Guide.md) |
 | Browser extension | [README](extensiones/browser/README.md) · install from the [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd) or [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/) |
 
+## Install in VS Code
+
+- **VS Marketplace:** open the [extension page](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode), or run `code --install-extension m365-copilot-vscode.m365-copilot-vscode`.
+- **GitHub release:** download the `.vsix` from the [latest release](https://github.com/cristiancastineiras/M365CopilotVSCode/releases/latest), then run `code --install-extension m365-copilot-vscode-X.Y.Z.vsix` or choose **Install from VSIX…** in VS Code's Extensions view.
+
+## Connect the browser
+
+The browser companion captures and renews the Microsoft 365 Copilot token, then
+sends it to VS Code automatically. Install it from the
+[Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd)
+(Chrome and Edge) or [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/).
+For manual installation, the GitHub release includes browser ZIPs; see the
+[browser installation guide](extensiones/browser/README.md#install) for exact
+steps and permissions. Browser security requires this one-time manual
+confirmation; then open [M365 Copilot](https://m365.cloud.microsoft/chat/) and
+send a message to connect.
+
 ## Getting started
 
 ```bash
@@ -74,8 +91,11 @@ Requires Node ≥ 22.18 and pnpm 10.
 `releases/` is git-ignored: the official artifacts (VS Code, Chrome, Edge,
 Firefox and the Tampermonkey userscript) are built by
 [`.github/workflows/release.yml`](.github/workflows/release.yml) when a
-`vX.Y.Z` tag is pushed and published only on the
-[GitHub releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases).
+`vX.Y.Z` tag is pushed and attached to the
+[GitHub release](https://github.com/cristiancastineiras/M365CopilotVSCode/releases).
+When the required store credentials are configured, the workflow also publishes
+the VS Code extension to the Marketplace and submits the browser extension to
+Chrome Web Store and Firefox Add-ons for review.
 
 ## Languages
 
@@ -107,9 +127,9 @@ pnpm version-packages   # bump versions + CHANGELOGs
 git commit -am "chore: release vX.Y.Z" && git tag vX.Y.Z && git push --follow-tags
 ```
 
-Pushing the tag runs `.github/workflows/release.yml`, which builds everything
-and publishes a GitHub release with the `.vsix` and the browser zips. It then
-publishes the `.vsix` to the VS Code Marketplace (Microsoft Entra ID through
-GitHub OIDC, no PAT) and submits the browser extension to the Chrome Web Store
-and Firefox Add-ons for review (each store only when its secrets are set; the
-workflow lists them).
+Pushing the tag runs `.github/workflows/release.yml`, which verifies that the
+tag matches all package versions, builds everything and publishes a GitHub
+release with the `.vsix` and browser zips. It then publishes the `.vsix` to the
+VS Code Marketplace (Microsoft Entra ID through GitHub OIDC, no PAT) and submits
+the browser extension to Chrome Web Store and Firefox Add-ons for review (each
+store only when its credentials are configured; the workflow lists them).
