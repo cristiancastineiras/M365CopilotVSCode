@@ -174,7 +174,13 @@ const TEXTS = {
   },
 };
 const T = /^es\b/i.test(navigator.language || "") ? TEXTS.es : TEXTS.en;
-const fill = (template: string, value: number) => template.replace("{0}", String(value));
+function fill(template: string, value: number): string {
+  return template.replace("{0}", String(value));
+}
+function flash(button: HTMLButtonElement, text: string, restore: () => void): void {
+  button.textContent = text;
+  setTimeout(restore, 1600);
+}
 
 // ------------------------------------------------------------------ storage
 
@@ -618,11 +624,6 @@ function mountUi(): void {
   root.appendChild(panel);
   root.appendChild(mini);
   (document.body || document.documentElement).appendChild(host);
-
-  const flash = (button: HTMLButtonElement, text: string, restore: () => void) => {
-    button.textContent = text;
-    setTimeout(restore, 1600);
-  };
 
   function render(): void {
     const store = readStore();
