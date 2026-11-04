@@ -426,3 +426,73 @@ code, kbd { font-family: var(--font-mono); font-size: 0.88em; }
 .btn-star .icon { width: 1.25em; height: 1.25em; fill: currentColor; }
 .star-count { padding: 2px 10px; background: rgb(0 0 0 / 0.13); font-size: 0.9em; }
 @media (prefers-reduced-motion: reduce) { .star-sprite { animation: none !important; } .btn-star { transition: none; } }
+
+/* ---------- Cifras de descargas ----------
+   Colores validados para daltonismo y contraste en claro y en oscuro. El color sigue a la fuente, nunca a su
+   posición, y el texto nunca lo lleva: cada cifra tiene su muestra al lado. */
+:root { --series-1: #0f6cbd; --series-2: #eb6834; --series-3: #1baf7a; }
+@media (prefers-color-scheme: dark) { :root { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; } }
+[data-series="1"] { --series: var(--series-1); }
+[data-series="2"] { --series: var(--series-2); }
+[data-series="3"] { --series: var(--series-3); }
+
+/* Sin JavaScript no hay datos que enseñar. */
+.stats { display: none; padding-block: 0 clamp(72px, 9vw, 112px); }
+html.js .stats:not([hidden]) { display: block; }
+.stats-panel { position: relative; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: clamp(28px, 4vw, 48px); padding: clamp(20px, 3vw, 36px); }
+@media (max-width: 899px) { .stats-panel { grid-template-columns: minmax(0, 1fr); } }
+/* Las cifras van en la fuente de texto: en la de títulos el 1 lleva una bandera que a este tamaño choca con el 9. */
+.stats-total { margin: 0; font: 700 clamp(3.25rem, 8vw, 5.25rem)/1 var(--font-body); letter-spacing: -0.03em; }
+.stats-title { margin-top: 8px; font-size: 1.15rem; font-weight: 500; letter-spacing: -0.01em; color: var(--muted); }
+
+/* El reparto: una barra fina con el total, cuyas cifras son las de debajo. Se destapa de izquierda a derecha. */
+.stats-split { display: flex; gap: 2px; margin-top: 18px; clip-path: inset(0 100% 0 0); transition: clip-path 1.2s cubic-bezier(0.22, 1, 0.36, 1); }
+.is-in .stats-split { clip-path: inset(0); }
+.stats-seg { flex: 1 1 0; min-width: 2px; padding-block: 8px; }
+.stats-seg::before { content: ""; display: block; height: 8px; background: var(--series); }
+.stats-seg:first-child::before { border-radius: 4px 0 0 4px; }
+.stats-seg:last-child::before { border-radius: 0 4px 4px 0; }
+.stats-tiles { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 10px; }
+@media (max-width: 559px) { .stats-tiles { grid-template-columns: minmax(0, 1fr); gap: 10px; } }
+.stats-tiles strong { display: flex; align-items: center; gap: 8px; font: 600 1.4rem/1.2 var(--font-body); letter-spacing: -0.015em; }
+.stats-key { flex: none; width: 10px; height: 10px; border-radius: 2px; background: var(--series); }
+.stats-label { display: block; margin-top: 2px; font-size: 0.8125rem; line-height: 1.35; color: var(--muted); }
+
+/* Una columna por versión, sobre un solo eje. La altura incluye la franja de las etiquetas de abajo. */
+.stats-chart { margin: 0; min-width: 0; }
+.stats-chart figcaption strong { display: block; font: 600 1.05rem var(--font-head); }
+.stats-plot { position: relative; height: 262px; margin-top: 8px; container-type: inline-size; }
+.stats-area { position: absolute; inset: 26px 0 26px 44px; }
+.stats-gridline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); }
+.stats-tick { position: absolute; right: 100%; top: 0; margin-right: 8px; transform: translateY(-50%); font-size: 0.75rem; line-height: 1; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stats-cols { position: absolute; inset: 0; display: flex; }
+.stats-col { position: relative; flex: 1 1 0; min-width: 0; }
+.stats-col:focus-visible { outline-offset: -2px; }
+.stats-bar { position: absolute; left: 50%; bottom: 0; width: min(24px, 70%); height: var(--h); min-height: 2px; translate: -50% 0; background: var(--series); border-radius: 4px 4px 0 0; transform: scaleY(0); transform-origin: bottom; transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--i) * 45ms), filter 0.12s; }
+.is-in .stats-bar { transform: scaleY(1); }
+.stats-col:hover .stats-bar, .stats-col:focus-visible .stats-bar { filter: brightness(1.15); }
+.stats-cap { position: absolute; left: 50%; bottom: calc(var(--h) + 4px); translate: -50% 0; font-size: 0.8125rem; font-weight: 600; line-height: 1.2; opacity: 0; transition: opacity 0.4s 0.9s; }
+.is-in .stats-cap { opacity: 1; }
+.stats-x { position: absolute; left: 50%; top: 100%; margin-top: 7px; translate: -50% 0; font-size: 0.75rem; line-height: 1.2; color: var(--muted); white-space: nowrap; }
+/* Si no caben todas las etiquetas se queda una de cada dos o de cada tres, siempre con la última. La tabla y el detalle dicen el resto. */
+@container (min-width: 265px) and (max-width: 520px) { .stats-col:nth-last-child(even) .stats-x { display: none; } }
+@container (max-width: 264px) { .stats-col:not(:nth-last-child(3n + 1)) .stats-x { display: none; } }
+
+.stats-tip { position: absolute; z-index: 5; width: max-content; max-width: calc(100% - 16px); pointer-events: none; padding: 8px 11px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--shadow); }
+.stats-tip strong { display: block; font: 600 1.05rem/1.25 var(--font-body); }
+.stats-tip-label { display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; line-height: 1.35; color: var(--muted); }
+.stats-tip-key { flex: none; width: 12px; height: 2px; background: var(--series); }
+
+.stats-table { margin-top: 10px; font-size: 0.875rem; }
+.stats-table summary { width: fit-content; cursor: pointer; color: var(--link); }
+.stats-table table { width: 100%; margin-top: 8px; border-collapse: collapse; }
+.stats-table th, .stats-table td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; font-weight: 400; }
+.stats-table th { font-weight: 600; }
+.stats-table th:last-child, .stats-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stats-split, .stats-bar, .stats-cap { transition: none; }
+}
+@media (forced-colors: active) {
+  .stats-seg::before, .stats-bar, .stats-key, .stats-tip-key { forced-color-adjust: none; }
+}

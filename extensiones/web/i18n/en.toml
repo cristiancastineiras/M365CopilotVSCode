@@ -117,3 +117,32 @@ other = "Waiting for your Copilot token…"
 other = "Token captured. Looking for VS Code…"
 [art_connected]
 other = "Connected to VS Code. The token syncs by itself."
+
+[stats_eyebrow]
+other = "In numbers"
+[stats_title]
+other = "installs and downloads so far"
+[stats_installs]
+other = "Marketplace installs"
+[stats_github]
+other = "GitHub downloads"
+[stats_vsix]
+other = "Marketplace .vsix downloads"
+[stats_note]
+other = "Live from the VS Code Marketplace and GitHub. It counts installs and downloads, not people, and leaves out updates and the browser stores."
+[stats_chart_title]
+other = "GitHub downloads per release"
+[stats_chart_sub]
+other = "Latest releases, adding up all their files"
+[stats_table]
+other = "View as a table"
+[stats_col_version]
+other = "Version"
+[stats_col_date]
+other = "Published"
+[stats_col_downloads]
+other = "Downloads"
+[stats_unit]
+other = "downloads"
+[stats_share]
+other = "of the total"

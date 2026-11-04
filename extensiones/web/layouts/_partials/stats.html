@@ -1,0 +1,35 @@
+{{- /* Cifras de descargas: las rellena main.js en directo con la Marketplace y GitHub, así que no hace falta
+       republicar la web para que suban. Sin JavaScript no se muestra (ver .stats en main.css). */ -}}
+<section class="section stats" id="stats" aria-labelledby="stats-title" data-stats data-market="{{ site.Params.marketplaceId }}" data-unit="{{ i18n "stats_unit" }}" data-share="{{ i18n "stats_share" }}">
+  <div class="wrap">
+    <div class="card stats-panel">
+      <div class="stats-summary">
+        <p class="eyebrow">{{ i18n "stats_eyebrow" }}</p>
+        <p class="stats-total" data-stats-total>—</p>
+        <h2 class="stats-title" id="stats-title">{{ i18n "stats_title" }}</h2>
+        <div class="stats-split" role="img" data-stats-split></div>
+        <ul class="stats-tiles">
+          <li data-part="installs" data-series="1"><strong><i class="stats-key"></i><span data-value>—</span></strong><span class="stats-label" data-label>{{ i18n "stats_installs" }}</span></li>
+          <li data-part="github" data-series="2"><strong><i class="stats-key"></i><span data-value>—</span></strong><span class="stats-label" data-label>{{ i18n "stats_github" }}</span></li>
+          <li data-part="vsix" data-series="3"><strong><i class="stats-key"></i><span data-value>—</span></strong><span class="stats-label" data-label>{{ i18n "stats_vsix" }}</span></li>
+        </ul>
+        <p class="note">{{ i18n "stats_note" }}</p>
+      </div>
+      <figure class="stats-chart">
+        <figcaption>
+          <strong>{{ i18n "stats_chart_title" }}</strong>
+          <span class="muted small">{{ i18n "stats_chart_sub" }}</span>
+        </figcaption>
+        <div class="stats-plot" data-stats-plot></div>
+        <details class="stats-table">
+          <summary>{{ i18n "stats_table" }}</summary>
+          <table>
+            <thead><tr><th scope="col">{{ i18n "stats_col_version" }}</th><th scope="col">{{ i18n "stats_col_date" }}</th><th scope="col">{{ i18n "stats_col_downloads" }}</th></tr></thead>
+            <tbody data-stats-rows></tbody>
+          </table>
+        </details>
+      </figure>
+      <div class="stats-tip" data-stats-tip hidden></div>
+    </div>
+  </div>
+</section>
