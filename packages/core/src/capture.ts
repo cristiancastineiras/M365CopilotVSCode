@@ -296,14 +296,15 @@ export function withoutExpiredToken(store: CaptureStore, now = Date.now()): Capt
   return cleaned;
 }
 
+function stripCaptureTimestamp(store: CaptureStore): string {
+  const normalized: CaptureStore = { ...store };
+  delete normalized.capturedAt;
+  return JSON.stringify(normalized);
+}
+
 /** Misma forma ignorando el sello temporal: sólo se escribe si algo cambió de verdad. */
 export function sameCapture(a: CaptureStore, b: CaptureStore): boolean {
-  const strip = (store: CaptureStore) => {
-    const copy: CaptureStore = { ...store };
-    delete copy.capturedAt;
-    return JSON.stringify(copy);
-  };
-  return strip(a) === strip(b);
+  return stripCaptureTimestamp(a) === stripCaptureTimestamp(b);
 }
 
 /** El perfil que se envía a VS Code, o null si todavía no hay token. */

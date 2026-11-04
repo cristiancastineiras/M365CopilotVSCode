@@ -101,6 +101,8 @@ export async function buildUserscript() {
       logLevel: "warn",
       tsconfig: join(ROOT, "userscript", "tsconfig.json"),
       deps: { alwaysBundle: ["@m365copilot/core"] },
+      // Inlining leaves each exported constant declared but unused in the file users read.
+      inputOptions: { optimization: { inlineConst: false } },
       banner: metadata(version),
     });
     const [file] = (await import("node:fs"))
