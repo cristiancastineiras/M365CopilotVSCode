@@ -1,6 +1,6 @@
 {
   "name": "m365-copilot-vscode-extension",
-  "version": "3.0.6",
+  "version": "4.0.0",
   "private": true,
   "type": "module",
   "scripts": {
