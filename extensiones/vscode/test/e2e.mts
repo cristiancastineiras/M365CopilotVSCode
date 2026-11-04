@@ -136,13 +136,23 @@ import {
 import { buildInlineEditPrompt, extractEditedCode, reindent } from "../src/inlineEditPrompt.ts";
 import {
   renderTranscript,
+  isTurnRefusal,
   retrievalText,
   TRANSCRIPT_LIMITS,
   type TranscriptMessage,
+  transcriptLimitsFor,
 } from "../src/transcript.ts";
 import { describeShell, localDate, renderEnvironment } from "../src/environment.ts";
 import { renderSkills } from "../src/skills.ts";
-import { ConcurrencyLimiter, clip, runSubagentTask, runToolLoop } from "../src/subagentCore.ts";
+import {
+  ConcurrencyLimiter,
+  clip,
+  DEFAULT_MAX_DURATION_MINUTES,
+  durationBudgetMs,
+  loopLimitsFor,
+  runSubagentTask,
+  runToolLoop,
+} from "../src/subagentCore.ts";
 import { replaceTextOnce } from "../tools/replaceText.ts";
 import {
   looksLikeFakeCompletion,
@@ -1221,6 +1231,33 @@ function testTranscript() {
     "del prompt del modo agente sólo cuenta <userRequest>",
   );
   assert.equal(retrievalText(["solo"]), "solo");
+  // The context VS Code was told a model has also reaches the model, within what was measured.
+  const atDefault = transcriptLimitsFor(128_000);
+  assert.equal(atDefault.maxContextChars, 448_000);
+  assert.equal(atDefault.fullToolResults, TRANSCRIPT_LIMITS.fullToolResults);
+  assert.deepEqual(transcriptLimitsFor(1_000), TRANSCRIPT_LIMITS, "nunca menos que el mínimo");
+  const atMost = transcriptLimitsFor(2_000_000);
+  assert.equal(atMost.maxContextChars + atMost.maxRequestChars, 1_000_000, "lo medido");
+  const longSession = [
+    user("first chat turn"),
+    answer("first answer"),
+    user("THE TASK"),
+    ...Array.from({ length: 40 }, (_, i) => [
+      call("grep_search"),
+      result("grep_search", `result ${i} ${"y".repeat(5_000)}`),
+    ]).flat(),
+  ];
+  assert.doesNotMatch(renderTranscript(longSession), /first chat turn/);
+  assert.match(renderTranscript(longSession, atDefault), /first chat turn/);
+
+  // What a shorter message could get past, and what it could not.
+  assert.ok(isTurnRefusal(new CopilotClientError("InternalError")));
+  assert.ok(isTurnRefusal(new CopilotModelUnavailableError("Chat", "InternalError")));
+  assert.ok(!isTurnRefusal(new CopilotAuthError("rejected", 401)));
+  assert.ok(!isTurnRefusal(new CopilotLicenseError("InvalidCopilotLicense", "no licence")));
+  assert.ok(!isTurnRefusal(new CopilotClientError("__CANCELLED__")));
+  assert.ok(!isTurnRefusal(new Error("not from the client")));
+
   assert.equal(retrievalText([]), "");
   console.log(
     "  ✓ transcript: petición fijada, resultados antiguos recortados y repetidos resumidos, y búsqueda con la petición anterior",
@@ -1894,7 +1931,9 @@ async function testConcurrencyLimiter() {
 function startScriptedServer(
   getReply: (connectionIndex: number) => string,
   onChatFrame?: (frame: { arguments: [{ message: Record<string, unknown> }] }) => void,
-  onConnection?: (sessionKey: string | string[] | undefined) => void,
+  onConnection?: (sessionKey: string | string[] | undefined, url: string) => void,
+  /** Como el servicio real con un mensaje demasiado largo: sin texto, `result=InternalError`. */
+  refuse?: (text: string) => boolean,
 ): Promise<{ port: number; close: () => void }> {
   return new Promise((resolve) => {
     let connectionIndex = 0;
@@ -1904,7 +1943,7 @@ function startScriptedServer(
       resolve({ port, close: () => wss.close() });
     });
     wss.on("connection", (socket, request) => {
-      onConnection?.(request.headers["x-routingparameter-sessionkey"]);
+      onConnection?.(request.headers["x-routingparameter-sessionkey"], request.url ?? "");
       const index = connectionIndex++;
       let handshaken = false;
       socket.on("message", (data) => {
@@ -1934,6 +1973,12 @@ async function testSubagentLoop() {
       ? `<m365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</m365_tool_call>`
       : "Resumen: encontré 2 coincidencias de foo.",
   );
+          if (refuse?.(String(frame.arguments[0].message.text))) {
+            const result = { value: "InternalError", message: "Sorry" };
+            socket.send(JSON.stringify({ type: 2, invocationId: "0", item: { result } }) + RS);
+            socket.send(JSON.stringify({ type: 3, invocationId: "0" }) + RS);
+            continue;
+          }
   const calls: { name: string; input: Record<string, unknown> }[] = [];
   const offeredTools: OfferedTool[] = [{ name: M365_TOOL_NAMES.searchText }];
 
@@ -2108,6 +2153,185 @@ function testClipClosesDanglingFence() {
   const cutInsideFence = text.indexOf("console.log") + 5;
   const clippedInsideFence = clip(text, cutInsideFence);
   assert.equal(
+/**
+ * `m365copilot.chat.maxDurationMinutes: 0` quita el techo, no lo pone a cero:
+ * con un presupuesto de 0 ms el bucle se cortaría nada más terminar el primer
+ * paso. Aquí sólo debe pararlo el contador de pasos.
+ */
+async function testSubagentLoopWithoutWallClock() {
+  assert.equal(durationBudgetMs(30), 30 * 60_000);
+
+  const manifest = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  ) as { contributes: { configuration: { properties: Record<string, { default?: unknown }> } } };
+  assert.equal(
+    manifest.contributes.configuration.properties["m365copilot.chat.maxDurationMinutes"]?.default,
+    DEFAULT_MAX_DURATION_MINUTES,
+  );
+
+  const server = await startScriptedServer(
+    () =>
+      `<m365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</m365_tool_call>`,
+  );
+  const result = await runSubagentTask({
+    label: "sin techo",
+    task: "Una tarea a la que sólo le limita el número de pasos.",
+    profile: makeProfile(server.port),
+    tone: null,
+    maxSteps: 3,
+    signal: new AbortController().signal,
+    offeredTools: [{ name: M365_TOOL_NAMES.searchText }],
+    endpointBase: mockBase(server.port),
+    maxWallClockMs: durationBudgetMs(0),
+    executeTool: async () =>
+      new Promise((resolve) => setTimeout(() => resolve("resultado parcial"), 40)),
+  });
+  server.close();
+
+  assert.equal(result.steps, 3);
+  assert.match(result.summary, /límite de 3 paso/);
+  console.log("  ✓ maxDurationMinutes 0 quita el techo de tiempo: sólo corta el límite de pasos");
+}
+
+/**
+ * Sin techo de tiempo una tarea puede durar más que su token: el bucle debe
+ * recoger el que el navegador envió mientras tanto, y sólo si es de la misma
+ * cuenta, porque la conversación está atada a su `oid@tid`.
+ */
+async function testToolLoopPicksUpRenewedToken() {
+  const tokens: (string | null)[] = [];
+  const server = await startScriptedServer(
+    () =>
+      `<m365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</m365_tool_call>`,
+    undefined,
+    (_sessionKey, url) => tokens.push(new URL(url, "ws://local").searchParams.get("access_token")),
+  );
+  const first = makeProfile(server.port);
+  const renewed = { ...first, accessToken: `${first.accessToken}-renewed` };
+  const otherAccount: CopilotProfile = {
+    ...first,
+    accessToken: `${first.accessToken}-other`,
+    claims: { ...first.claims, oid: "otra-cuenta" },
+  };
+  // Lo que hay guardado antes de cada paso: nada, otra cuenta, el renovado y un fallo al leer.
+  const stored = [null, otherAccount, renewed, new Error("SecretStorage")];
+  const result = await runSubagentTask({
+    label: "tarea larga",
+    task: "Una tarea que dura más que su token.",
+    profile: first,
+    latestProfile: async () => {
+      const next = stored.shift() ?? null;
+      if (next instanceof Error) throw next;
+      return next;
+    },
+    tone: null,
+    maxSteps: 4,
+    signal: new AbortController().signal,
+    offeredTools: [{ name: M365_TOOL_NAMES.searchText }],
+    endpointBase: mockBase(server.port),
+    executeTool: async () => "resultado parcial",
+  });
+  server.close();
+
+  assert.equal(result.steps, 4);
+  assert.deepEqual(tokens, [
+    first.accessToken,
+    first.accessToken,
+    renewed.accessToken,
+    renewed.accessToken,
+  ]);
+  console.log("  ✓ el bucle recoge el token renovado antes de cada paso, sólo de la misma cuenta");
+}
+
+/** Lo que el modelo recibe en cada paso de un bucle cuyos resultados miden `resultChars`. */
+async function runLoopCapturing(options: {
+  readonly resultChars: number;
+  readonly maxSteps: number;
+  readonly maxInputTokens?: number;
+  readonly refuse?: (text: string) => boolean;
+}) {
+  const prompts: string[] = [];
+  const conversations: (string | null)[] = [];
+  const server = await startScriptedServer(
+    () =>
+      `<m365_tool_call>{"name":"${M365_TOOL_NAMES.searchText}","input":{"query":"foo"}}</m365_tool_call>`,
+    (frame) => prompts.push(String(frame.arguments[0].message.text)),
+    (_sessionKey, url) =>
+      conversations.push(new URL(url, "ws://local").searchParams.get("ConversationId")),
+    options.refuse,
+  );
+  const result = await runSubagentTask({
+    label: "tarea",
+    task: "LA PETICIÓN ORIGINAL",
+    profile: makeProfile(server.port),
+    tone: null,
+    maxSteps: options.maxSteps,
+    maxInputTokens: options.maxInputTokens,
+    signal: new AbortController().signal,
+    offeredTools: [{ name: M365_TOOL_NAMES.searchText }],
+    endpointBase: mockBase(server.port),
+    executeTool: async () => `${"r".repeat(options.resultChars)} FIN-DEL-RESULTADO`,
+  });
+  server.close();
+  return { result, prompts, conversations };
+}
+
+/** `read_file` devuelve hasta 14.000 caracteres: antes el bucle se comía más de dos tercios. */
+async function testToolLoopContextBudget() {
+  assert.equal(loopLimitsFor(128_000).conversationChars, 400_000);
+  assert.ok(loopLimitsFor(1_000).resultChars >= 4_000, "nunca menos que el mínimo");
+
+  const roomy = await runLoopCapturing({
+    resultChars: 14_000,
+    maxSteps: 2,
+    maxInputTokens: 128_000,
+  });
+  assert.match(roomy.prompts[1]!, /FIN-DEL-RESULTADO/);
+  const tight = await runLoopCapturing({ resultChars: 14_000, maxSteps: 2 });
+  assert.doesNotMatch(tight.prompts[1]!, /FIN-DEL-RESULTADO/, "sin ajuste, lo mínimo");
+  console.log("  ✓ maxInputTokens fija cuánto de cada resultado llega al modelo en el bucle");
+}
+
+/**
+ * BizChat olvida sin avisar lo más antiguo de una conversación larga, y lo más
+ * antiguo es la petición: antes de llegar ahí el bucle sigue en otra, con ella.
+ */
+async function testToolLoopMovesToNewConversation() {
+  const { result, prompts, conversations } = await runLoopCapturing({
+    resultChars: 70_000,
+    maxSteps: 8,
+    maxInputTokens: 128_000,
+  });
+  assert.equal(result.steps, 8);
+  const carriesRequest = prompts.map((prompt) => prompt.includes("LA PETICIÓN ORIGINAL"));
+  assert.deepEqual(carriesRequest, [true, false, false, false, false, false, false, true]);
+  assert.equal(new Set(conversations.slice(0, 7)).size, 1);
+  assert.notEqual(conversations[7], conversations[0]);
+  assert.match(prompts[7]!, /FIN-DEL-RESULTADO/, "el último resultado sigue entero");
+  assert.ok(prompts[7]!.length < 250_000, `deja sitio para seguir (${prompts[7]!.length})`);
+  console.log("  ✓ una tarea larga sigue en una conversación nueva con la petición y los pasos");
+}
+
+/** Un tenant que rechaza mensajes largos: el mismo paso, más corto, y la tarea sigue. */
+async function testToolLoopShortensRefusedPrompt() {
+  const refuse = (text: string) => text.length > 50_000;
+  const { result, prompts } = await runLoopCapturing({
+    resultChars: 70_000,
+    maxSteps: 3,
+    maxInputTokens: 128_000,
+    refuse,
+  });
+  assert.equal(result.steps, 3, result.summary);
+  assert.ok(prompts.some(refuse), "el mensaje largo se intentó");
+  assert.ok(!refuse(prompts.at(-1)!), "y la tarea siguió con mensajes cortos");
+
+  // Lo que no se arregla acortando sigue siendo un error.
+  const always = await runLoopCapturing({ resultChars: 10, maxSteps: 2, refuse: () => true });
+  assert.equal(always.result.ok, false);
+  assert.equal(always.prompts.length, 2, "un solo reintento del cliente, ninguno por tamaño");
+  console.log("  ✓ si el servicio rechaza un mensaje largo, el bucle sigue con mensajes cortos");
+}
+
     (clippedInsideFence.match(/```/g) ?? []).length % 2,
     0,
     "un recorte a media valla de código debe cerrarla, si no el resto del informe queda dentro del bloque",
@@ -6571,6 +6795,11 @@ async function main() {
 }
 
 main().catch((err) => {
+  await testSubagentLoopWithoutWallClock();
+  await testToolLoopPicksUpRenewedToken();
+  await testToolLoopContextBudget();
+  await testToolLoopMovesToNewConversation();
+  await testToolLoopShortensRefusedPrompt();
   console.error("\nTEST FAILURE:", err);
   process.exit(1);
 });

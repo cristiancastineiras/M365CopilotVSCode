@@ -258,6 +258,13 @@ export const es: Record<keyof typeof en, string> = {
   "log.commitMessageRetry": "mensaje de commit rechazado ({0}); se vuelve a pedir",
   "log.autoCommit": "autocommit {0}: {1}",
   "log.server.listening": "✅ Servidor de auto-renovación escuchando en http://localhost:{0}",
+  "log.loopTokenRenewed": "el token se renovó durante la tarea: el siguiente paso usa el nuevo",
+  "log.loopNewConversation":
+    "la conversación llegó a {0} caracteres: la tarea sigue en otra nueva con la petición y los pasos hechos",
+  "log.loopPromptShortened":
+    "el servicio rechazó un mensaje de {0} caracteres: esta tarea sigue con mensajes más cortos",
+  "log.promptShortened":
+    "el servicio rechazó un mensaje de {0} caracteres y aceptó uno de {1}: se mantiene ese tamaño hasta recargar la ventana",
   "log.server.portInUse":
     "⚠️ Puerto {0} ya en uso. El servidor de auto-renovación no está disponible.",
   "log.server.error": "❌ Error en servidor de auto-renovación: {0}",
@@ -605,7 +612,8 @@ export const es: Record<keyof typeof en, string> = {
   "participant.progress.tool": "Ejecutando {0}…",
   "participant.stepLimit":
     "_(Me detuve tras {0} llamadas a herramientas sin una respuesta final — pulsa Continuar abajo, o sube `m365copilot.chat.maxToolCalls` (0 = sin límite).)_",
-  "participant.timeLimit": "_(Me detuve: la petición superó los {0} min.)_",
+  "participant.timeLimit":
+    "_(Me detuve: la petición superó los {0} min — pulsa Continuar abajo, o sube `m365copilot.chat.maxDurationMinutes` (0 = sin límite).)_",
   "participant.error": "No se ha podido completar la respuesta. {0}",
   "participant.followup.continue": "Continuar",
   "participant.followup.continue.prompt": "Continúa donde lo dejaste.",

@@ -252,6 +252,13 @@ export const en = {
   "log.commitMessageRetry": "commit message rejected ({0}); asking again",
   "log.autoCommit": "auto-commit {0}: {1}",
   "log.server.listening": "✅ Auto-refresh server listening on http://localhost:{0}",
+  "log.loopTokenRenewed": "the token was renewed during the task: the next step uses the new one",
+  "log.loopNewConversation":
+    "the conversation reached {0} characters: the task continues in a new one with the request and the steps so far",
+  "log.loopPromptShortened":
+    "the service refused a message of {0} characters: this task continues with shorter ones",
+  "log.promptShortened":
+    "the service refused a message of {0} characters and took one of {1}: keeping to that size until the window reloads",
   "log.server.portInUse": "⚠️ Port {0} already in use. The auto-refresh server is not available.",
   "log.server.error": "❌ Auto-refresh server error: {0}",
   "log.server.stopped": "🔌 Auto-refresh server stopped",
@@ -591,7 +598,8 @@ export const en = {
   "participant.progress.tool": "Running {0}…",
   "participant.stepLimit":
     "_(Stopped after {0} tool calls without a final answer — choose Continue below, or raise `m365copilot.chat.maxToolCalls` (0 = no limit).)_",
-  "participant.timeLimit": "_(Stopped: the request took more than {0} min.)_",
+  "participant.timeLimit":
+    "_(Stopped: the request took more than {0} min — choose Continue below, or raise `m365copilot.chat.maxDurationMinutes` (0 = no limit).)_",
   "participant.error": "The answer could not be completed. {0}",
   "participant.followup.continue": "Continue",
   "participant.followup.continue.prompt": "Continue where you left off.",

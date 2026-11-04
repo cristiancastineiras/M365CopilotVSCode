@@ -17,6 +17,11 @@
  *
  * Kept free of the `vscode` import so test/e2e.mts can check it.
  */
+import {
+  CopilotAuthError,
+  CopilotClientError,
+  isAccountLevelError,
+} from "@m365copilot/core/bizchat";
 import { t } from "./i18n";
 import { retrievalQuery } from "./rag/text";
 
@@ -36,19 +41,80 @@ export interface TranscriptMessage {
   readonly parts: readonly TranscriptPart[];
 }
 
-export const TRANSCRIPT_LIMITS = {
+export interface TranscriptLimits {
   /** Everything but the pinned request. */
+  readonly maxContextChars: number;
+  readonly maxMessageChars: number;
+  /** The pinned request (or the latest message) gets more room. */
+  readonly maxRequestChars: number;
+  /** The latest {@link fullToolResults} results… */
+  readonly maxToolResultChars: number;
+  readonly fullToolResults: number;
+  /** …and every older one. */
+  readonly maxOldToolResultChars: number;
+  readonly maxToolCallInputChars: number;
+}
+
+/** The smallest budget, and the one to fall back on when the service refuses a longer message. */
+export const TRANSCRIPT_LIMITS: TranscriptLimits = {
   maxContextChars: 48_000,
   maxMessageChars: 12_000,
-  /** The pinned request (or the latest message) gets more room. */
   maxRequestChars: 24_000,
-  /** The latest {@link fullToolResults} results… */
   maxToolResultChars: 12_000,
   fullToolResults: 2,
-  /** …and every older one. */
   maxOldToolResultChars: 1_500,
   maxToolCallInputChars: 4_000,
-} as const;
+};
+
+/** Rough token estimate; BizChat exposes no tokenizer. */
+export const CHARS_PER_TOKEN = 3.5;
+
+/**
+ * The most the context takes, whatever `m365copilot.models.maxInputTokens` says.
+ * Measured against the real service in November 2026, on a personal account: a
+ * message of 1,000,000 characters reached the model whole and one of 1,200,000
+ * was refused. With the longest request this one allows, the total stays at the
+ * first (the limit may not be in characters, so no closer).
+ */
+const MAX_CONTEXT_CHARS = 750_000;
+
+/**
+ * The limits for the context size VS Code was told a model has, so that what it
+ * sends also reaches the model. All of it counts as context: VS Code's budget
+ * already includes the request, whose own room is hardly ever used. The other
+ * limits are {@link TRANSCRIPT_LIMITS} grown in proportion, never below it.
+ */
+export function transcriptLimitsFor(maxInputTokens: number): TranscriptLimits {
+  const base = TRANSCRIPT_LIMITS.maxContextChars + TRANSCRIPT_LIMITS.maxRequestChars;
+  const wanted = Math.min(maxInputTokens * CHARS_PER_TOKEN, MAX_CONTEXT_CHARS);
+  if (wanted <= base) return TRANSCRIPT_LIMITS;
+  const scale = wanted / base;
+  const scaled = (chars: number) => Math.round(chars * scale);
+  return {
+    maxContextChars: wanted,
+    maxMessageChars: scaled(TRANSCRIPT_LIMITS.maxMessageChars),
+    maxRequestChars: scaled(TRANSCRIPT_LIMITS.maxRequestChars),
+    maxToolResultChars: scaled(TRANSCRIPT_LIMITS.maxToolResultChars),
+    fullToolResults: TRANSCRIPT_LIMITS.fullToolResults,
+    maxOldToolResultChars: scaled(TRANSCRIPT_LIMITS.maxOldToolResultChars),
+    maxToolCallInputChars: scaled(TRANSCRIPT_LIMITS.maxToolCallInputChars),
+  };
+}
+
+/**
+ * The service turned a turn down for a reason a different turn could avoid —
+ * not the token, the account's limits or the user cancelling. BizChat has no
+ * error for a message that is too long: it answers `InternalError`, which with a
+ * model forced reads as "model not available", so that one counts too.
+ */
+export function isTurnRefusal(error: unknown): boolean {
+  return (
+    error instanceof CopilotClientError &&
+    !(error instanceof CopilotAuthError) &&
+    !isAccountLevelError(error) &&
+    error.message !== "__CANCELLED__"
+  );
+}
 
 /** A request shorter than this is a follow-up ("now the other one"): the previous one says what it is about. */
 const SHORT_REQUEST_WORDS = 8;
@@ -105,7 +171,7 @@ export function condenseToolResult(text: string, budget: ResultBudget): string {
  */
 export function renderTranscript(
   messages: readonly TranscriptMessage[],
-  limits = TRANSCRIPT_LIMITS,
+  limits: TranscriptLimits = TRANSCRIPT_LIMITS,
 ): string {
   const pinned = findLastIndex(
     messages,

@@ -21,7 +21,7 @@ import * as vscode from "vscode";
 import { registerTracedTool, traceInvokeTool } from "./debugMode";
 import { boundedInteger, errorMessage } from "../tools/common";
 import { currentEnvironment } from "./editorContext";
-import { findModel } from "./models";
+import { findModel, tokenLimits } from "./models";
 import {
   isTokenUsable,
   M365_TOOL_NAMES,
@@ -32,6 +32,8 @@ import type { ProfileStore } from "./secrets";
 import {
   ConcurrencyLimiter,
   clip,
+  DEFAULT_MAX_DURATION_MINUTES,
+  durationBudgetMs,
   runSubagentTask,
   type SubagentStepInfo,
   type SubagentTaskResult,
@@ -69,6 +71,8 @@ interface SubagentSettings {
   readonly enabled: boolean;
   readonly maxConcurrent: number;
   readonly maxSteps: number;
+  readonly maxWallClockMs: number;
+  readonly maxInputTokens: number;
   readonly tone: string | null;
 }
 
@@ -144,8 +148,11 @@ async function spawnAgents(
                 label: entry.label,
                 task: entry.task,
                 profile,
+                latestProfile: () => store.get(),
                 tone: settings.tone,
                 maxSteps: settings.maxSteps,
+                maxWallClockMs: settings.maxWallClockMs,
+                maxInputTokens: settings.maxInputTokens,
                 signal: controller.signal,
                 offeredTools,
                 executeTool,
@@ -241,8 +248,18 @@ function readSubagentSettings(): SubagentSettings {
     enabled: config.get<boolean>("enabled", true),
     maxConcurrent: boundedInteger(config.get<number>("maxConcurrent"), 3, 1, 6),
     maxSteps: boundedInteger(config.get<number>("maxSteps"), 6, 1, 12),
+    maxWallClockMs: configuredWallClockMs(),
+    maxInputTokens: tokenLimits().maxInputTokens,
     tone: findModel(modelId)?.tone ?? null,
   };
+}
+
+/** `m365copilot.chat.maxDurationMinutes` as a loop's budget: `@m365` and each sub-agent share it. */
+export function configuredWallClockMs(): number {
+  const minutes = vscode.workspace
+    .getConfiguration("m365copilot.chat")
+    .get<number>("maxDurationMinutes");
+  return durationBudgetMs(boundedInteger(minutes, DEFAULT_MAX_DURATION_MINUTES, 0, 1_440));
 }
 
 function stepMessage(info: SubagentStepInfo): string {
@@ -253,8 +270,8 @@ function stepMessage(info: SubagentStepInfo): string {
       return t("subagent.step.done");
     case "limit":
       // Cubre tanto el límite de pasos como el de tiempo total (ver
-      // MAX_TASK_WALL_CLOCK_MS en subagentCore.ts) — el motivo exacto ya va en
-      // info.detail, así que aquí basta con un rótulo genérico.
+      // DEFAULT_MAX_DURATION_MINUTES en subagentCore.ts) — el motivo exacto ya
+      // va en info.detail, así que aquí basta con un rótulo genérico.
       return t("subagent.step.limit");
     case "error":
       return t("subagent.step.error", info.detail);

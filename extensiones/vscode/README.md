@@ -128,10 +128,14 @@ The participant shows which code it used as a reference, streams its answer,
 reports each tool step, offers a **Review pending changes** button after
 editing, and suggests follow-ups (`/doc`, `/tests`…).
 
-Each request can make up to **30 tool calls** (read, search, edit, run…); change
-that with `m365copilot.chat.maxToolCalls` (`0` = no limit; a request still stops
-after 8 minutes). If it is cut short, the chat says so and offers a **Continue**
-button. `/explain` and `/terminal` keep their own shorter limits (4 and 6).
+Each request can make up to **30 tool calls** (read, search, edit, run…) and run
+for up to **8 minutes**; change that with `m365copilot.chat.maxToolCalls` and
+`m365copilot.chat.maxDurationMinutes` (`0` = no limit in both). If it is cut
+short, the chat says so and offers a **Continue** button. `/explain` and
+`/terminal` keep their own shorter limits of tool calls (4 and 6). With neither
+limit, a request runs until it finishes or you cancel it. It picks up the token
+the browser renews, and ends with an error only if the token expires without a
+new one.
 
 ### Context menu, lightbulb and editor title
 
@@ -410,11 +414,13 @@ access is used up, until it refills (see
 Check models** (also the first entry of _Update models_) sends a short message
 to each model, one conversation each, and lists which ones work for you.
 
-| Setting                                | Default | Purpose                                                          |
-| -------------------------------------- | ------- | ---------------------------------------------------------------- |
-| `m365copilot.models.updateFromCatalog` | `true`  | Download `models.json` (a plain GET to GitHub; nothing is sent). |
-| `m365copilot.models.detectFromBrowser` | `true`  | Add the models the web app uses.                                 |
-| `m365copilot.models.custom`            | `[]`    | Extra models by `tone` (or `{ "tone", "name" }`).                |
+| Setting                                | Default  | Purpose                                                          |
+| -------------------------------------- | -------- | ---------------------------------------------------------------- |
+| `m365copilot.models.updateFromCatalog` | `true`   | Download `models.json` (a plain GET to GitHub; nothing is sent). |
+| `m365copilot.models.detectFromBrowser` | `true`   | Add the models the web app uses.                                 |
+| `m365copilot.models.custom`            | `[]`     | Extra models by `tone` (or `{ "tone", "name" }`).                |
+| `m365copilot.models.maxInputTokens`    | `128000` | Context size of every model (see below).                         |
+| `m365copilot.models.maxOutputTokens`   | `16000`  | Reply size VS Code is told every model has.                      |
 
 The model settings of sub-agents, inline completions and editor answers
 (`*.model`) offer the built-in models.
@@ -422,6 +428,23 @@ The model settings of sub-agents, inline completions and editor answers
 ## Limits and refusals from M365 Copilot
 
 M365 Copilot can also refuse a turn for reasons that have nothing to do with
+The two token settings apply to all models at once. `maxInputTokens` also sets how
+much of the conversation reaches the model in Copilot Chat: the extension fits it
+into one BizChat message at about 3.5 characters per token (about 448,000
+characters by default), up to 750,000. BizChat publishes no limits. Measured in
+November 2026 on a personal account, every available model took 446,000 characters
+and kept calling tools, and Auto took 1,000,000 but not 1,200,000. If the service
+refuses a message that long, the extension retries with about 72,000 characters and
+keeps to that until the window reloads. `maxOutputTokens` only changes what VS Code
+is told: BizChat decides how long its replies are.
+
+`maxInputTokens` also sets how much of each tool result `@m365` and sub-agents keep
+(about 75,000 characters by default). Their tasks run in one BizChat conversation,
+and BizChat silently forgets the oldest part of a long one, which is your request:
+measured the same way, it kept all of 419,000 characters and only the last 600,000
+of 2,000,000. So a task that reaches 400,000 characters continues in a new
+conversation, with the request and the steps so far.
+
 the model. The extension recognises them, says what happened in plain words
 (with the service's own message) and does not retry: the same request would get
 the same answer.
@@ -564,7 +587,8 @@ only sees its task and returns a concise summary, so broad exploration does not
 fill the main conversation's context. Calls that edit, run commands or touch git
 are serialised among sub-agents; read-only ones run in parallel. _Known
 limitation:_ the confirmation dialog does not say which sub-agent asked; the
-progress notification and the log do.
+progress notification and the log do. `m365copilot.chat.maxDurationMinutes` also
+limits each sub-agent, counted from when its turn to run starts.
 
 | Setting                               | Default | Purpose                                            |
 | ------------------------------------- | ------- | -------------------------------------------------- |
