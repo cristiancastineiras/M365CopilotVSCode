@@ -93,6 +93,8 @@ other = "Avisar de un fallo"
 other = "Versiones"
 [footer_docs]
 other = "Documentación"
+[footer_support]
+other = "Apoya el proyecto"
 [footer_legal]
 other = "M365 Copilot for VS Code es un proyecto independiente de código abierto. No está afiliado, respaldado ni patrocinado por Microsoft. Microsoft 365 Copilot y Visual Studio Code son marcas de Microsoft Corporation. Úsalo conforme a los términos y políticas de Microsoft; el software se ofrece «tal cual», sin garantías."
 
