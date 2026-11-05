@@ -29,6 +29,17 @@
           <li><a href="{{ $repo }}/issues" rel="noopener">{{ i18n "footer_issues" }}</a></li>
         </ul>
       </nav>
+      <div>
+        <h2 class="foot-title">{{ i18n "footer_support" }}</h2>
+        <div class="support-links">
+          <a class="support-link support-link-kofi" href="https://ko-fi.com/cristiancastineiras" target="_blank" rel="noopener noreferrer" data-goatcounter-click="footer-kofi">
+            {{ partial "icon.html" "kofi" }}<span>Ko-fi</span>
+          </a>
+          <a class="support-link support-link-coffee" href="https://buymeacoffee.com/cristiancastineiras" target="_blank" rel="noopener noreferrer" data-goatcounter-click="footer-buymeacoffee">
+            {{ partial "icon.html" "coffee" }}<span>Buy Me a Coffee</span>
+          </a>
+        </div>
+      </div>
     </div>
     <p class="legal">{{ i18n "footer_legal" }}</p>
     {{ with site.Params.goatcounter }}<p class="legal">{{ i18n "footer_analytics" | safeHTML }}</p>{{ end }}

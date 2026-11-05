@@ -302,12 +302,26 @@ code, kbd { font-family: var(--font-mono); font-size: 0.88em; }
 
 /* ---------- Pie ---------- */
 .site-footer { border-top: 1px solid var(--line); padding-block: 48px 40px; background: var(--bg); }
-.foot-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 32px; margin-bottom: 32px; }
+.foot-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1.1fr; gap: 32px; margin-bottom: 32px; }
+@media (min-width: 720px) and (max-width: 999px) { .foot-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .foot-grid > :first-child { grid-column: 1 / -1; } }
 @media (max-width: 719px) { .foot-grid { grid-template-columns: 1fr 1fr; } .foot-grid > :first-child { grid-column: 1 / -1; } }
 .foot-title { margin: 0 0 10px; font: 600 0.9rem var(--font-head); }
 .site-footer ul { list-style: none; display: grid; gap: 6px; }
 .site-footer li a { color: var(--muted); text-decoration: none; font-size: 0.95rem; }
 .site-footer li a:hover { color: var(--link); text-decoration: underline; }
+.support-links { display: grid; gap: 8px; }
+.site-footer .support-link {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  min-height: 42px; padding: 8px 12px; border: 1px solid transparent; border-radius: 10px;
+  font: 600 0.9rem/1.2 var(--font-head); text-align: center; text-decoration: none;
+  transition: filter 0.15s, transform 0.15s;
+}
+.site-footer .support-link:hover { filter: brightness(0.94); text-decoration: none; transform: translateY(-1px); }
+.support-link-kofi { background: #13c3ff; color: #073b4c; }
+.support-link-coffee { background: #ffdd00; color: #1b1b1b; }
+.site-footer .support-link:focus-visible { outline: 3px solid var(--link); outline-offset: 3px; }
+.support-link .icon { width: 21px; height: 21px; flex: 0 0 auto; }
+@media (prefers-reduced-motion: reduce) { .site-footer .support-link { transition: none; } }
 .site-footer .muted { margin: 10px 0 0; font-size: 0.95rem; }
 .legal { margin: 0 0 6px; font-size: 0.78rem; line-height: 1.55; color: var(--muted); max-width: 90ch; }
 .nf { padding-block: clamp(64px, 12vw, 140px); }
