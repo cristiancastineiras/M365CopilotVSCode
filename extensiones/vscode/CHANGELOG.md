@@ -1,5 +1,52 @@
 # m365-copilot-vscode
 
+## 4.0.1
+
+### Patch Changes
+
+- 28cff7c: Long tasks and long conversations go further.
+
+  - `m365copilot.chat.maxDurationMinutes` (8) sets how long one `@m365` request or one sub-agent can run, and `0` removes the limit. The notice when it is reached names the setting.
+  - A task picks up the token the browser renews while it runs, before each step, instead of ending in an error when the first one expires.
+  - `m365copilot.models.maxInputTokens` (128000) and `m365copilot.models.maxOutputTokens` (16000) set what VS Code is told about every model.
+  - `maxInputTokens` now also sets how much of the conversation reaches the model in Copilot Chat: about 448,000 characters by default, up to 750,000, where it was always about 72,000. If the service refuses a message that long, the extension retries with the old size and keeps to it until the window reloads.
+  - `@m365` and sub-agents keep far more of each tool result: about 75,000 characters by default, where it was 4,000, so a whole `read_file` reaches the model.
+  - A task that reaches 400,000 characters continues in a new conversation with the request and the steps so far, because BizChat silently forgets the oldest part of a longer one, which is the request.
+
+- 6ae0746: Automatic sending now tells you what is going on with both kinds of account.
+
+  - The userscript panel and the browser extension popup show whether the account is personal or work/school, and what that means for renewing the token.
+  - They no longer say "Connected" when VS Code is rejecting the token: they say so and tell you to update the VS Code extension. VS Code also warns once per reason, and confirms a token it received even when the token does not say when it expires.
+  - The browser extension no longer lets another Microsoft frame replace the token in use with an older one, or with none at all.
+  - The popup copies the whole profile for a personal account, because its token alone cannot be pasted.
+  - When the service refuses a token (401), VS Code marks it as expired right away and says what to do. For a personal account, whose token does not say when it expires, that is send a message in the web chat: the new token arrives by itself.
+  - A very long chat address no longer loses the captured endpoint, which says what kind of account it is.
+
+- Updated dependencies [6ae0746]
+  - @m365copilot/core@4.0.1
+
+## 4.0.0
+
+### Major Changes
+
+- Mejora en uso de tools y agregado captura de tokens personales en la extension
+
+### Minor Changes
+
+- 2827a29: `@m365` edits now use VS Code's own review of chat edits, the one GitHub Copilot's have: red and green inline, Keep/Undo on each change, "files changed" next to the chat input, and checkpoints. Edits are saved as they land, so the next command the model runs sees them, and only files that can run code or hold secrets ask for confirmation first.
+
+  The review that remains for inline edits and quick fixes no longer leaves files marked as modified after Undo, removes the tab of a created file, follows Ctrl+Z and Ctrl+Y on disk, and shows the previous text when hovering over a change.
+
+  The model is less likely to say it cannot use tools: the prompt now asks for a way of working in the user's voice instead of claiming it has access, tools are called with code blocks instead of JSON, the catalog is shorter and always includes one tool for each basic capability, a shell block runs through the terminal tool when the reply opens with it, and a reply that gives up or claims work no tool did is retried at any step of a task. Based on measurements published by github.com/cramt/m365-copilot-proxy.
+
+### Patch Changes
+
+- 4c01307: Support personal Microsoft 365 subscriptions (Personal, Family), whose Copilot token is an encrypted 5-part JWE: the browser extension and the userscript capture it from the chat WebSocket (also on copilot.com), and the paste command accepts it in the chat URL or in a copied profile. Its account comes from the URL, the turn uses the scenario the web app used, and logs hide all five parts. The token's expiry cannot be read, so it stays usable until Microsoft rejects it with a 401. The browser extension now asks for access to copilot.com. Also updates `@vscode/vsce` and its dependencies to clear six security alerts.
+- Updated dependencies
+- Updated dependencies [2827a29]
+- Updated dependencies [4c01307]
+  - @m365copilot/core@4.0.0
+
 ## 3.0.6
 
 ### Patch Changes

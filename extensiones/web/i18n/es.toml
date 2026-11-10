@@ -93,6 +93,8 @@ other = "Avisar de un fallo"
 other = "Versiones"
 [footer_docs]
 other = "Documentación"
+[footer_support]
+other = "Apoya el proyecto"
 [footer_legal]
 other = "M365 Copilot for VS Code es un proyecto independiente de código abierto. No está afiliado, respaldado ni patrocinado por Microsoft. Microsoft 365 Copilot y Visual Studio Code son marcas de Microsoft Corporation. Úsalo conforme a los términos y políticas de Microsoft; el software se ofrece «tal cual», sin garantías."
 
@@ -117,3 +119,32 @@ other = "Esperando tu token de Copilot…"
 other = "Token capturado. Buscando VS Code…"
 [art_connected]
 other = "Conectado con VS Code. El token se sincroniza solo."
+
+[stats_eyebrow]
+other = "En cifras"
+[stats_title]
+other = "instalaciones y descargas hasta ahora"
+[stats_installs]
+other = "Instalaciones en Marketplace"
+[stats_github]
+other = "Descargas en GitHub"
+[stats_vsix]
+other = "Descargas del .vsix en Marketplace"
+[stats_note]
+other = "En directo desde VS Code Marketplace y GitHub. Cuenta instalaciones y descargas, no personas, y deja fuera las actualizaciones y las tiendas de navegador."
+[stats_chart_title]
+other = "Descargas de GitHub por versión"
+[stats_chart_sub]
+other = "Últimas versiones, sumando todos sus archivos"
+[stats_table]
+other = "Ver como tabla"
+[stats_col_version]
+other = "Versión"
+[stats_col_date]
+other = "Publicada"
+[stats_col_downloads]
+other = "Descargas"
+[stats_unit]
+other = "descargas"
+[stats_share]
+other = "del total"

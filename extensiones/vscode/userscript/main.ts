@@ -24,17 +24,20 @@ import {
   TOKEN_ENDPOINT_PATH,
   TOKEN_SERVER_URL,
   acceptToken,
-  areClaimsUsable,
+  accountKind,
   connectionArtSvg,
   connectionState,
   inspectOutgoingFrames,
+  isCapturedTokenUsable,
   isCopilotSocketUrl,
   needsResync,
   nextScan,
   normalizeEndpoint,
   profileFromCapture,
+  rejectedByVSCode,
   sameCapture,
   tokenInSocketUrl,
+  tokenStamp,
   tokensInStorageValue,
   toneOfTemplate,
   withObservedTone,
@@ -105,8 +108,15 @@ const TEXTS = {
     capturedSub: "VS Code is not answering. Open it with the M365 Copilot extension enabled.",
     connectedTitle: "Connected to VS Code",
     connectedSub: "The token is sent automatically whenever it is renewed.",
+    connectedSubPersonal: "The token is sent automatically each time you chat here.",
     warningTitle: "Token expired",
     warningSub: "Reload this page or sign in again to renew it.",
+    rejectedTitle: "VS Code rejected the token",
+    rejectedSub: "Update the M365 Copilot extension in VS Code and reload the window.",
+    account: "Account",
+    accountNone: "—",
+    accountPersonal: "personal",
+    accountEnterprise: "work or school",
     token: "Token",
     tokenNone: "not captured",
     tokenLeft: "{0} min left",
@@ -114,6 +124,7 @@ const TEXTS = {
     vscode: "VS Code",
     vscodeOk: "connected",
     vscodeDown: "not answering",
+    vscodeRejected: "rejected the token",
     vscodeChecking: "checking…",
     sync: "Last sync",
     syncNever: "never",
@@ -144,8 +155,15 @@ const TEXTS = {
     capturedSub: "VS Code no responde. Ábrelo con la extensión M365 Copilot activa.",
     connectedTitle: "Conectado con VS Code",
     connectedSub: "El token se envía solo cada vez que se renueva.",
+    connectedSubPersonal: "El token se envía solo cada vez que chateas aquí.",
     warningTitle: "Token caducado",
     warningSub: "Recarga esta página o vuelve a iniciar sesión para renovarlo.",
+    rejectedTitle: "VS Code rechazó el token",
+    rejectedSub: "Actualiza la extensión M365 Copilot en VS Code y recarga la ventana.",
+    account: "Cuenta",
+    accountNone: "—",
+    accountPersonal: "personal",
+    accountEnterprise: "profesional",
     token: "Token",
     tokenNone: "sin capturar",
     tokenLeft: "quedan {0} min",
@@ -153,6 +171,7 @@ const TEXTS = {
     vscode: "VS Code",
     vscodeOk: "conectado",
     vscodeDown: "no responde",
+    vscodeRejected: "rechazó el token",
     vscodeChecking: "comprobando…",
     sync: "Última sincronización",
     syncNever: "nunca",
@@ -173,7 +192,13 @@ const TEXTS = {
   },
 };
 const T = /^es\b/i.test(navigator.language || "") ? TEXTS.es : TEXTS.en;
-const fill = (template: string, value: number) => template.replace("{0}", String(value));
+function fill(template: string, value: number): string {
+  return template.replace("{0}", String(value));
+}
+function flash(button: HTMLButtonElement, text: string, restore: () => void): void {
+  button.textContent = text;
+  setTimeout(restore, 1600);
+}
 
 // ------------------------------------------------------------------ storage
 
@@ -211,10 +236,10 @@ function pruneExpiredToken(): void {
   GM_setValue(CAPTURE_STORE_KEY, JSON.stringify(cleaned));
 }
 
-function offerToken(token: string | null, source: string): void {
+function offerToken(token: string | null, source: string, socketUrl?: string): void {
   if (!token) return;
   try {
-    const accepted = acceptToken(readStore(), token);
+    const accepted = acceptToken(readStore(), token, undefined, socketUrl);
     if (!accepted) return;
     writeStore({ ...accepted, tokenSource: source });
     if (IS_TOP) void syncToVSCode(hasUnsentChanges());
@@ -228,14 +253,15 @@ function offerToken(token: string | null, source: string): void {
 function captureSocket(url: unknown, socket: WebSocket): void {
   const raw = String(url);
   if (!isCopilotSocketUrl(raw)) return;
-  offerToken(tokenInSocketUrl(raw), "websocket-url");
 
   // Substrate opens several sockets (presence, notifications…): keep this one
   // only tentatively, until it sends a `chat` frame — the proof it is the hub.
+  // Before the token, so that the first send to VS Code is already complete.
   const endpoint = normalizeEndpoint(raw);
   if (endpoint && !readStore().endpointConfirmed) {
     writeStore({ endpoint, origin: location.origin, userAgent: navigator.userAgent });
   }
+  offerToken(tokenInSocketUrl(raw), "websocket-url", raw);
 
   const originalSend = socket.send;
   socket.send = function (this: WebSocket, ...args: Parameters<WebSocket["send"]>) {
@@ -386,13 +412,9 @@ let syncing = false;
  * which only exists not to hammer a VS Code that is not running.
  */
 function hasUnsentToken(): boolean {
-  const exp = readStore().claims?.exp;
+  const stamp = tokenStamp(readStore());
   const sync = readSync();
-  return (
-    typeof exp === "number" &&
-    (sync.syncedTokenExp === null || exp > sync.syncedTokenExp) &&
-    sync.vscodeReachable !== false
-  );
+  return stamp !== null && stamp !== sync.syncedTokenExp && sync.vscodeReachable !== false;
 }
 
 /**
@@ -418,7 +440,7 @@ const hasUnsentChanges = () => hasUnsentToken() || hasUnsentTone();
 async function syncToVSCode(force = false): Promise<boolean> {
   const store = readStore();
   const profile = profileFromCapture(store, navigator.userAgent);
-  if (!profile || !areClaimsUsable(store.claims) || syncing) return false;
+  if (!profile || !isCapturedTokenUsable(store) || syncing) return false;
   const sync = readSync();
   const now = Date.now();
   if (
@@ -426,7 +448,7 @@ async function syncToVSCode(force = false): Promise<boolean> {
     !needsResync({
       capturedAt: store.capturedAt ?? null,
       syncedTokenExp: sync.syncedTokenExp,
-      currentTokenExp: store.claims?.exp ?? null,
+      currentTokenExp: tokenStamp(store),
       hasToken: true,
       lastSyncAttemptAt: sync.lastSyncAttemptAt,
       now,
@@ -441,7 +463,7 @@ async function syncToVSCode(force = false): Promise<boolean> {
     const status = await request("POST", TOKEN_ENDPOINT_PATH, JSON.stringify(profile));
     if (status >= 200 && status < 300) {
       writeSync({
-        syncedTokenExp: store.claims?.exp ?? null,
+        syncedTokenExp: tokenStamp(store),
         syncedTones: profile.observedTones ?? [],
         lastSyncedAt: Date.now(),
         lastError: null,
@@ -478,7 +500,7 @@ function maybeReloadToRenew(): void {
   if (!IS_TOP || !readUi().autoReload || document.visibilityState !== "hidden") return;
   const store = readStore();
   const hadSession = Boolean(store.endpoint || store.invocationTemplate);
-  const expired = !store.accessToken || !areClaimsUsable(store.claims);
+  const expired = !isCapturedTokenUsable(store);
   if (!hadSession || !expired || Date.now() - LOADED_AT < MIN_PAGE_AGE_MS) return;
   const { lastReloadAt } = readSync();
   if (lastReloadAt && Date.now() - lastReloadAt < RELOAD_EVERY_MS) return;
@@ -585,7 +607,7 @@ function mountUi(): void {
     `<div class="art">${connectionArtSvg({ idPrefix: "us-art", title: T.art })}</div>`,
     '<div class="status"><div class="status-title"></div><div class="status-sub"></div></div>',
     '<dl class="rows">',
-    ...(["token", "vscode", "sync"] as const).map(
+    ...(["account", "token", "vscode", "sync"] as const).map(
       (row) =>
         `<div class="row"><dt data-text="${row}"></dt><dd><span class="dot" data-dot="${row}"></span><span data-value="${row}"></span></dd></div>`,
     ),
@@ -622,20 +644,20 @@ function mountUi(): void {
   root.appendChild(mini);
   (document.body || document.documentElement).appendChild(host);
 
-  const flash = (button: HTMLButtonElement, text: string, restore: () => void) => {
-    button.textContent = text;
-    setTimeout(restore, 1600);
-  };
-
   function render(): void {
     const store = readStore();
     const sync = readSync();
     const hasToken = Boolean(store.accessToken);
-    const usable = hasToken && areClaimsUsable(store.claims);
+    const usable = isCapturedTokenUsable(store);
+    const expired = hasToken && !usable;
+    const kind = accountKind(store);
+    // VS Code answers, so it looks connected, but the token is not reaching it.
+    const rejected = usable && sync.vscodeReachable !== false && rejectedByVSCode(sync.lastError);
     const state = connectionState({
       hasToken,
-      expired: hasToken && !usable,
+      expired,
       vscodeConnected: sync.vscodeReachable === true,
+      needsUser: rejected,
     });
     panel.dataset.state = state;
     mini.dataset.state = state;
@@ -644,18 +666,30 @@ function mountUi(): void {
     panel.classList.toggle("hidden", minimized);
     mini.classList.toggle("hidden", !minimized);
 
-    const [title, sub] = {
-      waiting: [T.waitingTitle, T.waitingSub],
-      captured: [T.capturedTitle, T.capturedSub],
-      connected: [T.connectedTitle, T.connectedSub],
-      warning: [T.warningTitle, T.warningSub],
-    }[state] as [string, string];
+    const [title, sub] = (
+      rejected
+        ? [T.rejectedTitle, T.rejectedSub]
+        : {
+            waiting: [T.waitingTitle, T.waitingSub],
+            captured: [T.capturedTitle, T.capturedSub],
+            connected: [
+              T.connectedTitle,
+              kind === "personal" ? T.connectedSubPersonal : T.connectedSub,
+            ],
+            warning: [T.warningTitle, T.warningSub],
+          }[state]
+    ) as [string, string];
     q(".status-title").textContent = title;
     q<HTMLElement>(".status-title").toggleAttribute("data-busy", state === "waiting");
     q(".status-sub").textContent = sub;
 
     const exp = store.claims?.exp;
     const minutes = typeof exp === "number" ? Math.round((exp * 1000 - Date.now()) / 60000) : null;
+    q('[data-value="account"]').textContent = !kind
+      ? T.accountNone
+      : kind === "personal"
+        ? T.accountPersonal
+        : T.accountEnterprise;
     q('[data-value="token"]').textContent = !hasToken
       ? T.tokenNone
       : !usable
@@ -663,8 +697,9 @@ function mountUi(): void {
         : minutes === null
           ? "✓"
           : fill(T.tokenLeft, minutes);
-    q('[data-value="vscode"]').textContent =
-      sync.vscodeReachable === null
+    q('[data-value="vscode"]').textContent = rejected
+      ? T.vscodeRejected
+      : sync.vscodeReachable === null
         ? T.vscodeChecking
         : sync.vscodeReachable
           ? T.vscodeOk
@@ -673,16 +708,21 @@ function mountUi(): void {
     q('[data-value="sync"]').textContent =
       ago === null ? T.syncNever : ago < 1 ? T.syncJustNow : fill(T.syncAgo, ago);
     const tones = {
+      account: kind ? "ok" : "neutral",
       token: !hasToken ? "neutral" : usable ? "ok" : "warn",
-      vscode: sync.vscodeReachable === null ? "neutral" : sync.vscodeReachable ? "ok" : "bad",
+      vscode:
+        sync.vscodeReachable === null
+          ? "neutral"
+          : sync.vscodeReachable && !rejected
+            ? "ok"
+            : "bad",
       sync: ago === null ? "neutral" : "ok",
     };
     for (const [row, tone] of Object.entries(tones))
       q<HTMLElement>(`[data-dot="${row}"]`).dataset.tone = tone;
 
-    if (!sendButton.dataset.flashing)
-      sendButton.textContent = state === "warning" ? T.renew : T.send;
-    sendButton.disabled = !hasToken && state !== "warning";
+    if (!sendButton.dataset.flashing) sendButton.textContent = expired ? T.renew : T.send;
+    sendButton.disabled = !hasToken;
     tokenButton.disabled = !usable;
     profileButton.disabled = !usable;
   }
@@ -697,14 +737,15 @@ function mountUi(): void {
     render();
   });
   sendButton.addEventListener("click", async () => {
-    if (panel.dataset.state === "warning") {
+    if (!isCapturedTokenUsable(readStore())) {
       location.reload();
       return;
     }
     sendButton.dataset.flashing = "1";
     const ok = await syncToVSCode(true);
     render();
-    flash(sendButton, ok ? T.sent : T.sendFailed, () => {
+    const failure = rejectedByVSCode(readSync().lastError) ? T.rejectedTitle : T.sendFailed;
+    flash(sendButton, ok ? T.sent : failure, () => {
       delete sendButton.dataset.flashing;
       render();
     });

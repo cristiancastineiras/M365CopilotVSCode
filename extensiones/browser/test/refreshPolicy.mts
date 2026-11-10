@@ -119,10 +119,11 @@ function testExpiredAndMissing() {
     "none",
   );
 
-  // Un token sin `exp` no se puede evaluar: se renueva por si acaso.
+  // Un token sin `exp` (cifrado) no se puede evaluar, y recargar no lo renovaría:
+  // no se toca la pestaña del usuario en cada latido.
   assert.equal(
     decideRefreshAction(context({ token: { hasToken: true, expEpochSeconds: null } })).action,
-    "rescan",
+    "none",
   );
 
   console.log("  ✓ token caducado, ausente, sin exp y sin captura previa");
@@ -160,6 +161,8 @@ function testResync() {
   assert.equal(needsResync({ ...base, syncedTokenExp: base.currentTokenExp }), false);
   // Tiene uno más viejo: se reenvía.
   assert.equal(needsResync({ ...base, syncedTokenExp: base.currentTokenExp - 600 }), true);
+  // O uno con un `exp` posterior al sello del actual (cambió a una cuenta personal).
+  assert.equal(needsResync({ ...base, syncedTokenExp: base.currentTokenExp + 600 }), true);
   // Sin token no hay nada que mandar.
   assert.equal(needsResync({ ...base, hasToken: false, syncedTokenExp: null }), false);
   // Y no se martillea al servidor local cuando está apagado.

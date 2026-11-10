@@ -31,6 +31,8 @@ const MATCHES = [
   "https://www.office.com/*",
   "https://outlook.office.com/*",
   "https://teams.microsoft.com/*",
+  "https://copilot.com/*",
+  "https://*.copilot.com/*",
 ];
 const GRANTS = [
   "GM_getValue",
@@ -102,6 +104,8 @@ export async function buildUserscript() {
         alwaysBundle: ["@m365copilot/core"],
         neverBundle: true,
       },
+      // Inlining leaves each exported constant declared but unused in the file users read.
+      inputOptions: { optimization: { inlineConst: false } },
       banner: metadata(version),
     });
     const [file] = (await import("node:fs"))

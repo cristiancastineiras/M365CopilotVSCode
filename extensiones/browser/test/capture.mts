@@ -14,20 +14,27 @@ import {
   SCAN_MISSING_MAX_MS,
   SCAN_MISSING_MS,
   acceptToken,
+  accountKind,
   areClaimsUsable,
+  claimsInSocketUrl,
   connectionArtSvg,
   connectionState,
   diagnoseToken,
   inspectOutgoingFrames,
+  isCapturedTokenUsable,
   isCopilotSocketUrl,
+  isEncryptedToken,
   isMicrosoftHost,
   isValidJwt,
   nextScan,
   normalizeEndpoint,
   profileFromCapture,
+  rejectedByVSCode,
   sameCapture,
+  supersedesCapture,
   tokenInSocketUrl,
   tokensInStorageValue,
+  tokenStamp,
   toneOfTemplate,
   withObservedTone,
   withoutExpiredToken,
@@ -325,7 +332,139 @@ function testObservedTones() {
   );
 }
 
+function testEncryptedToken() {
+  // Las dos formas de JWE: `alg: dir` deja vacía la segunda parte.
+  const direct = `${b64url({ alg: "dir", enc: "A256GCM" })}..aXY.Y2lwaGVy.dGFn`;
+  const wrapped = `${b64url({ alg: "RSA-OAEP", enc: "A256GCM" })}.a2V5.aXY.Y2lwaGVy.dGFn`;
+  const hub =
+    "wss://substrate.office.com/m365Copilot/Chathub/00000000-0000-0000-ea11-3f83b27d9e04@84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa";
+  const query = "scenario=OfficeWebPremiumConsumerCopilot&licenseType=Premium";
+  const socket = (token: string) => `${hub}?access_token=${token}&${query}`;
+  const account = {
+    oid: "00000000-0000-0000-ea11-3f83b27d9e04",
+    tid: "84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa",
+  };
+
+  assert.equal(isEncryptedToken(direct), true);
+  assert.equal(isEncryptedToken(wrapped), true);
+  assert.equal(isEncryptedToken(jwt({ exp: inMinutes(60) })), false);
+  assert.equal(isEncryptedToken("a.b.c.d.e"), false, "sin cabecera JSON");
+
+  // En el hub del chat se acepta, con la cuenta de la URL.
+  for (const token of [direct, wrapped]) {
+    assert.deepEqual(acceptToken({}, token, NOW, socket(token)), {
+      accessToken: token,
+      claims: account,
+    });
+  }
+
+  // En cualquier otro sitio no hay nada que pruebe que es el de Copilot.
+  assert.equal(diagnoseToken({}, direct, NOW).diagnosis, "not-sydney", "MSAL o cabecera");
+  for (const url of [
+    `wss://substrate.office.com/notifications?access_token=${direct}`,
+    `wss://substrate.office.com/m365Copilot/Chathub?access_token=${direct}`,
+    `wss://evil.example/m365Copilot/Chathub/o@t?access_token=${direct}`,
+  ]) {
+    assert.equal(diagnoseToken({}, direct, NOW, url).diagnosis, "not-sydney", url);
+  }
+  const huge = `${b64url({ alg: "dir" })}..aXY.${"x".repeat(MAX_JWT_CHARS)}.dGFn`;
+  assert.equal(diagnoseToken({}, huge, NOW, socket(huge)).diagnosis, "not-sydney", "tope");
+
+  const current = { accessToken: direct, claims: account };
+  assert.equal(diagnoseToken(current, direct, NOW, socket(direct)).diagnosis, "duplicate");
+  assert.equal(acceptToken(current, wrapped, NOW, socket(wrapped))?.accessToken, wrapped);
+
+  // Un JWT de la caché (otra cuenta del navegador) no lo pisa; el del chat, sí.
+  const other = jwt({ exp: inMinutes(60) });
+  assert.equal(diagnoseToken(current, other, NOW).diagnosis, "older-than-current");
+  assert.equal(
+    acceptToken(current, other, NOW, `wss://substrate.office.com/x/Chathub/o@t?access_token=x`)
+      ?.accessToken,
+    other,
+  );
+
+  // No dice cuándo caduca: sigue valiendo y se vigila de lejos.
+  assert.equal(isCapturedTokenUsable(current, NOW), true);
+  assert.equal(isCapturedTokenUsable({}, NOW), false);
+  assert.equal(isCapturedTokenUsable({ accessToken: other, claims: { exp: 1 } }, NOW), false);
+  assert.equal(withoutExpiredToken(current, NOW), null);
+  assert.equal(nextScan(current, SCAN_MISSING_MS, NOW).delay, SCAN_FRESH_MS);
+
+  // Lo que distingue a un token para VS Code es su `exp` o, sin él, la captura.
+  const capturedAt = new Date(NOW).toISOString();
+  assert.equal(tokenStamp({ claims: account, capturedAt }), NOW / 1000);
+  assert.equal(tokenStamp({ claims: { exp: 5 }, capturedAt }), 5);
+  assert.equal(tokenStamp(null), null);
+
+  // El endpoint no se pierde por lo largo que es el token que lleva dentro.
+  const long = `${b64url({ alg: "dir" })}..aXY.${"x".repeat(4000)}.dGFn`;
+  assert.equal(normalizeEndpoint(socket(long)), `${hub}?${query}`);
+
+  assert.deepEqual(claimsInSocketUrl(hub), account);
+  assert.deepEqual(claimsInSocketUrl(hub.replace("@", "%40")), account, "@ codificada");
+  assert.equal(claimsInSocketUrl("not a url"), null);
+  console.log(
+    "  ✓ JWE de cuentas personales: sólo desde el hub del chat, con su cuenta y sin caducidad",
+  );
+}
+
+/** Lo que distingue los dos tipos de cuenta y lo que pasa con varios frames a la vez. */
+function testAccountsAndFrames() {
+  const jwe = `${b64url({ alg: "dir" })}..aXY.${"x".repeat(40)}.dGFn`;
+  const account = { oid: "o", tid: "84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa" };
+  const token = jwt({ exp: inMinutes(60) });
+
+  assert.equal(accountKind(null), null);
+  assert.equal(accountKind({}), null);
+  assert.equal(accountKind({ accessToken: jwe, claims: account }), "personal");
+  assert.equal(
+    accountKind({ accessToken: token, claims: { tid: "9188040D-6C67-4C5B-B112-36A304B66DAD" } }),
+    "personal",
+    "un JWT también puede ser de una cuenta personal",
+  );
+  assert.equal(accountKind({ accessToken: token, claims: { tid: "contoso" } }), "enterprise");
+
+  for (const answered of ["HTTP 400", "HTTP 400: Bad Request"])
+    assert.equal(rejectedByVSCode(answered), true, answered);
+  for (const other of ["unreachable", "token-expired", "Failed to fetch", null, undefined])
+    assert.equal(rejectedByVSCode(other), false, String(other));
+
+  const earlier = new Date(NOW - 60_000).toISOString();
+  const later = new Date(NOW + 60_000).toISOString();
+  const personal = { accessToken: jwe, claims: account, capturedAt: new Date(NOW).toISOString() };
+  assert.equal(supersedesCapture(null, personal), true);
+  assert.equal(supersedesCapture({}, personal), true);
+  assert.equal(supersedesCapture(personal, { capturedAt: later }), false, "sin token no pisa");
+  assert.equal(supersedesCapture(personal, { ...personal, observedTones: ["x"] }), true);
+  const cached = { accessToken: token, claims: { exp: inMinutes(60) }, capturedAt: later };
+  for (const tokenSource of ["msal-cache", "fetch-header", "xhr-header"]) {
+    assert.equal(supersedesCapture(personal, { ...cached, tokenSource }), false, tokenSource);
+  }
+  assert.equal(
+    supersedesCapture(personal, { ...cached, tokenSource: "websocket-url" }),
+    true,
+    "el hub del chat dice que se ha cambiado de cuenta",
+  );
+  const otherJwe = `${b64url({ alg: "dir" })}..aXY.${"y".repeat(40)}.dGFn`;
+  assert.equal(supersedesCapture(personal, { accessToken: otherJwe, capturedAt: earlier }), false);
+  assert.equal(supersedesCapture(personal, { accessToken: otherJwe, capturedAt: later }), true);
+  const older = { accessToken: jwt({ exp: inMinutes(10) }), claims: { exp: inMinutes(10) } };
+  assert.equal(supersedesCapture(cached, older), false, "un JWT más viejo de otro origen");
+  assert.equal(supersedesCapture(older, cached), true);
+
+  // El endpoint es lo que dice el escenario: las variants se sacrifican antes que él.
+  const hub = "wss://substrate.office.com/m365Copilot/Chathub/o@t";
+  assert.equal(
+    normalizeEndpoint(`${hub}?scenario=S&variants=${"v".repeat(3000)}`),
+    `${hub}?scenario=S`,
+  );
+  assert.equal(normalizeEndpoint(`${hub}?scenario=S&variants=v`), `${hub}?scenario=S&variants=v`);
+  console.log("  ✓ tipo de cuenta, rechazo de VS Code y varios frames publicando a la vez");
+}
+
 testTokenValidation();
+testEncryptedToken();
+testAccountsAndFrames();
 testDiagnosis();
 testSources();
 testFrames();

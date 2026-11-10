@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import WebSocket from "ws";
+import { isEncryptedToken } from "../index";
 import { describeProfile, foreignAudience, type CopilotProfile } from "./profile";
 import { parseToneSelector, prettyTone } from "./modelCatalog";
 import { RunawayRepetitionGuard } from "./repetitionGuard";
@@ -27,6 +28,8 @@ const DEFAULT_ENDPOINT_PATH = "/m365Copilot/Chathub";
 const INCLUDED_SCENARIO = "OfficeWebIncludedCopilot";
 const PAID_SCENARIO = "OfficeWebPaidCopilot";
 const PAID_LICENSE_TYPE = "Premium";
+/** The personal Microsoft 365 subscriptions' (the accounts with an encrypted token). */
+const CONSUMER_SCENARIO = "OfficeWebPremiumConsumerCopilot";
 
 /** The `scenario` and `licenseType` the web app used, from the endpoint the browser side captured. */
 export function capturedScenario(
@@ -68,6 +71,14 @@ function scenarioFor(
   profile: CopilotProfile,
   paid: boolean,
 ): { scenario: string; licenseType?: string } {
+  // A personal account has its own scenario, whatever the model.
+  if (isEncryptedToken(profile.accessToken))
+    return (
+      capturedScenario(profile.endpoint) ?? {
+        scenario: CONSUMER_SCENARIO,
+        licenseType: PAID_LICENSE_TYPE,
+      }
+    );
   if (!paid) return { scenario: INCLUDED_SCENARIO };
   const captured = capturedScenario(profile.endpoint);
   return captured && accountTier(profile) === "paid"
@@ -520,6 +531,15 @@ export function onModelOutcome(listener: ModelOutcomeListener | undefined): void
   modelOutcomeListener = listener;
 }
 
+/** Told when the service refuses a token (401): nothing else can tell it has died. */
+export type TokenRejectedListener = (accessToken: string) => void;
+let tokenRejectedListener: TokenRejectedListener | undefined;
+
+/** Set (or clear, with undefined) the one listener for rejected tokens. */
+export function onTokenRejected(listener: TokenRejectedListener | undefined): void {
+  tokenRejectedListener = listener;
+}
+
 /** A rejection that says nothing about the model: retry later instead of flagging it. */
 const TRANSIENT_REJECTION = /thrott|rate.?limit|too many|capacity|busy|timeout|try again|429|503/i;
 
@@ -533,7 +553,11 @@ function describeUpgradeFailure(
   // than "expired": the fix is copying the right one, not re-capturing.
   const audience = status === 401 || status === 403 ? foreignAudience(token) : null;
   if (audience) return new CopilotAuthError(t("client.error.foreignAudience", audience), status);
-  if (status === 401) return new CopilotAuthError(t("client.error.401"), status);
+  if (status === 401) {
+    // A personal account's next token only comes from chatting, and by itself.
+    const message = isEncryptedToken(token) ? "client.error.401.personal" : "client.error.401";
+    return new CopilotAuthError(t(message), status);
+  }
   if (status === 403) return new CopilotAuthError(t("client.error.403"), status);
   if (status === 429) return new CopilotClientError(t("client.error.429"));
   return new CopilotClientError(
@@ -764,6 +788,8 @@ export async function streamCopilotTurn(options: {
           wsReadyState: ws.readyState,
         }),
       );
+      if (error instanceof CopilotAuthError && error.statusCode === 401)
+        tokenRejectedListener?.(profile.accessToken);
       if (error instanceof CopilotModelUnavailableError)
         modelOutcomeListener?.(error.tone, false, error.serverReply);
       if (error instanceof CopilotQuotaExhaustedError && error.tone) {
@@ -1618,7 +1644,8 @@ export async function streamCopilotTurnWithRetry(
 
 /**
  * Produce the wss URL to connect to. We always build this from the token's own
- * claims (`oid`/`tid`) instead of replaying the browser's captured `endpoint`,
+ * claims (`oid`/`tid`; an encrypted token's come from the socket URL it was
+ * captured from, see `claimsInSocketUrl`) instead of replaying the browser's captured `endpoint`,
  * even when one is available — its `variants` query string turns on the real
  * web app's feature set (native plugins, rich message types), which is the
  * same thing that breaks our text-based tool-call protocol (see
@@ -1654,7 +1681,8 @@ function buildEndpoint(
   const variants = mode === "web" ? capturedVariants(profile.endpoint) : undefined;
   if (variants) params.set("variants", variants);
   if (temporaryChat) params.set("disableMemory", "1");
-  return `${base}/${oid}@${tid}?${params.toString()}`;
+  // A pasted profile's claims are not signed: they must stay one path segment.
+  return `${base}/${encodeURIComponent(oid)}@${encodeURIComponent(tid)}?${params.toString()}`;
 }
 
 /** `…/m365Copilot/Chathub` → `…/m365Copilot/UploadFile`, over https (http for a local mock). */

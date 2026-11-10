@@ -54,6 +54,16 @@ navegador y VS Code lo usa.
      401 (el comando de pegar avisa). Dura alrededor de una hora; repítelo
      cuando caduque. La búsqueda web necesita una de las dos capturas
      anteriores.
+   - _Suscripciones personales de Microsoft 365 (Personal, Familia):_ su token va
+     cifrado, así que sólo se captura del propio chat: envía un mensaje en
+     <https://m365.cloud.microsoft/chat/> o <https://copilot.com>, y la extensión
+     de navegador o el userscript lo envían solos a VS Code, como con cualquier otra
+     cuenta. Ambos muestran qué tipo de cuenta han detectado, y avisan si VS Code
+     rechaza el token (actualiza la extensión: antes de la 4.0.0 no entiende este
+     token). A mano, pega la URL de arriba o **Copiar perfil**: el token solo no dice
+     de quién es. Nada puede saber de antemano cuándo caduca: el primer mensaje que
+     rechace lo marca como caducado en VS Code, que te pide enviar un mensaje en el
+     chat web. El token nuevo llega solo.
 2. **Chatea**: escribe **`@m365`** en el chat, o elige uno de los modelos **M365
    Copilot** (`Auto`, `Quick response`, `Think deeper`, `GPT 5.6 Think deeper`,
    `GPT 5.5`, `Claude Sonnet`…) en el selector de modelos.
@@ -125,10 +135,13 @@ en vivo, informa de cada paso de herramienta, ofrece un botón **Revisar cambios
 pendientes** tras editar y sugiere continuaciones (`/doc`, `/tests`…).
 
 Cada petición puede hacer hasta **30 llamadas a herramientas** (leer, buscar,
-editar, ejecutar…) y el límite se cambia con `m365copilot.chat.maxToolCalls`
-(`0` = sin límite; la petición se detiene igualmente a los 8 minutos). Si se
-corta, el chat avisa y ofrece un botón **Continuar**. `/explain` y `/terminal`
-conservan límites propios más cortos (4 y 6).
+editar, ejecutar…) y durar hasta **8 minutos**; se cambia con
+`m365copilot.chat.maxToolCalls` y `m365copilot.chat.maxDurationMinutes` (`0` = sin
+límite en ambos). Si se corta, el chat avisa y ofrece un botón **Continuar**.
+`/explain` y `/terminal` conservan límites propios más cortos de llamadas (4 y 6).
+Sin ninguno de los dos límites, la petición sigue hasta que termina o la cancelas.
+Recoge el token que renueva el navegador, y sólo acaba con un error si caduca sin
+que haya otro.
 
 ### Menú contextual, bombilla y barra de título
 
@@ -424,9 +437,29 @@ funcionan.
 | `m365copilot.models.updateFromCatalog` | `true`      | Descargar `models.json` (un GET a GitHub; no se envía nada). |
 | `m365copilot.models.detectFromBrowser` | `true`      | Añadir los modelos que usa la web.                           |
 | `m365copilot.models.custom`            | `[]`        | Modelos adicionales por `tone` (o `{ "tone", "name" }`).     |
+| `m365copilot.models.maxInputTokens`    | `128000`    | Tamaño de contexto de cada modelo (ver abajo).               |
+| `m365copilot.models.maxOutputTokens`   | `16000`     | Tamaño de respuesta que ve VS Code en cada modelo.           |
 
 Los ajustes de modelo de los sub-agentes, del autocompletado y de las respuestas
 en el editor (`*.model`) ofrecen los modelos de serie.
+
+Los dos ajustes de tokens se aplican a todos los modelos a la vez. `maxInputTokens`
+también fija cuánto de la conversación llega al modelo en Copilot Chat: la extensión
+la encaja en un mensaje de BizChat a unos 3,5 caracteres por token (unos 448.000
+caracteres por defecto), hasta 750.000. BizChat no publica límites. Medido en
+noviembre de 2026 con una cuenta personal, todos los modelos disponibles aceptaron
+446.000 caracteres y siguieron llamando a herramientas, y Auto aceptó 1.000.000 pero
+no 1.200.000. Si el servicio rechaza un mensaje tan largo, la extensión reintenta con
+unos 72.000 caracteres y se queda en ese tamaño hasta recargar la ventana.
+`maxOutputTokens` sólo cambia lo que se le indica a VS Code: BizChat decide cuánto
+ocupan sus respuestas.
+
+`maxInputTokens` también fija cuánto conservan `@m365` y los sub-agentes de cada
+resultado de herramienta (unos 75.000 caracteres por defecto). Sus tareas corren en
+una sola conversación de BizChat, y BizChat olvida sin avisar lo más antiguo de una
+conversación larga, que es tu petición: medido igual, conservó los 419.000 caracteres
+enteros y sólo los últimos 600.000 de 2.000.000. Por eso una tarea que llega a 400.000
+caracteres sigue en una conversación nueva, con la petición y los pasos hechos.
 
 ## Límites y rechazos de M365 Copilot
 
@@ -501,7 +534,7 @@ coincidencias».
 | -------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `m365copilot.tools.includeEditorTools` | `true`         | Describir también las herramientas nativas/MCP. `false` = sólo las `m365_*`.                                                                           |
 | `m365copilot.tools.duplicates`         | `preferEditor` | A cuál debe ir primero el modelo cuando una nativa y una nuestra hacen lo mismo. La otra queda como alternativa.                                       |
-| `m365copilot.tools.maxAdvertised`      | `48`           | Tope de herramientas descritas en el prompt (el catálogo viaja como texto). Las que no se describen siguen siendo ejecutables si el modelo las nombra. |
+| `m365copilot.tools.maxAdvertised`      | `20`           | Tope de herramientas descritas en el prompt (el catálogo viaja como texto). Las que no se describen siguen siendo ejecutables si el modelo las nombra. |
 
 ### Cómo conserva el contexto el prompt
 
@@ -528,12 +561,25 @@ que sigue el hilo el modelo:
 
 ### Revisión de cambios (Keep / Undo)
 
-Los cambios se aplican **en el editor, sin guardar en disco**, como en los
-flujos de edición nativos de VS Code:
+En el chat de `@m365`, las ediciones pasan por **la revisión de VS Code para las
+ediciones del chat**, la misma que tienen las de GitHub Copilot: rojo y verde en
+línea, **Keep / Undo** en cada cambio y en todo el archivo, **N archivos cambiados**
+junto a la caja del chat, y puntos de restauración. Se guardan al aplicarse, para
+que el siguiente comando del modelo las vea, y **Undo** devuelve el archivo en disco
+(o lo borra, si lo creó el agente). Con un modelo de M365 elegido en modo agente,
+las herramientas de edición de VS Code hacen lo mismo.
+
+Antes de cambiar archivos que pueden ejecutar código o guardar secretos
+(`.vscode/`, `.github/`, `.env`, `package.json`…) se te pregunta.
+
+Lo que no tiene un chat del que colgar esa revisión (ediciones en línea, arreglos
+rápidos, arreglos desde un comentario de revisión) usa la de esta extensión, con
+las mismas acciones:
 
 - cada **bloque (hunk)** cambiado se resalta por separado — las líneas añadidas
-  con el color de diff de tu tema, las borradas con una marca roja — y no todo el
-  tramo entre el primer cambio y el último;
+  con el color de diff de tu tema, las borradas con una marca roja, con el texto
+  anterior al pasar el ratón — y no todo el tramo entre el primer cambio y el
+  último;
 - cada bloque tiene su propio CodeLens **✓ Keep (+a −b)** y **↶ Undo**, y arriba
   del archivo están **Keep todo / Undo todo / Ver diff**; esas mismas acciones de
   archivo, más **cambio anterior / siguiente**, están en la **barra de título del
@@ -547,14 +593,14 @@ flujos de edición nativos de VS Code:
 - la barra de estado indica cuántos archivos quedan por revisar;
 - como es una edición normal del editor, **Ctrl+Z funciona** tal cual.
 
-Nada se escribe en disco hasta que guardas (los archivos nuevos sí se crean, y
-**Undo** los borra). Si aceptas un lote con Keep y te arrepientes, **M365
-Copilot: Deshacer último lote de cambios del agente** lo revierte.
+Una edición en línea queda sin guardar hasta que guardas, como si la escribieras, y
+**Undo** deja el archivo como estaba. Si aceptas un lote con Keep y te arrepientes,
+**M365 Copilot: Deshacer último lote de cambios del agente** lo revierte.
 
-> La API de _chat editing_ que usa GitHub Copilot Edits es _proposed API_ y no
-> está disponible para una extensión instalada normalmente, así que esto la
-> reproduce con API estable (decoraciones + CodeLens + diff + acciones en la
-> barra de título).
+> A la revisión de VS Code se llega con `externalEdit`, un método del flujo de
+> respuesta del chat que sigue siendo _proposed API_, aunque es el único método de
+> edición abierto a una extensión instalada normalmente (comprobado en VS Code 1.144
+> y 1.145). Si una versión lo cierra, `@m365` vuelve a la revisión de esta extensión.
 
 La herramienta de terminal es la única que ejecuta código arbitrario: antes de
 correr nada ves el comando literal (con un aviso extra para patrones típicamente
@@ -572,7 +618,8 @@ mucho no llena el contexto de la conversación principal. Las llamadas que
 editan, ejecutan comandos o tocan git se serializan entre sub-agentes; las de
 solo lectura corren en paralelo. _Limitación conocida:_ el diálogo de
 confirmación no indica qué sub-agente lo pidió; la notificación de progreso y
-el registro sí.
+el registro sí. `m365copilot.chat.maxDurationMinutes` también limita a cada
+sub-agente, contando desde que le toca correr.
 
 | Ajuste                                | Por defecto | Para qué                                                            |
 | ------------------------------------- | ----------- | ------------------------------------------------------------------- |

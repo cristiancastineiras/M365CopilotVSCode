@@ -107,17 +107,20 @@ export default defineContentScript({
     }
 
     /** Guarda un token sólo si es de Sydney, válido y no más viejo que el que ya teníamos. */
-    function offerToken(token: string, where: string): void {
+    function offerToken(token: string, where: string, socketUrl?: string): void {
       try {
-        const { diagnosis, accepted } = diagnoseToken(readStore(), token);
+        const { diagnosis, accepted } = diagnoseToken(readStore(), token, undefined, socketUrl);
         if (!accepted) {
           // `not-sydney` es de lo más normal (cada fetch a Graph trae su
           // bearer), por eso sólo se registra en modo verboso.
           diag(`token descartado desde ${where}: ${diagnosis}`);
           return;
         }
-        const minutes = Math.round(((accepted.claims.exp ?? 0) * 1000 - Date.now()) / 60000);
-        logger.info(`Token capturado desde ${where}, caduca en ${minutes} min`);
+        const { exp } = accepted.claims;
+        const expiry = exp
+          ? `, caduca en ${Math.round((exp * 1000 - Date.now()) / 60000)} min`
+          : "";
+        logger.info(`Token capturado desde ${where}${expiry}`);
         writeStore({ ...accepted, tokenSource: where });
       } catch (error) {
         logger.error(`Error al procesar token desde ${where}:`, error);
@@ -134,19 +137,19 @@ export default defineContentScript({
       diag("WebSocket:", String(url).split("?")[0], copilot ? "(copilot)" : "(ignorado)");
       if (!copilot) return;
 
-      // El token viaja en la query: se extrae ANTES de normalizar la URL.
-      const token = tokenInSocketUrl(url);
-      diag("socket de copilot; token en la URL:", Boolean(token));
-      if (token) offerToken(token, "websocket-url");
-
       // Substrate abre varios WebSockets (presencia, notificaciones…). Guardamos
       // éste sólo de forma tentativa hasta que veamos que envía un frame `chat`,
       // que es la prueba definitiva de que es el hub del chat. Un endpoint ya
-      // confirmado no se pisa con un socket cualquiera.
+      // confirmado no se pisa con un socket cualquiera. Va antes que el token
+      // para que su primer envío a VS Code salga completo.
       const endpoint = normalizeEndpoint(String(url));
       if (endpoint && !readStore().endpointConfirmed) {
         writeStore({ endpoint, origin: location.origin, userAgent: navigator.userAgent });
       }
+
+      const token = tokenInSocketUrl(url);
+      diag("socket de copilot; token en la URL:", Boolean(token));
+      if (token) offerToken(token, "websocket-url", String(url));
 
       const originalSend = ws.send;
       ws.send = function (data: any) {

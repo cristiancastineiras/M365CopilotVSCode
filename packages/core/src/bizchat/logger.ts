@@ -120,7 +120,8 @@ export function formatDebugData(value: unknown): string {
 
 // ------------------------------------------------------------------- redaction
 
-const JWT = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/g;
+// De tres a cinco partes: un JWE tiene cinco y la segunda puede ir vacía.
+const JWT = /eyJ[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]*){2,4}/g;
 const URL_SECRET =
   /([?&](?:access_token|id_token|refresh_token|token|sig|signature|client_secret|password|api[_-]?key)=)[^&\s"'#]+/gi;
 const AUTH_SCHEME = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/g;

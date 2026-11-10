@@ -311,7 +311,70 @@ async function testFramesAndMenu() {
   );
 }
 
+async function testEncryptedTokenOfPersonalAccounts() {
+  const token = `${b64url({ alg: "dir", enc: "A256GCM" })}..aXY.${"Y".repeat(3000)}.dGFn`;
+  const hub =
+    "wss://substrate.office.com/m365Copilot/Chathub/00000000-0000-0000-ea11-3f83b27d9e04@84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa";
+  const query = "scenario=OfficeWebPremiumConsumerCopilot&licenseType=Premium";
+
+  // In the MSAL cache nothing proves it is Copilot's.
+  const page = load({ localStorage: { "some-key": JSON.stringify({ secret: token }) } });
+  await settle();
+  assert.equal(page.capture().accessToken, undefined);
+  assert.equal(page.posts().length, 0);
+
+  page.openSocket(`${hub}?access_token=${token}&ConversationId=c1&${query}`);
+  await settle();
+  const capture = page.capture();
+  assert.equal(capture.accessToken, token);
+  assert.deepEqual(capture.claims, {
+    oid: "00000000-0000-0000-ea11-3f83b27d9e04",
+    tid: "84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa",
+  });
+  assert.equal(capture.endpoint, `${hub}?${query}`, "the long token does not cost the endpoint");
+
+  // Sent to VS Code once, even with no `exp` to tell one token from another.
+  assert.equal(page.posts().length, 1);
+  const profile = JSON.parse(page.posts()[0].data!);
+  assert.equal(profile.accessToken, token);
+  assert.deepEqual(profile.claims, capture.claims);
+  assert.equal(profile.endpoint, capture.endpoint, "its first send is already complete");
+  assert.equal(typeof page.sync().syncedTokenExp, "number");
+  page.openSocket(`${hub}?access_token=${token}&${query}`);
+  await settle();
+  assert.equal(page.posts().length, 1);
+  console.log("  ✓ JWE de cuentas personales: se captura del hub del chat y se envía una vez");
+}
+
+/**
+ * VS Code answers but refuses the token: what an extension older than 4.0.0 does
+ * with an encrypted one. It must not count as sent, and the next attempt after
+ * updating goes through by itself.
+ */
+async function testVsCodeRejectsTheToken() {
+  let answer = 400;
+  const page = load({ vscode: (request) => (request.method === "POST" ? answer : 200) });
+  const hub =
+    "wss://substrate.office.com/m365Copilot/Chathub/00000000-0000-0000-ea11-3f83b27d9e04@84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa";
+  const token = (fill: string) =>
+    `${b64url({ alg: "dir", enc: "A256GCM" })}..aXY.${fill.repeat(40)}.dGFn`;
+  page.openSocket(`${hub}?access_token=${token("Y")}`);
+  await settle();
+  assert.equal(page.sync().lastError, "HTTP 400");
+  assert.equal(page.sync().vscodeReachable, true, "it does answer");
+  assert.equal(page.sync().syncedTokenExp, null, "but it does not have the token");
+
+  answer = 200;
+  page.openSocket(`${hub}?access_token=${token("Z")}`);
+  await settle();
+  assert.equal(page.sync().lastError, null);
+  assert.equal(typeof page.sync().syncedTokenExp, "number");
+  console.log("  ✓ si VS Code rechaza el token queda dicho, y se recupera al aceptarlo");
+}
+
 await testWebSocketCaptureAndSync();
+await testEncryptedTokenOfPersonalAccounts();
+await testVsCodeRejectsTheToken();
 await testMsalCacheAndRenewal();
 await testHeadersAndVsCodeDown();
 await testFramesAndMenu();

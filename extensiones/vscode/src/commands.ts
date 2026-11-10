@@ -4,7 +4,7 @@
  * language picker.
  */
 import * as vscode from "vscode";
-import { M365_CHAT_URL } from "@m365copilot/core";
+import { accountKind, M365_CHAT_URL } from "@m365copilot/core";
 import {
   foreignAudience,
   isTokenUsable,
@@ -22,7 +22,7 @@ import {
   isDeepDebug,
   log,
 } from "@m365copilot/core/bizchat";
-import type { ProfileStore } from "./secrets";
+import { unusableTokenMessage, type ProfileStore } from "./secrets";
 import type { WorkspaceEditManager } from "../tools/writeFile";
 import { unavailabilityText, type CopilotModel, type ModelRegistry } from "./models";
 import type { IndexStatus } from "./projectIndex";
@@ -147,7 +147,7 @@ export async function requireUsableProfile(
   if (profile && isTokenUsable(profile)) return profile;
   const paste = t("watcher.pasteToken");
   const picked = await vscode.window.showWarningMessage(
-    t(profile ? "participant.tokenExpired" : "participant.noToken"),
+    profile ? unusableTokenMessage(profile) : t("participant.noToken"),
     paste,
   );
   if (picked === paste) await vscode.commands.executeCommand("m365copilot.pasteProfile");
@@ -238,7 +238,13 @@ export async function showStatus(store: ProfileStore): Promise<void> {
   }
   const usable = isTokenUsable(profile);
   const lines = [
-    t("status.user", profile.claims?.upn ?? t("status.unknownUser")),
+    t(
+      "status.user",
+      profile.claims?.upn ??
+        t(
+          accountKind(profile) === "personal" ? "statusbar.tooltip.personal" : "status.unknownUser",
+        ),
+    ),
     t("status.state", tokenSummary(profile)),
     t("status.captured", new Date(profile.capturedAt).toLocaleString(getLocale())),
   ];
@@ -481,7 +487,7 @@ function tokenSummary(profile: Awaited<ReturnType<ProfileStore["get"]>>): string
   if (!profile) return t("statusbar.tooltip.tokenMissing");
   const mins = minutesUntilExpiry(profile);
   if (!isTokenUsable(profile)) {
-    return mins !== null
+    return mins !== null && !profile.tokenRejected
       ? `${t("status.tokenExpired")} (${t("status.expiredAgo", Math.abs(mins))})`
       : t("status.tokenExpired");
   }

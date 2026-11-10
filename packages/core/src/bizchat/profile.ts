@@ -2,7 +2,9 @@
  * El "perfil" es lo que se captura de la web de M365 Copilot (con la extensión
  * de navegador o el userscript). Puede ser:
  *   - un objeto JSON completo (token + endpoint + frame de invocación), o
- *   - un JWT pelado (sólo el token).
+ *   - un JWT pelado (sólo el token), o
+ *   - la URL del WebSocket del chat, con un JWT o con el JWE de las cuentas
+ *     personales, que sólo así (o en el JSON) llega con su `{oid}@{tid}`.
  *
  * `endpoint` e `invocationTemplate` se conservan por compatibilidad y como
  * diagnóstico, pero client.ts ya NO los usa para construir peticiones: sólo
@@ -11,8 +13,11 @@
  * pegado, que es específico de los clientes de BizChat.
  */
 import {
+  accountKind,
+  claimsInSocketUrl,
   decodeJwtPayload,
   extractClaims,
+  isEncryptedToken,
   isSydneyToken,
   isTokenUsable,
   minutesUntilExpiry,
@@ -28,16 +33,22 @@ export type { CopilotProfile, TokenClaims } from "../index";
 export { decodeJwtPayload, isTokenUsable, minutesUntilExpiry } from "../index";
 
 const DEFAULT_ORIGIN = "https://m365.cloud.microsoft";
+/** Desde donde chatean las cuentas personales, las del token cifrado. */
+const ENCRYPTED_TOKEN_ORIGIN = "https://copilot.com";
 const DEFAULT_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 
 export class ProfileParseError extends Error {}
 
 const BARE_JWT = /^ey[\w-]+\.[\w-]+\.[\w-]+$/;
-/** `Bearer eyJ…`, as copied from an `Authorization` header. */
-const BEARER_JWT = /^bearer\s+(ey[\w-]+\.[\w-]+\.[\w-]+)$/i;
 /** The chat WebSocket URL copied from DevTools (`wss://…/Chathub/…?access_token=…`). */
 const SOCKET_URL = /^(wss?|https?):\/\//i;
+
+/** The token alone, without the `Bearer ` it has if copied from an `Authorization` header. */
+function bareToken(text: string): string | null {
+  const token = text.replace(/^bearer\s+/i, "");
+  return BARE_JWT.test(token) || isEncryptedToken(token) ? token : null;
+}
 
 /**
  * Something the paste command can use: a bare JWT, `Bearer <JWT>`, the chat
@@ -46,7 +57,7 @@ const SOCKET_URL = /^(wss?|https?):\/\//i;
  */
 export function looksLikeProfile(text: string): boolean {
   const value = text.trim();
-  if (BARE_JWT.test(value) || BEARER_JWT.test(value)) return true;
+  if (bareToken(value)) return true;
   if (SOCKET_URL.test(value)) return /[?&]access_token=ey/.test(value);
   return value.startsWith("{") && /"(accessToken|access_token|token)"\s*:\s*"ey/.test(value);
 }
@@ -63,19 +74,20 @@ export function parsePastedProfile(input: string): CopilotProfile {
   const text = input.trim();
   if (!text) throw new ProfileParseError(t("profile.error.empty"));
 
-  // ¿JWT pelado?
-  if (BARE_JWT.test(text)) {
-    return normalize({ accessToken: text });
-  }
-  const bearer = BEARER_JWT.exec(text);
-  if (bearer) {
-    return normalize({ accessToken: bearer[1] });
+  // ¿Token pelado?
+  const bare = bareToken(text);
+  if (bare) {
+    return normalize({ accessToken: bare });
   }
   if (SOCKET_URL.test(text)) {
     const token = tokenInSocketUrl(text);
     if (!token) throw new ProfileParseError(t("profile.error.urlWithoutToken"));
     // Sin el token ni los ids de esa sesión; conserva las `variants`.
-    return normalize({ accessToken: token, endpoint: normalizeEndpoint(text) || undefined });
+    return normalize({
+      accessToken: token,
+      endpoint: normalizeEndpoint(text) || undefined,
+      claims: claimsInSocketUrl(text),
+    });
   }
 
   let obj: unknown;
@@ -106,16 +118,26 @@ function normalize(record: Record<string, unknown>, token?: string): CopilotProf
   const accessToken = (token ?? (record.accessToken as string) ?? "").trim();
   const claims: TokenClaims | null =
     extractClaims(accessToken) ?? (record.claims as TokenClaims | undefined) ?? null;
+  const encrypted = isEncryptedToken(accessToken);
 
-  if (!accessToken || accessToken.split(".").length !== 3) {
+  if (!accessToken || (!encrypted && accessToken.split(".").length !== 3)) {
     throw new ProfileParseError(t("profile.error.invalidJwt"));
+  }
+  // El cifrado no dice de quién es, y la URL del chat lleva `{oid}@{tid}`.
+  if (encrypted && !(claims?.oid && claims.tid)) {
+    throw new ProfileParseError(t("profile.error.encryptedWithoutAccount"));
   }
 
   return {
     version: typeof record.version === "number" ? record.version : 1,
     accessToken,
     endpoint: typeof record.endpoint === "string" ? record.endpoint : null,
-    origin: typeof record.origin === "string" ? record.origin : DEFAULT_ORIGIN,
+    origin:
+      typeof record.origin === "string"
+        ? record.origin
+        : encrypted
+          ? ENCRYPTED_TOKEN_ORIGIN
+          : DEFAULT_ORIGIN,
     userAgent: typeof record.userAgent === "string" ? record.userAgent : DEFAULT_UA,
     invocationTemplate:
       record.invocationTemplate && typeof record.invocationTemplate === "object"
@@ -136,9 +158,10 @@ function normalize(record: Record<string, unknown>, token?: string): CopilotProf
  * the `Authorization: Bearer` of another request on the page (Graph, search…):
  * it decodes fine and has not expired — so everything looks connected — yet
  * the chat rejects it with 401. `?` when the token has no readable audience.
+ * An encrypted token hides its audience, which says nothing against it.
  */
 export function foreignAudience(token: string): string | null {
-  if (isSydneyToken(token)) return null;
+  if (isSydneyToken(token) || isEncryptedToken(token)) return null;
   const aud = decodeJwtPayload(token)?.aud;
   return typeof aud === "string" && aud ? aud : "?";
 }
@@ -172,7 +195,8 @@ export function accountOf(profile: CopilotProfile | null | undefined): ProfileAc
   return {
     sessionId: `${claims.tid ?? "tenant"}/${accountId}`,
     accountId,
-    label: upn || t("account.unknownUser"),
+    label:
+      upn || t(accountKind(profile) === "personal" ? "account.personal" : "account.unknownUser"),
   };
 }
 
@@ -195,6 +219,7 @@ export function describeProfile(
   }
   const exp = profile.claims?.exp;
   return {
+    accountKind: accountKind(profile),
     user: profile.claims?.upn,
     tenant: profile.claims?.tid,
     objectId: profile.claims?.oid,

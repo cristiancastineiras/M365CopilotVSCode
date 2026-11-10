@@ -14,7 +14,9 @@ import {
   describeChange,
   describeHunks,
   diffLines,
+  eolOf,
   revertHunkEdit,
+  splitLines,
   type Hunk,
 } from "./lineDiff";
 import { t } from "../src/i18n";
@@ -27,6 +29,24 @@ const MAX_EDIT_TEXT_CHARS = 500_000;
 const MAX_HUNK_LENSES = 40;
 /** Typing in a file under review re-diffs it, but not on every keystroke. */
 const REFRESH_DEBOUNCE_MS = 150;
+/** How many of the previous lines a change's hover shows. */
+const MAX_HOVER_LINES = 30;
+
+/**
+ * VS Code's own review of chat edits: snapshot the files, run the callback, read
+ * them back from disk and show the difference as Copilot's edits are shown (red
+ * and green inline, Keep/Undo on each change, "files changed" in the chat,
+ * checkpoints). It is a method of the response stream that is still a proposed
+ * API, but the only edit method there that does not require being allow-listed
+ * (checked on VS Code 1.144), so it is looked up at runtime and our own review
+ * stays as the fallback.
+ */
+export type ChatReview = (targets: vscode.Uri[], run: () => Thenable<unknown>) => Thenable<unknown>;
+
+export function chatReviewOf(stream: vscode.ChatResponseStream): ChatReview | undefined {
+  const { externalEdit } = stream as unknown as { externalEdit?: ChatReview };
+  return typeof externalEdit === "function" ? externalEdit.bind(stream) : undefined;
+}
 
 export interface ApplyWorkspaceEditsInput {
   readonly edits: unknown;
@@ -55,6 +75,14 @@ interface PendingFile {
   baseline: string | undefined;
   /** The agent deleted the file: there is no document left to diff. */
   deleted: boolean;
+  /**
+   * The change went to disk when it was applied, as VS Code's own chat edits do
+   * (a command the model runs next has to see it), so reverting it has to as well.
+   * An edit made from the editor (inline edit) stays unsaved, like typing would.
+   */
+  readonly savesEdits: boolean;
+  /** The document had no unsaved changes before the edit: undoing it should leave it so. */
+  readonly wasClean: boolean;
 }
 
 /** Snapshot of a file as it was kept, for "undo last batch". */
@@ -62,6 +90,8 @@ interface KeptFile {
   readonly uri: vscode.Uri;
   readonly before: string | undefined;
   readonly after: string | undefined;
+  /** Whether putting `before` back has to reach the disk too. */
+  readonly save: boolean;
 }
 
 /** Holds the "before" side of the diff, so the right-hand pane can be the
@@ -101,9 +131,12 @@ class PreviewContentProvider implements vscode.TextDocumentContentProvider {
  * the first to the last changed line, so two separate changes could only be
  * kept or undone together and the highlight covered untouched code between.
  *
- * Edits land as unsaved editor changes, so nothing is written to disk until
- * the user saves — Undo restores the previous content outright, and plain
- * Ctrl+Z works because every change is a normal editor edit.
+ * In a chat request VS Code's own review takes over ({@link ChatReview}), and
+ * this class only writes the files; what is described here is what remains for
+ * edits from the editor, and for when that review is not available. Agent edits
+ * are saved as they land, because the command the model runs next has to see
+ * them; Undo restores the previous content on disk too, and plain Ctrl+Z works
+ * because every change is a normal editor edit.
  */
 export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Disposable {
   private readonly previews = new PreviewContentProvider();
@@ -113,6 +146,14 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
   /** The last batch the user kept as a whole, so it can still be reverted afterwards. */
   private lastKept: KeptFile[] = [];
   private refreshTimer: NodeJS.Timeout | undefined;
+  /** Files whose review ended because the user pressed Ctrl+Z: Ctrl+Y brings it back. */
+  private readonly undoneByUser = new Map<string, PendingFile>();
+  /** Documents whose last change was an undo, until the debounced re-diff looks at them. */
+  private readonly lastChangeUndone = new Set<string>();
+  /** The review of the chat request whose edit tool is running. */
+  private chatReview: ChatReview | undefined;
+  /** Files created under {@link chatReview}, by URI. See {@link removeIfUndone}. */
+  private readonly createdInChat = new Set<string>();
 
   private readonly insertedLines = vscode.window.createTextEditorDecorationType({
     backgroundColor: new vscode.ThemeColor("diffEditor.insertedLineBackground"),
@@ -161,8 +202,24 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
       // Drives the Keep/Undo/Diff buttons in the editor title bar.
       vscode.window.onDidChangeActiveTextEditor(() => this.updateActiveEditorContext()),
       vscode.workspace.onDidChangeTextDocument((event) => {
-        if (this.pending.has(event.document.uri.toString())) this.scheduleRefresh();
+        // Also fired, with no changes, when only the dirty state flips.
+        if (event.contentChanges.length === 0) return;
+        const key = event.document.uri.toString();
+        if (event.reason === vscode.TextDocumentChangeReason.Redo) {
+          const undone = this.undoneByUser.get(key);
+          if (undone && !this.pending.has(key)) {
+            this.pending.set(key, undone);
+            if (undone.savesEdits) void event.document.save();
+          }
+          this.undoneByUser.delete(key);
+        }
+        if (!this.pending.has(key)) return;
+        if (event.reason === vscode.TextDocumentChangeReason.Undo) this.lastChangeUndone.add(key);
+        else this.lastChangeUndone.delete(key);
+        this.scheduleRefresh();
       }),
+      vscode.workspace.onDidCloseTextDocument((document) => void this.reconcileClosed(document)),
+      vscode.workspace.onDidSaveTextDocument((document) => void this.removeIfUndone(document)),
     );
     this.renderStatus();
   }
@@ -180,6 +237,21 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 
   // ------------------------------------------------------------- tool entry
 
+  /**
+   * Run the next edit under this chat response's own review. The tool runs after
+   * a round trip through the main process that keeps nothing but JSON, hence a
+   * field and not an argument.
+   *
+   * shortcut: with @m365 requests running at once in two chats, an edit could show
+   * up in the other chat's response; still reviewed. Upgrade if chats ever run in parallel.
+   */
+  offerChatReview(review: ChatReview): vscode.Disposable {
+    this.chatReview = review;
+    return new vscode.Disposable(() => {
+      if (this.chatReview === review) this.chatReview = undefined;
+    });
+  }
+
   async stageEdits(
     input: ApplyWorkspaceEditsInput,
     token: vscode.CancellationToken,
@@ -193,11 +265,19 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
         charsAfter: file.after?.length ?? null,
       })),
     );
-    await this.applyToEditor(files);
-
-    for (const file of files) this.track(file);
+    // A deletion stays with our own review: VS Code's reads the file back from
+    // disk to compute the change, and there would be nothing to read.
+    const inChat = await this.applyUnderChatReview(
+      files.filter((file) => file.after !== undefined),
+    );
+    const ours = inChat ? files.filter((file) => file.after === undefined) : files;
+    if (ours.length > 0) {
+      await this.applyToEditor(ours);
+      await this.saveAll(ours.filter((file) => file.after !== undefined));
+      for (const file of ours) this.track(file);
+      this.changed();
+    }
     await this.revealFirst(files[0]!);
-    this.changed();
 
     const summary = files
       .map((file) => `${file.relativePath} (${describeChange(file.before, file.after)})`)
@@ -222,6 +302,8 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
         relativePath: relativePathForUri(document.uri),
         baseline: document.getText(),
         deleted: false,
+        savesEdits: false,
+        wasClean: !document.isDirty,
       });
     }
     const edit = new vscode.WorkspaceEdit();
@@ -242,6 +324,8 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
         relativePath: file.relativePath,
         baseline: file.before,
         deleted: file.after === undefined,
+        savesEdits: true,
+        wasClean: true,
       });
       return;
     }
@@ -286,7 +370,7 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 
     const files = [...byUri.values()]
       .filter((entry) => entry.file.before !== entry.after)
-      .map((entry) => ({ ...entry.file, after: entry.after }));
+      .map((entry) => ({ ...entry.file, after: withFileEol(entry.after, entry.file.before) }));
     if (files.length === 0) throw new Error(t("edit.noChange"));
     return files;
   }
@@ -348,6 +432,65 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 
   // ------------------------------------------------------------- applying
 
+  /**
+   * Whether these files went through the chat's own review. If the host refuses
+   * before running the callback (an older or stricter VS Code), ours takes over.
+   */
+  private async applyUnderChatReview(files: readonly PlannedFile[]): Promise<boolean> {
+    const review = this.chatReview;
+    if (!review) return false;
+    if (files.length === 0) return true;
+    let ran = false;
+    try {
+      await review(
+        files.map((file) => file.uri),
+        async () => {
+          ran = true;
+          for (const file of files) {
+            const bytes = await vscode.workspace.encode(file.after ?? "", { uri: file.uri });
+            await vscode.workspace.fs.writeFile(file.uri, bytes);
+            if (file.before === undefined && file.after) {
+              this.createdInChat.add(file.uri.toString());
+            }
+          }
+        },
+      );
+      return true;
+    } catch (error) {
+      if (ran) throw error;
+      debug("edits", "the chat's own review is not available: using ours", error);
+      return false;
+    }
+  }
+
+  /**
+   * VS Code's review treats a file that did not exist before an external edit as
+   * edited from empty, so its Undo leaves an empty file behind (checked on 1.145).
+   * Saved empty, a file the agent created is that Undo: finish the job.
+   *
+   * shortcut: a file the agent created and the user later empties and saves is
+   * deleted too (nothing is lost). Upgrade if VS Code ever reports the Undo.
+   */
+  private async removeIfUndone(document: vscode.TextDocument): Promise<void> {
+    if (!this.createdInChat.delete(document.uri.toString())) return;
+    if (document.getText() !== "") {
+      this.createdInChat.add(document.uri.toString());
+      return;
+    }
+    debug("edits", `removing ${relativePathForUri(document.uri)}: its creation was undone`);
+    await vscode.workspace.fs.delete(document.uri).then(undefined, () => {});
+    await this.closeTabsOf([document]);
+  }
+
+  /** Through the document: `workspace.save` only saves files that have a tab open. */
+  private async saveAll(files: readonly { readonly uri: vscode.Uri }[]): Promise<void> {
+    for (const file of files) {
+      if (file.uri.scheme === "untitled") continue;
+      const document = await vscode.workspace.openTextDocument(file.uri);
+      await document.save();
+    }
+  }
+
   private async applyToEditor(files: readonly PlannedFile[]): Promise<void> {
     const edit = new vscode.WorkspaceEdit();
     for (const file of files) {
@@ -385,7 +528,10 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
     if (file.after === undefined) return; // nothing to show for a deletion
     try {
       const document = await vscode.workspace.openTextDocument(file.uri);
-      const editor = await vscode.window.showTextDocument(document, { preview: false });
+      const editor = await vscode.window.showTextDocument(document, {
+        preview: false,
+        preserveFocus: true,
+      });
       const first = diffLines(file.before ?? "", file.after)[0];
       if (first) revealLine(editor, first.newStart);
     } catch {
@@ -414,6 +560,8 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
       await this.revert(await Promise.all(files.map((file) => this.snapshot(file))));
       void vscode.window.setStatusBarMessage(t("edit.reverted", files.length), 5000);
     } catch (error) {
+      // Nothing was reverted: the changes are still there, so they stay under review.
+      for (const file of files) this.pending.set(file.uri.toString(), file);
       void vscode.window.showErrorMessage(t("edit.revertFailed", errorMessage(error)));
     }
     this.changed();
@@ -460,6 +608,9 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
       void vscode.window.showErrorMessage(t("edit.revertFailed", t("edit.restoreFailed")));
       return;
     }
+    if (file.savesEdits || (file.wasClean && document.getText() === file.baseline)) {
+      await document.save();
+    }
     this.reconcile();
   }
 
@@ -486,8 +637,10 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
       if (file.before === undefined) {
         edit.deleteFile(file.uri, { ignoreIfNotExists: true });
       } else if (file.after === undefined) {
-        edit.createFile(file.uri, { overwrite: true });
-        if (file.before) edit.insert(file.uri, new vscode.Position(0, 0), file.before);
+        edit.createFile(file.uri, {
+          overwrite: true,
+          contents: await vscode.workspace.encode(file.before, { uri: file.uri }),
+        });
       } else {
         edit.replace(file.uri, await this.fullRange(file.uri, file.after), file.before);
       }
@@ -495,17 +648,34 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
     if (!(await vscode.workspace.applyEdit(edit))) {
       throw new Error(t("edit.restoreFailed"));
     }
+    // Without this the file would stay "modified" although it is back to what is
+    // on disk, or the agent's version would stay on disk behind the restored text.
+    await this.saveAll(files.filter((file) => file.save && file.before !== undefined));
+    await this.closeTabsOf(files.filter((file) => file.before === undefined));
+  }
+
+  /** A file the agent created is gone: a tab left open would show it as "(deleted)". */
+  private async closeTabsOf(files: readonly { readonly uri: vscode.Uri }[]): Promise<void> {
+    const gone = new Set(files.map((file) => file.uri.toString()));
+    if (gone.size === 0) return;
+    const tabs = vscode.window.tabGroups.all
+      .flatMap((group) => group.tabs)
+      .filter(
+        (tab) => tab.input instanceof vscode.TabInputText && gone.has(tab.input.uri.toString()),
+      );
+    if (tabs.length > 0) await vscode.window.tabGroups.close(tabs);
   }
 
   private async snapshot(file: PendingFile): Promise<KeptFile> {
-    if (file.deleted) return { uri: file.uri, before: file.baseline, after: undefined };
+    const save = file.savesEdits || file.wasClean;
+    if (file.deleted) return { uri: file.uri, before: file.baseline, after: undefined, save };
     let after = "";
     try {
       after = (await vscode.workspace.openTextDocument(file.uri)).getText();
     } catch {
       /* gone from disk: reverting recreates it from the baseline */
     }
-    return { uri: file.uri, before: file.baseline, after };
+    return { uri: file.uri, before: file.baseline, after, save };
   }
 
   private take(uri?: vscode.Uri): PendingFile[] {
@@ -670,8 +840,34 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
       if (this.hunksFor(file, document).length === 0) {
         this.pending.delete(key);
         this.hunkCache.delete(key);
+        if (this.lastChangeUndone.has(key)) {
+          this.undoneByUser.set(key, file);
+          // Ctrl+Z undid a change that was already saved: the disk follows.
+          if (file.savesEdits || file.wasClean) void document.save();
+        }
       }
+      this.lastChangeUndone.delete(key);
     }
+    this.changed();
+  }
+
+  /**
+   * A document closed under review. If it was closed without saving, what is on
+   * disk may already be the baseline: nothing is left to review, although the
+   * status bar would go on offering it.
+   */
+  private async reconcileClosed(document: vscode.TextDocument): Promise<void> {
+    const key = document.uri.toString();
+    this.undoneByUser.delete(key);
+    const file = this.pending.get(key);
+    if (!file || file.deleted || file.baseline === undefined) return;
+    try {
+      if ((await readWorkspaceText(file.uri)) !== file.baseline) return;
+    } catch {
+      return;
+    }
+    this.pending.delete(key);
+    this.hunkCache.delete(key);
     this.changed();
   }
 
@@ -689,23 +885,27 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
       const file = this.pending.get(editor.document.uri.toString());
       const hunks = file ? this.hunksFor(file, editor.document) : [];
       const lastLine = Math.max(editor.document.lineCount - 1, 0);
-      const inserted: vscode.Range[] = [];
-      const above: vscode.Range[] = [];
-      const below: vscode.Range[] = [];
+      const inserted: vscode.DecorationOptions[] = [];
+      const above: vscode.DecorationOptions[] = [];
+      const below: vscode.DecorationOptions[] = [];
+      const oldLines = file?.baseline === undefined ? [] : splitLines(file.baseline);
       for (const hunk of hunks) {
+        const hoverMessage = previousLinesHover(oldLines, hunk, editor.document.languageId);
         if (hunk.newLength > 0) {
-          inserted.push(
-            new vscode.Range(
-              hunk.newStart,
-              0,
-              Math.min(hunk.newStart + hunk.newLength - 1, lastLine),
-              0,
-            ),
+          const range = new vscode.Range(
+            hunk.newStart,
+            0,
+            Math.min(hunk.newStart + hunk.newLength - 1, lastLine),
+            0,
           );
+          inserted.push({ range, hoverMessage });
         } else if (hunk.newStart <= lastLine) {
-          above.push(new vscode.Range(hunk.newStart, 0, hunk.newStart, 0));
+          above.push({
+            range: new vscode.Range(hunk.newStart, 0, hunk.newStart, 0),
+            hoverMessage,
+          });
         } else {
-          below.push(new vscode.Range(lastLine, 0, lastLine, 0));
+          below.push({ range: new vscode.Range(lastLine, 0, lastLine, 0), hoverMessage });
         }
       }
       editor.setDecorations(this.insertedLines, inserted);
@@ -807,7 +1007,6 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
     }
     this.status.text = t("edit.status.text", count);
     this.status.tooltip = t("edit.status.tooltip");
-    this.status.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
     this.status.show();
   }
 
@@ -837,8 +1036,32 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
     for (const disposable of this.disposables) disposable.dispose();
     this.pending.clear();
     this.hunkCache.clear();
+    this.undoneByUser.clear();
+    this.createdInChat.clear();
     this.lastKept = [];
   }
+}
+
+/** What a change's lines were before it, shown when hovering over them. */
+function previousLinesHover(
+  oldLines: readonly string[],
+  hunk: Hunk,
+  languageId: string,
+): vscode.MarkdownString | undefined {
+  if (hunk.oldLength === 0) return undefined;
+  const lines = oldLines.slice(hunk.oldStart, hunk.oldStart + hunk.oldLength);
+  const shown = lines.slice(0, MAX_HOVER_LINES).join("\n");
+  const more = lines.length - MAX_HOVER_LINES;
+  const hover = new vscode.MarkdownString(t("edit.hover.before"));
+  hover.appendCodeblock(shown, languageId);
+  if (more > 0) hover.appendMarkdown(t("edit.hover.more", more));
+  return hover;
+}
+
+/** The whole text in the line ending the file had: what the editor would have done. */
+function withFileEol(after: string | undefined, before: string | undefined): string | undefined {
+  if (after === undefined || before === undefined) return after;
+  return after.replace(/\r\n|\r|\n/g, eolOf(before));
 }
 
 function revealLine(editor: vscode.TextEditor, line: number): void {

@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { randomUUID } from "node:crypto";
+import { accountKind } from "@m365copilot/core";
 import {
   streamCopilotTurnWithRetry,
   CopilotClientError,
@@ -21,16 +22,20 @@ import {
 import { currentEnvironment, currentSkills } from "./editorContext";
 import { MarkdownStreamFormatter } from "./markdown";
 import { flattenMessages, imagesOf, recentUserTexts } from "./messages";
-import { looksLikeRemoteSandbox, ProseHold, toolFreeProblem } from "./giveUp";
-import { retrievalText } from "./transcript";
+import { FORCE_NOTE_KEYS, looksLikeRemoteSandbox, ProseHold, toolFreeProblem } from "./giveUp";
+import {
+  CHARS_PER_TOKEN,
+  isTurnRefusal,
+  retrievalText,
+  TRANSCRIPT_LIMITS,
+  transcriptLimitsFor,
+  type TranscriptLimits,
+} from "./transcript";
 import { webSearchEnabled } from "./webSearch";
 import { sourcesMarkdown } from "./webSearchPrompt";
 import { allModels, findModel, modelRegistry, toChatInformation, type TokenState } from "./models";
-import type { ProfileStore } from "./secrets";
+import { unusableTokenMessage, type ProfileStore } from "./secrets";
 import { t } from "./i18n";
-
-/** Rough token estimate; BizChat exposes no tokenizer. */
-const CHARS_PER_TOKEN = 3.5;
 
 /** Numbers each chat request in the deep trace (`chat#3`), so interleaved requests can be told apart. */
 let chatSeq = 0;
@@ -46,7 +51,7 @@ function readToolSettings(): {
   return {
     includeEditorTools: config.get<boolean>("includeEditorTools", true),
     duplicates: config.get<DuplicatePolicy>("duplicates", "preferEditor"),
-    maxTools: config.get<number>("maxAdvertised", 48),
+    maxTools: config.get<number>("maxAdvertised", 20),
     singleRoot: (vscode.workspace.workspaceFolders?.length ?? 0) <= 1,
   };
 }
@@ -58,6 +63,8 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
   private readonly changeEmitter = new vscode.EventEmitter<void>();
   readonly onDidChangeLanguageModelChatInformation = this.changeEmitter.event;
   private readonly storeListener: vscode.Disposable;
+  /** The service refused a long message that a shorter one got past: keep to short ones. */
+  private shortPromptsOnly = false;
 
   constructor(
     private readonly store: ProfileStore,
@@ -114,7 +121,14 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
       debug(scope, `refused: the stored token expired (${mins} min)`);
       this.changeEmitter.fire();
       throw userError(
-        t("provider.tokenExpired", mins !== null ? t("provider.expiredAgo", Math.abs(mins)) : ""),
+        accountKind(profile) === "personal"
+          ? unusableTokenMessage(profile)
+          : t(
+              "provider.tokenExpired",
+              mins !== null && !profile.tokenRejected
+                ? t("provider.expiredAgo", Math.abs(mins))
+                : "",
+            ),
       );
     }
 
@@ -153,14 +167,19 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
     debug(scope, `project context (${projectContext?.length ?? 0} chars)`, projectContext);
     // Screenshots pasted in the chat go with the turn, uploaded like the web app does.
     const images = imagesOf(messages);
-    const prompt = flattenMessages(messages, {
-      catalog,
-      toolsRequired,
-      environment: currentEnvironment(),
-      skills: currentSkills(),
-      projectContext,
-      attachedImages: new Set(images),
-    });
+    const flatten = (limits: TranscriptLimits) =>
+      flattenMessages(messages, {
+        catalog,
+        toolsRequired,
+        environment: currentEnvironment(),
+        skills: currentSkills(),
+        projectContext,
+        attachedImages: new Set(images),
+        limits,
+      });
+    let prompt = flatten(
+      this.shortPromptsOnly ? TRANSCRIPT_LIMITS : transcriptLimitsFor(model.maxInputTokens),
+    );
     debug(
       scope,
       `prompt flattened (${prompt.length} chars) — exactly what goes to BizChat as the user message`,
@@ -196,6 +215,7 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
     const cancelListener = token.onCancellationRequested(() => controller.abort());
     const sources: WebSource[] = [];
     const toolsOffered = catalog.callable.size > 0;
+    let emitted = false;
     // What could not be attached is said once, before the answer.
     const skippedImages = new Set<string>();
     const onImageSkipped = (reason: string) => {
@@ -220,7 +240,6 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
       let prose = "";
       let called = false;
       let remoteWork = false;
-      let emitted = false;
       const toolDecoder = new ToolCallDecoder(
         catalog.callable,
         (text) => {
@@ -237,6 +256,7 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
           );
           finishTurn.abort();
         },
+        catalog.fenced,
       );
       const run = (mode: TurnMode) => {
         debug(scope, `starting the BizChat turn in "${mode}" mode`);
@@ -267,16 +287,9 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
           // The web app's invocation is captured, not designed for us: if
           // BizChat turns it down, answer the plain way instead of failing.
           const retryable =
-            webTurn &&
-            !emitted &&
-            !token.isCancellationRequested &&
-            error instanceof CopilotClientError &&
-            !(error instanceof CopilotAuthError) &&
-            // Throttled, out of quota, no licence, filtered: the plain turn would fare the same.
-            !isAccountLevelError(error) &&
-            error.message !== "__CANCELLED__";
+            webTurn && !emitted && !token.isCancellationRequested && isTurnRefusal(error);
           if (!retryable) throw error;
-          log(t("log.webFallback", error.message));
+          log(t("log.webFallback", error instanceof Error ? error.message : String(error)));
           debug(
             scope,
             'the web invocation was turned down; falling back to the lean "tools" invocation',
@@ -293,27 +306,46 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
       return { held, prose, called, remoteWork };
     };
 
+    /**
+     * The first try, with a shorter message if the service refuses this one
+     * before answering: only a tenant's real limit tells how long is too long.
+     * A shorter one that gets through also clears the "not available" flag that
+     * the refusal may have put on a forced model.
+     */
+    const firstAttempt = async () => {
+      try {
+        return await attempt(prompt, toolsOffered);
+      } catch (error) {
+        if (emitted || token.isCancellationRequested || !isTurnRefusal(error)) throw error;
+        const shorter = flatten(TRANSCRIPT_LIMITS);
+        if (shorter.length >= prompt.length) throw error;
+        debug(scope, `refused with ${prompt.length} chars; trying ${shorter.length}`, error);
+        const turn = await attempt(shorter, toolsOffered);
+        log(t("log.promptShortened", prompt.length, shorter.length));
+        prompt = shorter;
+        this.shortPromptsOnly = true;
+        return turn;
+      }
+    };
+
     try {
-      let turn = await attempt(prompt, toolsOffered);
-      // No tool call although tools were offered, and the reply gave up or
-      // worked in M365's own sandbox: once more, with a note that says what is
-      // true. What it wrote is dropped unseen (it was still held back).
+      let turn = await firstAttempt();
+      // No tool call although tools were offered, and the reply gave up, worked
+      // in M365's own sandbox or claims changes nothing could have made: once
+      // more, with a note that says what is true. What it wrote is dropped
+      // unseen (it was still held back).
+      const toolsRan = messages.some((message) =>
+        message.content.some((part) => part instanceof vscode.LanguageModelToolResultPart),
+      );
       const problem =
         toolsOffered && !turn.called && turn.held.holding
-          ? toolFreeProblem(turn.prose, turn.remoteWork)
+          ? toolFreeProblem(turn.prose, turn.remoteWork, toolsRan)
           : null;
       if (problem) {
         const dropped = turn.held.discard();
         log(t("log.forcedRetry", problem));
-        debug(
-          scope,
-          `no tool call and the reply ${problem === "sandbox" ? "worked in its own sandbox" : "gave up"}: retrying once`,
-          dropped,
-        );
-        turn = await attempt(
-          `${prompt}\n\n${t(problem === "sandbox" ? "protocol.force.sandbox" : "protocol.force.giveUp")}`,
-          false,
-        );
+        debug(scope, `no tool call and the reply looks like "${problem}": retrying once`, dropped);
+        turn = await attempt(`${prompt}\n\n${t(FORCE_NOTE_KEYS[problem])}`, false);
       }
       turn.held.flush();
       // Still in its sandbox: say plainly that nothing happened here.

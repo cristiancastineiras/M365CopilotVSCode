@@ -1,7 +1,7 @@
 {
   "name": "m365-copilot-vscode",
   "displayName": "%displayName%",
-  "version": "3.0.6",
+  "version": "4.0.1",
   "description": "%description%",
   "categories": [
     "AI",
@@ -39,7 +39,7 @@
     "@types/node": "^26.6.4",
     "@types/vscode": "^1.104.0",
     "@types/ws": "^8.18.2",
-    "@vscode/vsce": "^4.0.0",
+    "@vscode/vsce": "^4.1.0",
     "oxlint": "^1.87.0",
     "tsdown": "^0.23.0",
     "typescript": "^7.0.2"
@@ -171,7 +171,7 @@
       {
         "name": "m365_apply_edits",
         "displayName": "%tool.m365ApplyEdits.displayName%",
-        "modelDescription": "Apply a reversible batch of exact workspace edits. Changes land in the editor immediately (unsaved), highlighted, with Keep/Undo actions on the change for the user to accept or revert — so never assume they are final. Fields per operation: replace needs oldText (exact and unique in the file) plus newText; create needs content (NOT newText); delete needs only path. Prefer several small calls over one huge batch when creating many files.",
+        "modelDescription": "Apply a reversible batch of exact workspace edits. Changes are applied and saved right away, and the user reviews them with Keep/Undo and can still revert them — so they are not final. Fields per operation: replace needs oldText (exact and unique in the file) plus newText; create needs content (NOT newText); delete needs only path. Prefer several small calls over one huge batch when creating many files.",
         "userDescription": "%tool.m365ApplyEdits.userDescription%",
         "toolReferenceName": "m365ApplyEdits",
         "canBeReferencedInPrompt": true,
@@ -641,7 +641,7 @@
         },
         "m365copilot.tools.maxAdvertised": {
           "type": "number",
-          "default": 48,
+          "default": 20,
           "minimum": 4,
           "maximum": 200,
           "markdownDescription": "%config.tools.maxAdvertised%"
@@ -743,12 +743,33 @@
           },
           "markdownDescription": "%config.models.custom%"
         },
+        "m365copilot.models.maxInputTokens": {
+          "type": "integer",
+          "default": 128000,
+          "minimum": 1000,
+          "maximum": 2000000,
+          "markdownDescription": "%config.models.maxInputTokens%"
+        },
+        "m365copilot.models.maxOutputTokens": {
+          "type": "integer",
+          "default": 16000,
+          "minimum": 1000,
+          "maximum": 2000000,
+          "markdownDescription": "%config.models.maxOutputTokens%"
+        },
         "m365copilot.chat.maxToolCalls": {
           "type": "integer",
           "default": 30,
           "minimum": 0,
           "maximum": 200,
           "markdownDescription": "%config.chat.maxToolCalls%"
+        },
+        "m365copilot.chat.maxDurationMinutes": {
+          "type": "integer",
+          "default": 8,
+          "minimum": 0,
+          "maximum": 1440,
+          "markdownDescription": "%config.chat.maxDurationMinutes%"
         },
         "m365copilot.subagents.enabled": {
           "type": "boolean",

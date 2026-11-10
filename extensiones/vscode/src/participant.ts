@@ -25,7 +25,7 @@ import {
 } from "./editorContext";
 import type { EditorHandoff } from "./editorActions";
 import { MarkdownStreamFormatter } from "./markdown";
-import { findModel } from "./models";
+import { findModel, tokenLimits } from "./models";
 import {
   asParticipantCommand,
   buildParticipantFraming,
@@ -36,12 +36,18 @@ import {
   type ParticipantCommand,
   type PromptTerminalRun,
 } from "./participantPrompts";
-import { isTokenUsable, MAX_TURN_IMAGES, type TurnImage, debug } from "@m365copilot/core/bizchat";
-import type { ProfileStore } from "./secrets";
-import { MAX_TASK_WALL_CLOCK_MS, runToolLoop } from "./subagentCore";
+import {
+  isTokenUsable,
+  M365_TOOL_NAMES,
+  MAX_TURN_IMAGES,
+  type TurnImage,
+  debug,
+} from "@m365copilot/core/bizchat";
+import { unusableTokenMessage, type ProfileStore } from "./secrets";
+import { runToolLoop } from "./subagentCore";
 import { retrievalText } from "./transcript";
-import { toolResultToText } from "./subagents";
-import type { WorkspaceEditManager } from "../tools/writeFile";
+import { configuredWallClockMs, toolResultToText } from "./subagents";
+import { chatReviewOf, type WorkspaceEditManager } from "../tools/writeFile";
 import type { TerminalHistory } from "./terminalHistory";
 import type { ContextOptions } from "./projectIndex";
 import { boundedInteger, errorMessage, relativePathForUri } from "../tools/common";
@@ -106,7 +112,7 @@ async function handleRequest(
   const profile = await deps.store.get();
   if (!profile || !isTokenUsable(profile)) {
     deps.log(t("log.participantNoToken", command ?? "-"));
-    stream.markdown(t(profile ? "participant.tokenExpired" : "participant.noToken"));
+    stream.markdown(profile ? unusableTokenMessage(profile) : t("participant.noToken"));
     stream.button({ command: "m365copilot.pasteProfile", title: t("participant.button.paste") });
     return { metadata };
   }
@@ -193,11 +199,15 @@ async function handleRequest(
     markdown = new MarkdownStreamFormatter();
   };
 
+  // Read once: the notice must quote the limit this request ran under.
+  const maxWallClockMs = configuredWallClockMs();
+
   stream.progress(t("participant.progress.thinking"));
   try {
     const result = await runToolLoop({
       framing,
       profile,
+      latestProfile: () => deps.store.get(),
       tone,
       maxSteps: maxStepsForCommand(
         command,
@@ -208,6 +218,8 @@ async function handleRequest(
           200,
         ),
       ),
+      maxWallClockMs,
+      maxInputTokens: tokenLimits().maxInputTokens,
       signal: controller.signal,
       offeredTools,
       singleRoot: (vscode.workspace.workspaceFolders?.length ?? 0) <= 1,
@@ -229,6 +241,10 @@ async function handleRequest(
         }
       },
       executeTool: async (name, input) => {
+        // Edits get VS Code's own review of chat edits, the one Copilot's have.
+        const review =
+          name === M365_TOOL_NAMES.applyWorkspaceEdits ? chatReviewOf(stream) : undefined;
+        const offered = review && deps.edits.offerChatReview(review);
         try {
           const result = await traceInvokeTool("participant", name, input, () =>
             vscode.lm.invokeTool(
@@ -240,6 +256,8 @@ async function handleRequest(
           return toolResultToText(result);
         } catch (error) {
           return t("tool.error", errorMessage(error));
+        } finally {
+          offered?.dispose();
         }
       },
     });
@@ -258,9 +276,7 @@ async function handleRequest(
         unfinished = true;
         break;
       case "timeLimit":
-        stream.markdown(
-          `\n\n${t("participant.timeLimit", Math.round(MAX_TASK_WALL_CLOCK_MS / 60_000))}`,
-        );
+        stream.markdown(`\n\n${t("participant.timeLimit", Math.round(maxWallClockMs / 60_000))}`);
         unfinished = true;
         break;
       default:

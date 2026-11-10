@@ -2,10 +2,16 @@ import * as vscode from "vscode";
 import {
   buildToolProtocolInstructions,
   buildToolProtocolReminder,
+  renderCallFor,
   type ToolCatalog,
   MAX_TURN_IMAGES,
 } from "@m365copilot/core/bizchat";
-import { renderTranscript, type TranscriptMessage, type TranscriptPart } from "./transcript";
+import {
+  renderTranscript,
+  type TranscriptLimits,
+  type TranscriptMessage,
+  type TranscriptPart,
+} from "./transcript";
 import { t } from "./i18n";
 
 /*
@@ -32,6 +38,8 @@ export interface FlattenOptions {
   readonly projectContext?: string;
   /** Las imágenes que van adjuntas al turno ({@link imagesOf}): el transcript las anuncia como tales. */
   readonly attachedImages?: ReadonlySet<unknown>;
+  /** Cuánto cabe del transcript; sin indicar, lo mínimo (`TRANSCRIPT_LIMITS`). */
+  readonly limits?: TranscriptLimits;
 }
 
 /**
@@ -95,7 +103,10 @@ export function flattenMessages(
   messages: readonly vscode.LanguageModelChatRequestMessage[],
   options: FlattenOptions = {},
 ): string {
-  const transcript = renderTranscript(toTranscript(messages, options.attachedImages));
+  const transcript = renderTranscript(
+    toTranscript(messages, options.attachedImages, options.catalog),
+    options.limits,
+  );
   if (!transcript) return "";
 
   // A short reminder placed AFTER the transcript — the last thing the model
@@ -135,6 +146,7 @@ export function flattenMessages(
 function toTranscript(
   messages: readonly vscode.LanguageModelChatRequestMessage[],
   attachedImages: ReadonlySet<unknown> = new Set(),
+  catalog?: ToolCatalog,
 ): TranscriptMessage[] {
   const callNames = new Map<string, string>();
   for (const message of messages) {
@@ -154,7 +166,12 @@ function toTranscript(
         };
       }
       if (part instanceof vscode.LanguageModelToolCallPart) {
-        return { kind: "toolCall", name: part.name, input: safeJson(part.input) };
+        return {
+          kind: "toolCall",
+          name: part.name,
+          input: safeJson(part.input),
+          block: catalog && renderCallFor(catalog, part.name, part.input),
+        };
       }
       if (part instanceof vscode.LanguageModelDataPart && attachedImages.has(part)) {
         return {

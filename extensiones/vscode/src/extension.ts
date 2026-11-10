@@ -20,6 +20,7 @@ import {
   setTemporaryChat,
   setTestEndpointBase,
   onThrottleChange,
+  onTokenRejected,
 } from "@m365copilot/core/bizchat";
 import { installModelRegistry } from "./models";
 import { clearDebugLog, DebugSession, exportDebugLog, toggleDeepDebug } from "./debugMode";
@@ -128,11 +129,25 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
     debugFile: DEBUG_FILE,
     onChange: (on) => statusBar.setDebug(on),
   });
-  const tokenServer = new TokenAutoRefreshServer(store, (profile) => {
-    const minutes = minutesUntilExpiry(profile);
-    if (minutes !== null)
-      void vscode.window.setStatusBarMessage(t("statusbar.renewed", minutes), 5000);
-  });
+  // The browser retries every 30 s: once per reason is enough.
+  const rejectionsShown = new Set<string>();
+  onTokenRejected((accessToken) => void store.markRejected(accessToken));
+  const tokenServer = new TokenAutoRefreshServer(
+    store,
+    (profile) => {
+      // A personal account's token does not say when it expires.
+      const minutes = minutesUntilExpiry(profile);
+      void vscode.window.setStatusBarMessage(
+        minutes !== null ? t("statusbar.renewed", minutes) : t("statusbar.received"),
+        5000,
+      );
+    },
+    (reason) => {
+      if (rejectionsShown.has(reason)) return;
+      rejectionsShown.add(reason);
+      void vscode.window.showWarningMessage(t("server.tokenRejected", reason));
+    },
+  );
   tokenServer.start();
   // The local project index (RAG): context for every request, tools, search.
   const projectIndex = new ProjectIndexService(log);
@@ -170,6 +185,7 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
     statusBar,
     debugSession,
     { dispose: stopWatchingThrottle },
+    { dispose: () => onTokenRejected(undefined) },
     tokenServer,
     provider,
     workspaceEdits,
