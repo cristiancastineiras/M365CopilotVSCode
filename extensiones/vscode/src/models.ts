@@ -3,10 +3,11 @@ import {
   onModelOutcome,
   type AccountTier,
   BUILTIN_MODELS,
+  fetchModelMenu,
   isPaidSelector,
+  isTokenUsable,
   mergeModels,
   parseCustomModels,
-  parseModelCatalog,
   unannounced,
   type CatalogModel,
   type ModelEntry,
@@ -19,25 +20,20 @@ import type { ProfileStore } from "./secrets";
 /**
  * M365 Copilot / BizChat selects a model through the `tone` field of the chat
  * invocation, not a model id. The "Auto" model sends no override and lets
- * BizChat route; the others force a tone. Which tones exist changes often, so
- * the list is not fixed: see modelCatalog.ts for the sources and
- * {@link ModelRegistry} for how they are kept up to date.
+ * BizChat route; the others force a tone. Which tones exist depends on the
+ * account, so the list is its own model menu: see modelCatalog.ts for the
+ * sources and {@link ModelRegistry} for how it is kept up to date.
  */
 export type CopilotModel = CatalogModel;
 
-/** models.json in the project's repository — edit it there to add or retire a model for everyone. */
-export const MODEL_CATALOG_URL =
-  "https://raw.githubusercontent.com/cristiancastineiras/M365CopilotVSCode/main/models.json";
-const CATALOG_REFRESH_MS = 12 * 60 * 60_000;
-const CATALOG_TIMEOUT_MS = 8_000;
 /** Give activation room before going to the network. */
 const FIRST_FETCH_DELAY_MS = 5_000;
 
-const CATALOG_CACHE_KEY = "m365copilot.models.catalog";
-const OBSERVED_KEY = "m365copilot.models.observed";
+const MENU_CACHE_KEY = "m365copilot.models.account";
+/** Left by versions that took the list from models.json and the web app's chats. */
+const RETIRED_KEYS = ["m365copilot.models.catalog", "m365copilot.models.observed"];
 const ANNOUNCED_KEY = "m365copilot.models.announced";
 const UNAVAILABLE_KEY = "m365copilot.models.unavailable";
-const MAX_OBSERVED = 20;
 /**
  * How long a model the service refused stays flagged. Not for ever: new
  * models reach a tenant in phases over days, and usage limits reset.
@@ -87,15 +83,15 @@ export function editorTone(): string | null {
   return findModel(id)?.tone ?? null;
 }
 
-interface CatalogCache {
+interface MenuCache {
   readonly entries: ModelEntry[];
   readonly fetchedAt: number;
 }
 
 /**
- * Keeps the model list up to date: downloads the catalog (on start and every
- * 12 h, cached for offline use), learns the tones the web app used from every
- * profile the browser side sends, reads the custom ones from settings, and
+ * Keeps the model list up to date: loads the account's model menu (on start,
+ * with every new token — it may be another account — and from "Update
+ * models"; cached for offline use), reads the custom ones from settings, and
  * fires {@link onDidChange} when the merged list changes — the provider
  * re-announces it and the chat's model picker updates. New models are
  * announced once each.
@@ -106,23 +102,20 @@ export class ModelRegistry implements vscode.Disposable {
   readonly onDidChange = this.changed.event;
   private readonly disposables: vscode.Disposable[] = [];
   private timer: NodeJS.Timeout | undefined;
+  private loading: Promise<string | undefined> | undefined;
 
   constructor(
     private readonly memento: vscode.Memento,
     private readonly store: ProfileStore,
     private readonly log: (message: string) => void,
   ) {
+    for (const key of RETIRED_KEYS)
+      if (memento.get(key) !== undefined) void memento.update(key, undefined);
     this.disposables.push(
-      store.onDidChange(() => void this.absorbProfile()),
+      store.onDidChange(() => void this.refresh()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (!event.affectsConfiguration("m365copilot.models")) return;
         this.recompute();
-        if (
-          event.affectsConfiguration("m365copilot.models.updateFromCatalog") &&
-          catalogEnabled()
-        ) {
-          void this.refreshCatalog();
-        }
         // Not part of the list recompute() compares, but VS Code shows and budgets by them.
         if (
           event.affectsConfiguration("m365copilot.models.maxInputTokens") ||
@@ -133,11 +126,7 @@ export class ModelRegistry implements vscode.Disposable {
       }),
     );
     this.recompute(false);
-    void this.absorbProfile();
-    this.timer = setTimeout(() => {
-      void this.refreshCatalog();
-      this.timer = setInterval(() => void this.refreshCatalog(), CATALOG_REFRESH_MS);
-    }, FIRST_FETCH_DELAY_MS);
+    this.timer = setTimeout(() => void this.refresh(), FIRST_FETCH_DELAY_MS);
   }
 
   get models(): readonly CopilotModel[] {
@@ -145,58 +134,32 @@ export class ModelRegistry implements vscode.Disposable {
   }
 
   /**
-   * Download models.json now. Returns false when it could not be fetched or
-   * parsed — the cached copy (or the built-ins) stay in use.
+   * Load the account's model menu now. Resolves with why it could not — the
+   * last menu (or the built-ins) stays in use then — or undefined. Calls that
+   * overlap share one load.
    */
-  async refreshCatalog(): Promise<boolean> {
-    if (!catalogEnabled()) {
-      debug("models", "catalog refresh skipped: m365copilot.models.updateFromCatalog is off");
-      return false;
-    }
-    const started = Date.now();
-    try {
-      debug("models", `→ GET ${MODEL_CATALOG_URL}`, {
-        timeoutMs: CATALOG_TIMEOUT_MS,
-        headers: { Accept: "application/json" },
-      });
-      const response = await fetch(MODEL_CATALOG_URL, {
-        signal: AbortSignal.timeout(CATALOG_TIMEOUT_MS),
-        headers: { Accept: "application/json" },
-      });
-      debug(
-        "models",
-        `← ${response.status} ${response.statusText} (${Date.now() - started} ms)`,
-        () => {
-          const headers: Record<string, string> = {};
-          response.headers.forEach((value, key) => {
-            headers[key] = value;
-          });
-          return headers;
-        },
-      );
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const payload: unknown = await response.json();
-      const entries = parseModelCatalog(payload);
-      if (!entries) throw new Error('models.json has no "models" array');
-      debug("models", `catalog parsed: ${entries.length} entries`, entries);
-      await this.memento.update(CATALOG_CACHE_KEY, {
-        entries,
-        fetchedAt: Date.now(),
-      } satisfies CatalogCache);
-      this.log(t("log.modelsCatalog", entries.length));
-      this.recompute();
-      return true;
-    } catch (error) {
-      this.log(
-        t("log.modelsCatalogFailed", error instanceof Error ? error.message : String(error)),
-      );
-      return false;
-    }
+  refresh(): Promise<string | undefined> {
+    this.loading ??= this.loadMenu().finally(() => (this.loading = undefined));
+    return this.loading;
   }
 
-  /** When the catalog was last downloaded, if ever. */
-  get catalogFetchedAt(): number | undefined {
-    return this.memento.get<CatalogCache>(CATALOG_CACHE_KEY)?.fetchedAt;
+  private async loadMenu(): Promise<string | undefined> {
+    const profile = await this.store.get();
+    if (!profile || !isTokenUsable(profile)) return t("models.noToken");
+    try {
+      const entries = await fetchModelMenu({ profile });
+      await this.memento.update(MENU_CACHE_KEY, {
+        entries,
+        fetchedAt: Date.now(),
+      } satisfies MenuCache);
+      this.log(t("log.modelsMenu", entries.length));
+      this.recompute();
+      return undefined;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.log(t("log.modelsMenuFailed", reason));
+      return reason;
+    }
   }
 
   /** Whether the service recently refused this model for this account (Auto never is). */
@@ -236,30 +199,12 @@ export class ModelRegistry implements vscode.Disposable {
     if (wasFlagged !== !available) this.changed.fire();
   }
 
-  /** Remember the tones the web app used (they come inside the profile). */
-  private async absorbProfile(): Promise<void> {
-    const profile = await this.store.get();
-    const incoming = profile?.observedTones ?? [];
-    if (incoming.length === 0) return;
-    const known = this.memento.get<string[]>(OBSERVED_KEY, []);
-    const next = [...known.filter((tone) => !incoming.includes(tone)), ...incoming].slice(
-      -MAX_OBSERVED,
-    );
-    if (next.length === known.length && next.every((tone, index) => tone === known[index])) return;
-    await this.memento.update(OBSERVED_KEY, next);
-    this.recompute();
-  }
-
   private recompute(announce = true): void {
-    const config = vscode.workspace.getConfiguration("m365copilot.models");
     const next = mergeModels({
-      catalog: catalogEnabled()
-        ? (this.memento.get<CatalogCache>(CATALOG_CACHE_KEY)?.entries ?? [])
-        : [],
-      observed: config.get<boolean>("detectFromBrowser", true)
-        ? this.memento.get<string[]>(OBSERVED_KEY, [])
-        : [],
-      custom: parseCustomModels(config.get<unknown>("custom", [])),
+      account: this.memento.get<MenuCache>(MENU_CACHE_KEY)?.entries ?? null,
+      custom: parseCustomModels(
+        vscode.workspace.getConfiguration("m365copilot.models").get<unknown>("custom", []),
+      ),
     });
     const before = this.current.map((model) => `${model.id}|${model.name}|${model.tone}`).join(",");
     const after = next.map((model) => `${model.id}|${model.name}|${model.tone}`).join(",");
@@ -287,7 +232,6 @@ export class ModelRegistry implements vscode.Disposable {
   }
 
   dispose(): void {
-    // clearTimeout also clears an interval in Node.
     if (this.timer) clearTimeout(this.timer);
     if (registry === this) onModelOutcome(undefined);
     this.changed.dispose();
@@ -318,12 +262,6 @@ export function modelRegistry(): ModelRegistry | undefined {
   return registry;
 }
 
-function catalogEnabled(): boolean {
-  return vscode.workspace
-    .getConfiguration("m365copilot.models")
-    .get<boolean>("updateFromCatalog", true);
-}
-
 /**
  * The context and reply size VS Code is told about, the same for every model.
  * It also sets how much of it reaches the model (transcriptLimitsFor, loopLimitsFor).
@@ -344,11 +282,7 @@ export function modelDetail(model: CopilotModel): string {
   const text = model.detail?.[getLocale()] ?? model.detail?.en;
   if (text) return text;
   return t(
-    model.source === "observed"
-      ? "models.source.observed"
-      : model.source === "custom"
-        ? "models.source.custom"
-        : "models.source.catalog",
+    model.source === "custom" ? "models.source.custom" : "models.source.account",
     model.tone ?? "",
   );
 }

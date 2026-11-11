@@ -705,16 +705,6 @@
           "default": true,
           "markdownDescription": "%config.web.enabled%"
         },
-        "m365copilot.models.updateFromCatalog": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "%config.models.updateFromCatalog%"
-        },
-        "m365copilot.models.detectFromBrowser": {
-          "type": "boolean",
-          "default": true,
-          "markdownDescription": "%config.models.detectFromBrowser%"
-        },
         "m365copilot.models.custom": {
           "type": "array",
           "default": [],
@@ -1013,12 +1003,6 @@
         "title": "%command.refreshModels%",
         "category": "M365 Copilot",
         "icon": "$(sync)"
-      },
-      {
-        "command": "m365copilot.checkModels",
-        "title": "%command.checkModels%",
-        "category": "M365 Copilot",
-        "icon": "$(beaker)"
       },
       {
         "command": "m365copilot.searchProject",

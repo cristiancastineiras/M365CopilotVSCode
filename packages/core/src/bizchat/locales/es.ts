@@ -71,8 +71,8 @@ export const es: Record<keyof typeof en, string> = {
   "client.error.rejected": "M365 Copilot no ha podido atender esta petición.",
   "client.error.modelUnavailable":
     "«{0}» todavía no está disponible en tu cuenta. Los modelos nuevos llegan a las organizaciones poco a poco, y " +
-    "los de Anthropic y OpenAI tiene que activarlos tu administrador. Elige «M365 Copilot (Auto)», o ejecuta " +
-    "«M365 Copilot: Comprobar modelos» para ver cuáles tienes. (M365 Copilot dijo: «{1}»)",
+    "los de Anthropic y OpenAI tiene que activarlos tu administrador. Elige «M365 Copilot (Auto)» u otro modelo. " +
+    "(M365 Copilot dijo: «{1}»)",
   "client.error.disengaged":
     "M365 Copilot ha preferido no responder a esta petición. Prueba a decirlo de otra forma.",
   "client.error.serverSaid": " M365 Copilot dijo: «{0}»",

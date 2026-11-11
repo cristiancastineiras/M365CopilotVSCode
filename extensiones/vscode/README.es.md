@@ -389,56 +389,47 @@ Necesita la **sesión capturada por la extensión de navegador o el userscript**
 
 ## Modelos que siguen el ritmo de M365 Copilot
 
-Microsoft añade y retira modelos de M365 Copilot a menudo, y no hay ninguna API
-documentada que los liste. Tampoco se elige el modelo por un id: viaja en el
-campo `tone` de cada conversación (`magic` es Auto, `Chat` es «Respuesta
-rápida», `Reasoning` es «Pensar más a fondo», `Gpt_5_6_Reasoning` es GPT 5.6
-pensando más a fondo…). Por eso la lista de modelos no es fija: junta cuatro
-fuentes, y el selector de modelos del chat se actualiza solo cuando cambia.
+Microsoft añade y retira modelos de M365 Copilot a menudo, y cada cuenta ve los
+suyos. Tampoco se elige el modelo por un id: viaja en el campo `tone` de cada
+conversación (`magic` es Auto, `Chat` es «Respuesta rápida», `Reasoning` es
+«Pensar más a fondo», `Gpt_5_6_Reasoning` es GPT-5.6 Sol pensando más a
+fondo…).
 
-La lista de serie sigue el menú de la propia web, con sus nombres: **Auto**
-(M365 Copilot decide el modelo y cuánto pensar — recomendado), **Quick
-response** y **Think deeper** (M365 Copilot elige el modelo, rápido o a fondo),
-y después los modelos con nombre: GPT 5.6 Think deeper, GPT 5.5 Quick response /
-Think deeper, Claude Sonnet y Claude Sonnet Think deeper. Claude necesita que tu
-administrador tenga activados los modelos de Anthropic. El catálogo en línea
-añade otros más nuevos: **GPT-6.1 Sol** y **GPT 6.0 Sol** (modelos de
-razonamiento: piensan antes de responder, así que son más lentos) y **GPT 5.6
-Quick response**, disponible otra vez (para tareas de agente va mejor GPT 5.5 o
-un modelo Think deeper). Los modelos cuyo `tone` aún no es público (llegan a las
-organizaciones por fases) aparecen en VS Code en cuanto los usas en M365 Copilot
-con la extensión de navegador o el userscript instalados.
+Por eso la extensión pide a tu cuenta su propio menú de modelos — el que te
+muestra la web de M365 Copilot — con el mismo token que usa el chat
+(`GET /m365Copilot/getgptlist`). Lo pide al arrancar, cada vez que llega un
+token nuevo (puede ser de otra cuenta) y cuando ejecutas **M365 Copilot:
+Actualizar modelos**; el selector de modelos del chat se actualiza solo, y el
+último menú se guarda para cuando no hay red. Con una licencia de Microsoft 365
+Copilot el menú trae además los modelos de la licencia (Claude Opus 5.5, Claude
+Sonnet 5 / 5.5, GPT-6, GPT-6.1 Sol…): la extensión pide los dos menús y manda
+los turnos de esos modelos con la licencia. Claude necesita que tu
+administrador tenga activados los modelos de Anthropic.
 
-| Fuente               | Cómo funciona                                                                                                                                                                                                                                                    |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| De serie             | Los modelos que trae esta versión — siempre disponibles, también sin conexión.                                                                                                                                                                                   |
-| Catálogo en línea    | [`models.json`](https://github.com/cristiancastineiras/M365CopilotVSCode/blob/main/models.json) en el repositorio, descargado al arrancar y cada 12 h. Añadir ahí un modelo (o `"hidden": true` para retirarlo) llega a todos los usuarios sin publicar versión. |
-| Detectados en la web | Cuando usas un modelo en M365 Copilot, la extensión de navegador / el userscript ven su `tone` en la invocación del chat y lo envían con el token. Si VS Code aún no lo conoce, lo añade — es la prueba de que existe para tu cuenta.                            |
-| Tus ajustes          | `m365copilot.models.custom`, p. ej. `["Gpt_5_9_Chat"]`, para probar un modelo antes de que llegue al catálogo.                                                                                                                                                   |
+| Fuente      | Cómo funciona                                                                                                                  |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Tu cuenta   | El menú de modelos de la web de M365 Copilot, cargado con tu token.                                                            |
+| De serie    | Auto, Respuesta rápida, Pensar más a fondo y los modelos que conoce esta versión — solo hasta que el menú de tu cuenta se carga. |
+| Tus ajustes | `m365copilot.models.custom`, p. ej. `["Gpt_5_9_Chat"]`, para probar un modelo que no esté en tu menú.                          |
 
 Los modelos nuevos se anuncian una vez con una notificación. **M365 Copilot:
-Actualizar modelos** (también en el menú) descarga el catálogo al momento y
-lista cada modelo con su origen.
+Actualizar modelos** (también en el menú) carga el menú de tu cuenta al momento
+y lista cada modelo con su origen.
 
-Que M365 Copilot conozca un modelo no quiere decir que tu cuenta pueda usarlo:
-el servicio puede rechazar la petición, o contestar con su propio «no puedo
-ayudarte con eso» en lugar del modelo. En los dos casos la extensión lo dice —
-con el motivo que da el servicio y sugiriendo Auto — en vez de mostrar esa
-respuesta como si fuera la contestación, y marca el modelo en el selector (⚠
-«no disponible en tu cuenta ahora mismo») durante 12 horas o hasta que vuelva a
-funcionar — o, si se ha agotado su acceso prioritario, hasta que se renueve (ver
-[Límites y rechazos](#límites-y-rechazos-de-m365-copilot)). **M365 Copilot:
-Comprobar modelos** (también la primera entrada de _Actualizar modelos_) manda
-un mensaje corto a cada modelo, una conversación por modelo, y te dice cuáles
-funcionan.
+Que un modelo esté en el menú no quiere decir que tu cuenta pueda usarlo ahora
+mismo: el servicio puede rechazar la petición, o contestar con su propio «no
+puedo ayudarte con eso» en lugar del modelo. En los dos casos la extensión lo
+dice — con el motivo que da el servicio y sugiriendo Auto — en vez de mostrar
+esa respuesta como si fuera la contestación, y marca el modelo en el selector
+(⚠ «no disponible en tu cuenta ahora mismo») durante 12 horas o hasta que
+vuelva a funcionar — o, si se ha agotado su acceso prioritario, hasta que se
+renueve (ver [Límites y rechazos](#límites-y-rechazos-de-m365-copilot)).
 
-| Ajuste                                 | Por defecto | Para qué                                                     |
-| -------------------------------------- | ----------- | ------------------------------------------------------------ |
-| `m365copilot.models.updateFromCatalog` | `true`      | Descargar `models.json` (un GET a GitHub; no se envía nada). |
-| `m365copilot.models.detectFromBrowser` | `true`      | Añadir los modelos que usa la web.                           |
-| `m365copilot.models.custom`            | `[]`        | Modelos adicionales por `tone` (o `{ "tone", "name" }`).     |
-| `m365copilot.models.maxInputTokens`    | `128000`    | Tamaño de contexto de cada modelo (ver abajo).               |
-| `m365copilot.models.maxOutputTokens`   | `16000`     | Tamaño de respuesta que ve VS Code en cada modelo.           |
+| Ajuste                               | Por defecto | Para qué                                                 |
+| ------------------------------------ | ----------- | -------------------------------------------------------- |
+| `m365copilot.models.custom`          | `[]`        | Modelos adicionales por `tone` (o `{ "tone", "name" }`). |
+| `m365copilot.models.maxInputTokens`  | `128000`    | Tamaño de contexto de cada modelo (ver abajo).           |
+| `m365copilot.models.maxOutputTokens` | `16000`     | Tamaño de respuesta que ve VS Code en cada modelo.       |
 
 Los ajustes de modelo de los sub-agentes, del autocompletado y de las respuestas
 en el editor (`*.model`) ofrecen los modelos de serie.
@@ -470,7 +461,7 @@ recibiría la misma respuesta.
 
 | M365 Copilot dice                                                                                                                | Qué hace la extensión                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Limitado** (`Throttled` / `PerUserThrottled`): demasiadas peticiones en poco tiempo                                            | La limitación se levanta sola tras alrededor de una hora sin peticiones, y reintentar antes solo la alarga. Así que lo que va por su cuenta — el autocompletado, el autocommit (salvo _Comprobar ahora_), _Comprobar modelos_ — espera hasta 75 minutos después del último turno limitado: ⌚ en el elemento de la barra de estado (hasta cuándo, en su tooltip) y un aviso al empezar. Lo que pides tú sigue saliendo, y la primera respuesta levanta la pausa. |
+| **Limitado** (`Throttled` / `PerUserThrottled`): demasiadas peticiones en poco tiempo                                            | La limitación se levanta sola tras alrededor de una hora sin peticiones, y reintentar antes solo la alarga. Así que lo que va por su cuenta — el autocompletado, el autocommit (salvo _Comprobar ahora_) — espera hasta 75 minutos después del último turno limitado: ⌚ en el elemento de la barra de estado (hasta cuándo, en su tooltip) y un aviso al empezar. Lo que pides tú sigue saliendo, y la primera respuesta levanta la pausa. |
 | **Acceso prioritario agotado** (`OutOfCredits`): los modelos con cupo permiten tantos turnos al día, algunos también a la semana | Dice cuándo se renueva — a medianoche UTC, el semanal el lunes, en tu hora — y marca el modelo en el selector hasta entonces. Mientras, elige otro modelo, o Auto.                                                                                                                                                                                                                                                                                               |
 | **Sin licencia válida** (`InvalidCopilotLicense`)                                                                                | Lo dice. Es cosa de la cuenta, no del modelo, así que no se marca nada: consúltalo con el administrador de Microsoft 365.                                                                                                                                                                                                                                                                                                                                        |
 | **Ha rehusado responder** (`Disengaged`)                                                                                         | Un error, nunca texto: una edición en línea o un mensaje de commit nunca acaban con el aviso en lugar de una respuesta.                                                                                                                                                                                                                                                                                                                                          |
@@ -671,7 +662,7 @@ con todo detalle:
   que empezó el turno, contenido completo).
 - **Lo que envía y adónde:** la conexión con BizChat (endpoint, cabeceras,
   upgrade, handshake), el prompt exacto como texto legible y las tramas que
-  salen, la descarga del catálogo de modelos, cada proceso `git` y comando de
+  salen, la petición del menú de modelos de tu cuenta, cada proceso `git` y comando de
   shell (comando, carpeta, código de salida, salida, tiempo).
 - **Lo que hace:** cada petición de chat que hace VS Code (mensajes,
   herramientas ofrecidas, el modo elegido), las llamadas a herramientas con su
@@ -720,8 +711,7 @@ paleta de comandos bajo **M365 Copilot**.
 | `Cerrar sesión y volver a entrar`                                                                              | Borra el token **y** la sesión de Microsoft del navegador (cookies, caché de MSAL, almacenamiento) para que te vuelva a pedir las credenciales. |
 | `Activar/desactivar autocompletado en línea`                                                                   | Texto fantasma sí/no.                                                                                                                           |
 | `Cambiar idioma`                                                                                               | Inglés / español / automático.                                                                                                                  |
-| `Actualizar modelos`                                                                                           | Descarga el catálogo de modelos al momento y lista cada modelo con su origen.                                                                   |
-| `Comprobar modelos`                                                                                            | Manda un mensaje corto a cada modelo y te dice cuáles funcionan en tu cuenta.                                                                   |
+| `Actualizar modelos`                                                                                           | Vuelve a cargar el menú de modelos de tu cuenta y lista cada modelo con su origen.                                                              |
 | `Buscar en el proyecto…`                                                                                       | Búsqueda por relevancia en el índice del proyecto; Intro abre el código.                                                                        |
 | `Ver el mapa del proyecto`                                                                                     | El mapa del proyecto (estructura, paquetes, puntos de entrada, módulos más importados) como documento.                                          |
 | `Reconstruir el índice del proyecto`                                                                           | Vuelve a indexar el workspace.                                                                                                                  |

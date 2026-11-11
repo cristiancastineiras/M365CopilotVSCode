@@ -313,23 +313,6 @@
 		}
 		return found;
 	}
-	/** Un `tone` con forma de identificador de modelo de BizChat (p. ej. `Gpt_5_6_Reasoning`). */
-	const TONE_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]{1,63}$/;
-	/** El `tone` (modelo) de una plantilla de invocación `chat`, si es válido. */
-	function toneOfTemplate(template) {
-		const tone = template?.tone;
-		return typeof tone === "string" && TONE_PATTERN.test(tone) ? tone : null;
-	}
-	/**
-	* `tones` con `tone` añadido como el más reciente (sin duplicados, acotado).
-	* Así M365 puede estrenar un modelo y VS Code enterarse sin publicar versión:
-	* en cuanto alguien lo usa en la web, la captura lo trae.
-	*/
-	function withObservedTone(tones, tone) {
-		const list = (tones ?? []).filter((item) => item !== tone);
-		if (tone) list.push(tone);
-		return list.slice(-20);
-	}
 	/** El store sin el token si éste ya caducó (para invitar a recapturarlo), o null si no hay que tocarlo. */
 	function withoutExpiredToken(store, now = Date.now()) {
 		const exp = store.claims?.exp;
@@ -361,8 +344,7 @@
 			userAgent: store.userAgent || fallbackUserAgent,
 			invocationTemplate: store.invocationTemplate || null,
 			invocationType: store.invocationType || 4,
-			claims: store.claims || null,
-			...store.observedTones && store.observedTones.length > 0 ? { observedTones: [...store.observedTones] } : {}
+			claims: store.claims || null
 		};
 	}
 	/** Sin token: insistir. Con token fresco: vigilar de lejos. Cerca de caducar: apretar. */
@@ -671,8 +653,7 @@
 		lastSyncedAt: null,
 		lastError: null,
 		vscodeReachable: null,
-		lastReloadAt: null,
-		syncedTones: []
+		lastReloadAt: null
 	};
 	const PAGE = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
 	const IS_TOP = (() => {
@@ -839,7 +820,7 @@
 				...accepted,
 				tokenSource: source
 			});
-			if (IS_TOP) syncToVSCode(hasUnsentChanges());
+			if (IS_TOP) syncToVSCode(hasUnsentToken());
 		} catch {}
 	}
 	function captureSocket(url, socket) {
@@ -856,22 +837,18 @@
 		socket.send = function(...args) {
 			try {
 				const frames = inspectOutgoingFrames(args[0]);
-				if (frames.sawChat) {
-					const tone = toneOfTemplate(frames.template);
-					writeStore({
-						...tone ? { observedTones: withObservedTone(readStore().observedTones, tone) } : {},
-						...endpoint ? {
-							endpoint,
-							endpointConfirmed: true
-						} : {},
-						origin: location.origin,
-						userAgent: navigator.userAgent,
-						...frames.template ? {
-							invocationTemplate: frames.template,
-							invocationType: frames.invocationType
-						} : {}
-					});
-				}
+				if (frames.sawChat) writeStore({
+					...endpoint ? {
+						endpoint,
+						endpointConfirmed: true
+					} : {},
+					origin: location.origin,
+					userAgent: navigator.userAgent,
+					...frames.template ? {
+						invocationTemplate: frames.template,
+						invocationType: frames.invocationType
+					} : {}
+				});
 			} catch {}
 			return originalSend.apply(this, args);
 		};
@@ -972,16 +949,6 @@
 		return stamp !== null && stamp !== sync.syncedTokenExp && sync.vscodeReachable !== false;
 	}
 	/**
-	* The web app used a model (`tone`) VS Code has not been told about. The chat
-	* frame that reveals it arrives AFTER the token was sent, so without this VS
-	* Code would only learn it at the next token renewal, ~50 min later.
-	*/
-	function hasUnsentTone() {
-		const sync = readSync();
-		return sync.vscodeReachable !== false && (readStore().observedTones ?? []).some((tone) => !sync.syncedTones.includes(tone));
-	}
-	const hasUnsentChanges = () => hasUnsentToken() || hasUnsentTone();
-	/**
 	* Send the profile to VS Code when it needs it: a token it does not have yet,
 	* or VS Code started after the capture — the same rule (and cooldown) as the
 	* browser extension. `force` is the panel's "Send to VS Code" button.
@@ -1007,7 +974,6 @@
 			if (status >= 200 && status < 300) {
 				writeSync({
 					syncedTokenExp: tokenStamp(store),
-					syncedTones: profile.observedTones ?? [],
 					lastSyncedAt: Date.now(),
 					lastError: null,
 					vscodeReachable: true
@@ -1292,7 +1258,7 @@ button:focus-visible { outline: 2px solid #242424; outline-offset: 1px; }
 	if (IS_TOP) {
 		registerMenu();
 		try {
-			GM_addValueChangeListener(CAPTURE_STORE_KEY, () => void syncToVSCode(hasUnsentChanges()));
+			GM_addValueChangeListener(CAPTURE_STORE_KEY, () => void syncToVSCode(hasUnsentToken()));
 		} catch {}
 		checkHealth();
 		setInterval(() => void checkHealth(), HEALTH_EVERY_MS);

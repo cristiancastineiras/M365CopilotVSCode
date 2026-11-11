@@ -38,7 +38,7 @@ export const zh: Readonly<Partial<Record<keyof typeof en, string>>> = {
   "client.error.rejected": "M365 Copilot 无法处理该请求。",
   "client.error.modelUnavailable":
     "你的账户暂时还不能使用“{0}”。新模型会逐步推送到各组织，Anthropic 和 OpenAI 的模型需要管理员启用。" +
-    "请选择“M365 Copilot（自动）”，或运行“M365 Copilot: 检查模型”查看可用的模型。（M365 Copilot 表示：“{1}”）",
+    "请选择“M365 Copilot（自动）”或其他模型。（M365 Copilot 表示：“{1}”）",
   "client.error.disengaged": "M365 Copilot 选择不回答该请求。请换一种说法试试。",
   "client.error.serverSaid": " M365 Copilot 表示：“{0}”",
   "client.error.throttled":

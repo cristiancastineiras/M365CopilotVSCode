@@ -185,7 +185,7 @@ export const es: Record<keyof typeof en, string> = {
 
   // ------------------------------------------------------------ modelos
   "model.unavailable":
-    "No disponible en tu cuenta ahora mismo — usa Auto, o vuelve a comprobar los modelos más tarde.",
+    "No disponible en tu cuenta ahora mismo — usa Auto, o vuelve a probar más tarde.",
   "model.quotaUntil": "Acceso prioritario agotado hasta {0} — mientras tanto, elige otro modelo.",
   "model.needsPremium":
     "Necesita una licencia de Microsoft 365 Copilot — la web mostró tu cuenta solo con Copilot Chat.",
@@ -193,36 +193,19 @@ export const es: Record<keyof typeof en, string> = {
   "model.tokenExpired": "Token caducado — pega uno nuevo para usarlo.",
   "models.new":
     "M365 Copilot: nuevo modelo disponible — {0}. Elígelo en el selector de modelos del chat.",
-  "models.source.observed": "Detectado en la web de M365 Copilot (tone {0}).",
   "models.source.custom": "Añadido en tus ajustes (tone {0}).",
-  "models.source.catalog": "Del catálogo de modelos en línea (tone {0}).",
   "models.title": "Modelos de M365 Copilot ({0})",
   "models.placeholder": "Elige uno para abrir el chat con él",
-  "models.updating": "Actualizando los modelos de M365 Copilot…",
+  "models.updating": "Cargando los modelos de tu cuenta de M365 Copilot…",
   "models.updateFailed":
-    "M365 Copilot: no se pudo descargar el catálogo de modelos; se sigue usando la última lista conocida.",
+    "M365 Copilot: no se pudieron cargar los modelos de tu cuenta ({0}); se sigue usando la última lista conocida.",
   "models.label.builtin": "de serie",
-  "models.label.catalog": "catálogo en línea",
-  "models.label.observed": "detectado en la web de M365 Copilot",
   "models.label.custom": "tus ajustes",
-  "models.check.action": "Comprobar qué modelos funcionan en tu cuenta",
-  "models.check.actionDetail":
-    "Envía un mensaje corto a cada modelo (una conversación por modelo) y marca los que el servicio rechace.",
-  "models.check.noToken": "M365 Copilot: pega antes un token válido para comprobar los modelos.",
-  "models.check.title": "Comprobando los modelos de M365 Copilot",
-  "models.check.progress": "{0} ({1}/{2})",
-  "models.check.empty": "No contestó nada.",
-  "models.check.works": "Funciona en tu cuenta.",
-  "models.check.summary": "{0} de {1} modelos funcionan en tu cuenta",
-  "models.check.throttled":
-    "M365 Copilot está limitando tu cuenta hasta {0} aprox.: comprueba los modelos después.",
   "log.modelAvailable": "el modelo {0} contestó: ya no se marca como no disponible",
   "log.modelUnavailable": "el modelo {0} queda marcado como no disponible en esta cuenta: {1}",
   "models.rejectedHint":
     " — puede que «{0}» no esté (ya) disponible en tu tenant; prueba M365 Copilot (Auto) u otro modelo.",
   "menu.models": "Modelos: actualizar y ver la lista",
-  "log.modelsCatalog": "catálogo de modelos descargado: {0} entradas",
-  "log.modelsCatalogFailed": "catálogo de modelos no descargado ({0}); se usa la lista en caché",
 
   // ------------------------------------------------------------ proveedor
   "provider.noToken": "No hay token de M365 Copilot. Ejecuta «M365 Copilot: Pegar perfil o token».",
@@ -1109,9 +1092,9 @@ export const es: Record<keyof typeof en, string> = {
     "Este no es el token de M365 Copilot: es de {0}; cada mensaje fallaría con 401.",
   "tui.token.gone":
     "Token olvidado. La extensión de navegador o el userscript enviarán uno nuevo mientras uses M365 Copilot en la web.",
-  "tui.model.catalog.fetching": "Obteniendo el catálogo de modelos en línea…",
+  "tui.model.catalog.fetching": "Cargando el menú de modelos de tu cuenta…",
   "tui.model.catalog.failed":
-    "No se pudo obtener el catálogo en línea; se muestran los modelos ya conocidos.",
+    "No se pudo cargar el menú de modelos de tu cuenta; se muestran los modelos ya conocidos.",
   "tui.model.title": "Modelos — /model <n|id> elige uno:",
   "tui.model.current": "actual",
   "tui.model.set": "Modelo: {0}",

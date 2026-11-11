@@ -179,44 +179,26 @@ export const en = {
   "completion.prompt.codeEnd": "--- end ---",
 
   // ------------------------------------------------------------ models
-  "model.unavailable":
-    "Not available on your account right now — use Auto, or check the models again later.",
+  "model.unavailable": "Not available on your account right now — use Auto, or try again later.",
   "model.quotaUntil": "Priority access used up until {0} — pick another model in the meantime.",
   "model.needsPremium":
     "Needs a Microsoft 365 Copilot licence — the web app showed your account with Copilot Chat only.",
   "model.needsToken": "Paste your M365 Copilot token to enable it.",
   "model.tokenExpired": "Token expired — paste a new one to use it.",
   "models.new": "M365 Copilot: new model available — {0}. Pick it in the chat model picker.",
-  "models.source.observed": "Detected in the M365 Copilot web app (tone {0}).",
   "models.source.custom": "Added in your settings (tone {0}).",
-  "models.source.catalog": "From the online model catalog (tone {0}).",
   "models.title": "M365 Copilot models ({0})",
   "models.placeholder": "Pick one to open the chat with it",
-  "models.updating": "Updating the M365 Copilot models…",
+  "models.updating": "Loading your M365 Copilot account’s models…",
   "models.updateFailed":
-    "M365 Copilot: could not download the model catalog; the last known list stays in use.",
+    "M365 Copilot: could not load your account’s models ({0}); the last known list stays in use.",
   "models.label.builtin": "built in",
-  "models.label.catalog": "online catalog",
-  "models.label.observed": "detected in the M365 Copilot web app",
   "models.label.custom": "your settings",
-  "models.check.action": "Check which models work on your account",
-  "models.check.actionDetail":
-    "Sends a short message to each model (a conversation each) and flags the ones the service refuses.",
-  "models.check.noToken": "M365 Copilot: paste a valid token first to check the models.",
-  "models.check.title": "Checking the M365 Copilot models",
-  "models.check.progress": "{0} ({1}/{2})",
-  "models.check.empty": "It answered with nothing.",
-  "models.check.works": "Works on your account.",
-  "models.check.summary": "{0} of {1} models work on your account",
-  "models.check.throttled":
-    "M365 Copilot is limiting your account until about {0}: check the models after that.",
   "log.modelAvailable": "model {0} answered: no longer flagged as unavailable",
   "log.modelUnavailable": "model {0} flagged as unavailable for this account: {1}",
   "models.rejectedHint":
     " — “{0}” may not be available in your tenant (any more); try M365 Copilot (Auto) or another model.",
   "menu.models": "Models: update and list",
-  "log.modelsCatalog": "model catalog downloaded: {0} entries",
-  "log.modelsCatalogFailed": "model catalog not downloaded ({0}); using the cached list",
 
   // ------------------------------------------------------------ provider
   "provider.noToken": "There is no M365 Copilot token. Run “M365 Copilot: Paste profile or token”.",
@@ -1085,8 +1067,9 @@ export const en = {
     "This is not the M365 Copilot token: it is for {0}; every message would fail with 401.",
   "tui.token.gone":
     "Token forgotten. The browser extension or the userscript will push a new one while M365 Copilot is open on the web.",
-  "tui.model.catalog.fetching": "Fetching the online model catalog…",
-  "tui.model.catalog.failed": "Couldn't fetch the online catalog; showing the models already known.",
+  "tui.model.catalog.fetching": "Loading your account’s model menu…",
+  "tui.model.catalog.failed":
+    "Couldn't load your account’s model menu; showing the models already known.",
   "tui.model.title": "Models — /model <n|id> picks one:",
   "tui.model.current": "current",
   "tui.model.set": "Model: {0}",

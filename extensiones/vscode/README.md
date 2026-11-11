@@ -375,55 +375,46 @@ It needs the **session captured by the browser extension or the userscript**
 
 ## Models that keep up with M365 Copilot
 
-Microsoft adds and retires M365 Copilot models often, and there is no
-documented API that lists them. M365 Copilot does not take a model id either:
-the model travels in the `tone` field of each conversation (`magic` is Auto,
-`Chat` is Quick response, `Reasoning` is Think deeper, `Gpt_5_6_Reasoning` is
-GPT 5.6 Think deeper…). The model list is therefore not fixed: it merges four
-sources, and the chat's model picker updates by itself when it changes.
+Microsoft adds and retires M365 Copilot models often, and each account sees
+its own set. M365 Copilot does not take a model id either: the model travels in
+the `tone` field of each conversation (`magic` is Auto, `Chat` is Quick
+response, `Reasoning` is Think deeper, `Gpt_5_6_Reasoning` is GPT-5.6 Sol Think
+deeper…).
 
-The built-in list follows the web app's own menu and labels: **Auto** (M365
-Copilot decides the model and how long to think — recommended), **Quick
-response** and **Think deeper** (M365 Copilot picks the model, fast or
-thorough), then the named models: GPT 5.6 Think deeper, GPT 5.5 Quick response
-/ Think deeper, Claude Sonnet and Claude Sonnet Think deeper. Claude needs your
-admin to have Anthropic models enabled. The online catalog adds newer ones:
-**GPT-6.1 Sol** and **GPT 6.0 Sol** (reasoning models: they think before
-answering, so they are slower) and **GPT 5.6 Quick response**, available again
-(for agent work, GPT 5.5 or a Think deeper model does better). Models whose
-`tone` is not public yet (they reach organisations in phases) appear in VS Code
-once you use them on M365 Copilot with the browser extension or the userscript
-installed.
+So the extension asks your account for its own model menu — the one the M365
+Copilot web app shows you — with the same token the chat uses
+(`GET /m365Copilot/getgptlist`). It asks on start, every time a new token
+arrives (it may be another account) and when you run **M365 Copilot: Update
+models**; the chat's model picker updates by itself, and the last menu is kept
+for when the network is down. With a Microsoft 365 Copilot licence the menu
+also has the licence's models (Claude Opus 5.5, Claude Sonnet 5 / 5.5, GPT-6,
+GPT-6.1 Sol…): the extension asks for both menus and sends those models' turns
+on the licence. Claude needs your admin to have Anthropic models enabled.
 
-| Source                  | How it works                                                                                                                                                                                                                                              |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Built in                | The models this version ships with — always available, also offline.                                                                                                                                                                                      |
-| Online catalog          | [`models.json`](https://github.com/cristiancastineiras/M365CopilotVSCode/blob/main/models.json) in the repository, downloaded on start and every 12 h. Adding a model there (or `"hidden": true` to retire one) reaches every user without a new release. |
-| Detected in the web app | When you use a model on M365 Copilot, the browser extension / userscript sees its `tone` in the chat invocation and sends it with the token. If VS Code does not know it yet, it is added — that proves it exists for your account.                       |
-| Your settings           | `m365copilot.models.custom`, e.g. `["Gpt_5_9_Chat"]`, to try a model before it reaches the catalog.                                                                                                                                                       |
+| Source        | How it works                                                                                                                  |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Your account  | The model menu of the M365 Copilot web app, loaded with your token.                                                           |
+| Built in      | Auto, Quick response, Think deeper and the models this version knows — only until your account's menu has loaded once.       |
+| Your settings | `m365copilot.models.custom`, e.g. `["Gpt_5_9_Chat"]`, to try a model that is not in your menu.                                |
 
 New models are announced once with a notification. **M365 Copilot: Update
-models** (also in the menu) downloads the catalog right away and lists every
-model with its source.
+models** (also in the menu) loads your account's menu right away and lists
+every model with its source.
 
-A model M365 Copilot knows is not necessarily one your account can use: the
+A model in the menu is not always one your account can use right now: the
 service may turn the request down, or answer with its own canned "I can't help
 with that" instead of the model. Either way the extension says so — with the
 service's reason, and suggesting Auto — instead of showing that reply as the
 answer, and flags the model in the picker (⚠ "not available on your account
 right now") for 12 hours or until it works again — or, when its priority
 access is used up, until it refills (see
-[Limits and refusals](#limits-and-refusals-from-m365-copilot)). **M365 Copilot:
-Check models** (also the first entry of _Update models_) sends a short message
-to each model, one conversation each, and lists which ones work for you.
+[Limits and refusals](#limits-and-refusals-from-m365-copilot)).
 
-| Setting                                | Default  | Purpose                                                          |
-| -------------------------------------- | -------- | ---------------------------------------------------------------- |
-| `m365copilot.models.updateFromCatalog` | `true`   | Download `models.json` (a plain GET to GitHub; nothing is sent). |
-| `m365copilot.models.detectFromBrowser` | `true`   | Add the models the web app uses.                                 |
-| `m365copilot.models.custom`            | `[]`     | Extra models by `tone` (or `{ "tone", "name" }`).                |
-| `m365copilot.models.maxInputTokens`    | `128000` | Context size of every model (see below).                         |
-| `m365copilot.models.maxOutputTokens`   | `16000`  | Reply size VS Code is told every model has.                      |
+| Setting                              | Default  | Purpose                                           |
+| ------------------------------------ | -------- | ------------------------------------------------- |
+| `m365copilot.models.custom`          | `[]`     | Extra models by `tone` (or `{ "tone", "name" }`). |
+| `m365copilot.models.maxInputTokens`  | `128000` | Context size of every model (see below).          |
+| `m365copilot.models.maxOutputTokens` | `16000`  | Reply size VS Code is told every model has.       |
 
 The model settings of sub-agents, inline completions and editor answers
 (`*.model`) offer the built-in models.
@@ -454,7 +445,7 @@ the same answer.
 
 | M365 Copilot says                                                                                        | What the extension does                                                                                                                                                                                                                                                                                                                                                                                                      |
 | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Throttled** (`Throttled` / `PerUserThrottled`): too many requests in a short time                      | It lifts by itself after about an hour without requests, and retrying sooner only extends it. So what runs on its own — inline completions, the auto-commit (except _Check now_), _Check models_ — waits until 75 minutes after the last throttled turn: ⌚ on the status item (until when, in its tooltip) and one notification when it starts. What you ask yourself still goes out, and the first answer lifts the pause. |
+| **Throttled** (`Throttled` / `PerUserThrottled`): too many requests in a short time                      | It lifts by itself after about an hour without requests, and retrying sooner only extends it. So what runs on its own — inline completions, the auto-commit (except _Check now_) — waits until 75 minutes after the last throttled turn: ⌚ on the status item (until when, in its tooltip) and one notification when it starts. What you ask yourself still goes out, and the first answer lifts the pause. |
 | **Priority access used up** (`OutOfCredits`): metered models allow so many turns a day, some also a week | Says when it refills — midnight UTC, the weekly allowance on Monday, shown in your time — and flags the model in the picker until then. Pick another model, or Auto, in the meantime.                                                                                                                                                                                                                                        |
 | **No valid licence** (`InvalidCopilotLicense`)                                                           | Says so. It is about the account, not the model, so nothing is flagged: ask your Microsoft 365 admin.                                                                                                                                                                                                                                                                                                                        |
 | **Declined to answer** (`Disengaged`)                                                                    | An error, never text: an inline edit or a commit message never ends up with the notice instead of an answer.                                                                                                                                                                                                                                                                                                                 |
@@ -639,7 +630,7 @@ on the status bar item. From then on the extension traces, in detail:
   turn started, full content).
 - **What it sends, and where:** the BizChat connection (endpoint, headers,
   upgrade, handshake), the exact prompt as readable text and the frames that
-  leave, the model-catalog download, every `git` process and shell command
+  leave, the request for your account's model menu, every `git` process and shell command
   (command, folder, exit code, output, time).
 - **What it does:** each chat request VS Code makes (messages, tools offered,
   the mode chosen), tool calls with their input and result, the commands you run,
@@ -685,8 +676,7 @@ palette under **M365 Copilot**.
 | `Sign out and sign in again`                                                              | Deletes the token **and** the browser’s Microsoft session (cookies, MSAL’s cache, site storage) so it asks for your credentials again. |
 | `Toggle inline completions`                                                               | Ghost text on/off.                                                                                                                     |
 | `Change language`                                                                         | English / Spanish / automatic.                                                                                                         |
-| `Update models`                                                                           | Downloads the model catalog now and lists every model with its source.                                                                 |
-| `Check models`                                                                            | Sends a short message to each model and lists which ones work on your account.                                                         |
+| `Update models`                                                                           | Loads your account's model menu again and lists every model with its source.                                                           |
 | `Search the project…`                                                                     | Ranked search in the project index; Enter opens the code.                                                                              |
 | `Show project map`                                                                        | The project map (structure, packages, entry points, most imported modules) as a document.                                              |
 | `Rebuild project index`                                                                   | Indexes the workspace again.                                                                                                           |

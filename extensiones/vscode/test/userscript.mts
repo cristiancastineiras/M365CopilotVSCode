@@ -192,22 +192,14 @@ async function testWebSocketCaptureAndSync() {
   assert.equal(socket.sent.length, 1, "the page still sends its frame");
   await settle();
 
-  // The web app uses a model VS Code does not know: it is remembered and sent
-  // right away (not at the next token renewal, ~50 min later).
+  // Another model in the web app sends nothing: VS Code loads the account's model menu itself.
   const before = page.posts().length;
   socket.send(
     `${JSON.stringify({ type: 4, target: "chat", arguments: [{ tone: "Gpt_5_7_Chat" }] })}\x1e`,
   );
   await settle();
-  assert.deepEqual(page.capture().observedTones, ["magic", "Gpt_5_7_Chat"]);
-  assert.equal(page.posts().length, before + 1, "the new model is sent to VS Code");
-  assert.deepEqual(JSON.parse(page.posts().at(-1)!.data!).observedTones, ["magic", "Gpt_5_7_Chat"]);
-  // Using it again changes nothing and sends nothing.
-  socket.send(
-    `${JSON.stringify({ type: 4, target: "chat", arguments: [{ tone: "Gpt_5_7_Chat" }] })}\x1e`,
-  );
-  await settle();
-  assert.equal(page.posts().length, before + 1);
+  assert.equal(page.capture().observedTones, undefined);
+  assert.equal(page.posts().length, before);
 
   // Same token again: nothing new is sent.
   const posts = page.posts().length;

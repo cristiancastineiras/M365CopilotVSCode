@@ -26,12 +26,6 @@ export interface CopilotProfile {
   claims: TokenClaims | null;
   capturedAt: string;
   /**
-   * `tone`s (modelos) que la web de M365 Copilot ha usado de verdad, vistos en
-   * sus invocaciones `chat`: la extensión de VS Code añade al selector los que
-   * aún no conoce. Opcional: los perfiles antiguos no lo traen.
-   */
-  observedTones?: string[];
-  /**
    * El servicio rechazó este token con un 401: ya no sirve, diga lo que diga su
    * `exp`, y es la única forma de saberlo con uno cifrado, que no lo dice. Lo pone
    * quien lo usa, nunca llega del navegador.

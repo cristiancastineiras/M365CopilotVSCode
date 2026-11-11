@@ -1,15 +1,12 @@
 /**
  * Which M365 Copilot models (BizChat `tone`s) the extension offers, and where
- * each one comes from. Microsoft adds and retires models often, and there is
- * no documented API that lists them, so the list is the merge of four sources:
+ * each one comes from:
  *
- *  - builtin:  the ones shipped with this version (always available offline);
- *  - catalog:  models.json in the project's GitHub repo, downloaded by the
- *              extension — the maintainer adds a model (or hides a retired one)
- *              there and every user gets it without a new release;
- *  - observed: tones the M365 Copilot web app itself used, captured by the
- *              browser extension / userscript and sent along with the token —
- *              proof that the model exists for THIS tenant;
+ *  - account:  the account's own model menu — what the web app's model picker
+ *              offers it, from `GET /m365Copilot/getgptlist` (fetchModelMenu in
+ *              client.ts, read by {@link parseModelMenu});
+ *  - builtin:  the ones shipped with this version, offered only until the
+ *              account's menu has been loaded once;
  *  - custom:   tones the user typed in `m365copilot.models.custom`.
  *
  * Kept free of the `vscode` import so the merge rules can be tested directly.
@@ -17,7 +14,7 @@
 import { TONE_PATTERN } from "../capture";
 import type { CoreMessageKey } from "./i18n";
 
-export type ModelSource = "builtin" | "catalog" | "observed" | "custom";
+export type ModelSource = "builtin" | "account" | "custom";
 
 export interface CatalogModel {
   readonly id: string;
@@ -32,18 +29,16 @@ export interface CatalogModel {
   readonly source: ModelSource;
   /** Built-ins describe themselves through the i18n catalog… */
   readonly detailKey?: CoreMessageKey;
-  /** …the rest through per-language text from models.json (or nothing). */
+  /** …the rest through the account menu's or the setting's text (or nothing). */
   readonly detail?: Readonly<{ en?: string; es?: string }>;
 }
 
-/** One entry of models.json or of the `custom` setting. */
+/** One model of the account's menu or of the `custom` setting. */
 export interface ModelEntry {
   /** A tone, or `Tone@paid` (see {@link normalizeSelector}). */
   readonly tone: string;
   readonly name?: string;
   readonly detail?: Readonly<{ en?: string; es?: string }>;
-  /** Catalog only: the model was retired — hide it even if built in. */
-  readonly hidden?: boolean;
 }
 
 const FAMILY = "m365-copilot";
@@ -54,16 +49,12 @@ const MAX_NAME_CHARS = 60;
 const MAX_DETAIL_CHARS = 200;
 
 /**
- * What the M365 Copilot web app's model menu offers, with its own labels: the
- * three modes that let M365 pick the model (Auto = `magic`, Quick response =
- * `Chat`, Think deeper = `Reasoning`) and the named models. The tones come from
- * the web app's own menu and from tones seen answering live. Newer models
- * arrive in phases per tenant, so they come from the online catalog
- * (models.json) instead — GPT 6.0 Sol, GPT-6.1 Sol and GPT 5.6 Quick response
- * (`Gpt_5_6_Chat`, which serves again since 2026-09-24) are there — or show up
- * by themselves once the web app uses them (observed).
- * The ids of models kept from earlier versions do not change: settings and
- * the chat's picker refer to them.
+ * The models known when this version shipped: the three modes that let M365
+ * pick the model (Auto = `magic`, Quick response = `Chat`, Think deeper =
+ * `Reasoning`) and the named models. Auto is always offered; the rest only
+ * until the account's own menu arrives. When that menu lists one of these
+ * tones, the model keeps its id here — settings and the chat's picker refer
+ * to it — and its translated description.
  */
 const BUILTIN_SPECS: readonly Omit<CatalogModel, "family" | "source">[] = [
   {
@@ -140,8 +131,8 @@ export const PAID_ONLY_TONES: ReadonlySet<string> = new Set([
 /**
  * `Tone@paid`: the same tone on the paid scenario, where it is another model —
  * `Claude_Sonnet` is Claude Sonnet 4.6 on the included scenario and Claude
- * Sonnet 5.5 (metered: 80 turns a day) on the paid one. Not a valid BizChat tone
- * on purpose: versions without paid models skip such an entry of models.json.
+ * Sonnet 5.5 (metered: 80 turns a day) on the paid one. Never sent to BizChat
+ * as is: {@link parseToneSelector} splits it into the tone and the scenario.
  */
 export const PAID_SUFFIX = "@paid";
 
@@ -165,10 +156,9 @@ export function isPaidSelector(selector: string | null): boolean {
 }
 
 /**
- * A tone or `Tone@paid` from models.json or the settings, or null if it is not
- * one. A paid-only tone drops the suffix — it is paid anyway — so that a tone
- * the web app was seen using (`Claude_Opus`) and the catalog's entry for it are
- * the same model.
+ * A tone or `Tone@paid` from the account's menu or the settings, or null if it
+ * is not one. A paid-only tone drops the suffix — it is paid anyway — so that
+ * `Claude_Opus` and `Claude_Opus@paid` are the same model.
  */
 export function normalizeSelector(raw: string): string | null {
   const text = raw.trim();
@@ -254,92 +244,128 @@ function entryOf(raw: unknown): ModelEntry | null {
     tone,
     name: cleanText(record.name, MAX_NAME_CHARS),
     detail: cleanDetail(record.detail),
-    hidden: record.hidden === true,
   };
-}
-
-/**
- * models.json, validated: `{ "models": [{ "tone", "name"?, "detail"?, "hidden"? }] }`.
- * Null when it is not that shape at all (keep using the cached copy then).
- */
-export function parseModelCatalog(json: unknown): ModelEntry[] | null {
-  if (!json || typeof json !== "object" || !Array.isArray((json as { models?: unknown }).models))
-    return null;
-  return (
-    (json as { models: unknown[] }).models.map(entryOf).filter(Boolean) as ModelEntry[]
-  ).slice(0, MAX_MODELS);
 }
 
 /** The `m365copilot.models.custom` setting: tones, or `{ tone, name }` objects. */
 export function parseCustomModels(setting: unknown): ModelEntry[] {
   if (!Array.isArray(setting)) return [];
-  return (setting.map(entryOf).filter(Boolean) as ModelEntry[]).map((entry) => ({
-    ...entry,
-    hidden: false,
-  }));
-}
-
-export interface ModelSources {
-  readonly catalog: readonly ModelEntry[];
-  readonly observed: readonly string[];
-  readonly custom: readonly ModelEntry[];
+  return setting.map(entryOf).filter(Boolean) as ModelEntry[];
 }
 
 /**
- * The picker's list. One model per tone (Auto first), in the order built-in →
- * catalog → observed → custom. Names and descriptions: custom over catalog
- * over built-in; an observed tone only contributes its existence. A catalog
- * entry with `hidden` removes that tone — unless the user listed it in custom.
+ * The model menu in a `getgptlist` answer: `gptList[].clientPreferences.
+ * modelSelectorMetadata.availableModelSelectionOptions`, where a family
+ * ("Claude", "GPT") nests its models in `itemGroup`. Its `Magic` is Auto, which
+ * is always offered anyway. Null when the answer has no menu at all (keep the
+ * last one then).
+ */
+export function parseModelMenu(json: unknown): ModelEntry[] | null {
+  const gpts = json && typeof json === "object" ? (json as { gptList?: unknown }).gptList : null;
+  if (!Array.isArray(gpts)) return null;
+  for (const gpt of gpts) {
+    const options = (gpt as MenuGpt | null)?.clientPreferences?.modelSelectorMetadata
+      ?.availableModelSelectionOptions;
+    if (Array.isArray(options)) return menuEntries(options, "").slice(0, MAX_MODELS);
+  }
+  return null;
+}
+
+interface MenuGpt {
+  readonly clientPreferences?: {
+    readonly modelSelectorMetadata?: { readonly availableModelSelectionOptions?: unknown };
+  };
+}
+
+function menuEntries(options: readonly unknown[], family: string): ModelEntry[] {
+  return options.flatMap((raw): ModelEntry[] => {
+    if (!raw || typeof raw !== "object") return [];
+    const option = raw as Record<string, unknown>;
+    const title = cleanText(option.menuItemTitle, MAX_NAME_CHARS);
+    if (Array.isArray(option.itemGroup)) return menuEntries(option.itemGroup, title ?? family);
+    const tone = typeof option.id === "string" ? normalizeSelector(option.id) : null;
+    if (!tone || /^magic$/i.test(tone)) return [];
+    // "Claude" › "Sonnet 5" reads "Claude Sonnet 5"; "GPT" › "GPT-6" stays "GPT-6".
+    const name =
+      title && family && !title.toLowerCase().startsWith(family.toLowerCase())
+        ? `${family} ${title}`
+        : title;
+    return [{ tone, name, detail: cleanDetail(option.menuItemDescription) }];
+  });
+}
+
+/**
+ * One list from the menus of the two scenarios (see client.ts): `paid` is the
+ * Microsoft 365 Copilot licence's, null for an account that has only one. A
+ * model there that the included menu lacks — or names differently, because the
+ * same tone is another model on the licence — becomes `Tone@paid`, so its
+ * turns go on the paid scenario. In the paid menu's order, which is the web
+ * app's.
+ */
+export function combineMenus(
+  included: readonly ModelEntry[],
+  paid: readonly ModelEntry[] | null,
+): ModelEntry[] {
+  if (!paid) return [...included];
+  const includedNames = new Map(included.map((entry) => [entry.tone, entry.name]));
+  const combined = paid.map((entry) =>
+    includedNames.has(entry.tone) && includedNames.get(entry.tone) === entry.name
+      ? entry
+      : { ...entry, tone: normalizeSelector(`${entry.tone}${PAID_SUFFIX}`) ?? entry.tone },
+  );
+  const tones = new Set(combined.map((entry) => entry.tone));
+  return [...combined, ...included.filter((entry) => !tones.has(entry.tone))];
+}
+
+export interface ModelSources {
+  /** The account's model menu, or null until it has been loaded once. */
+  readonly account: readonly ModelEntry[] | null;
+  readonly custom: readonly ModelEntry[];
+}
+
+const BUILTIN_BY_TONE = new Map(BUILTIN_MODELS.slice(1).map((model) => [model.tone!, model]));
+
+/**
+ * The picker's list: Auto first, then the account's menu (the built-ins until
+ * it has been loaded), then the custom ones — one model per tone. Names:
+ * custom over the menu over built-in. Descriptions: custom over built-in
+ * (translated) over the menu's. A built-in tone keeps its built-in id.
  */
 export function mergeModels(sources: ModelSources): CatalogModel[] {
-  const hidden = new Set(
-    sources.catalog.filter((entry) => entry.hidden).map((entry) => entry.tone),
-  );
   const custom = new Map(sources.custom.map((entry) => [entry.tone, entry]));
-  const catalog = new Map(
-    sources.catalog.filter((entry) => !entry.hidden).map((entry) => [entry.tone, entry]),
-  );
   const merged = new Map<string, CatalogModel>();
-
   const add = (tone: string, source: ModelSource, entry?: ModelEntry) => {
-    if (merged.has(tone) || (hidden.has(tone) && !custom.has(tone))) return;
-    const override = custom.get(tone) ?? catalog.get(tone) ?? entry;
+    if (merged.has(tone)) return;
+    const builtin = BUILTIN_BY_TONE.get(tone);
+    const name = custom.get(tone)?.name ?? entry?.name;
+    const detail = custom.get(tone)?.detail;
     merged.set(tone, {
-      id: modelIdForTone(tone),
-      name: `${PREFIX}${override?.name ?? prettyTone(tone)}`,
+      id: builtin?.id ?? modelIdForTone(tone),
+      name: name ? `${PREFIX}${name}` : (builtin?.name ?? `${PREFIX}${prettyTone(tone)}`),
       family: FAMILY,
       tone,
       source,
-      detail: override?.detail,
+      ...(detail
+        ? { detail }
+        : builtin?.detailKey
+          ? { detailKey: builtin.detailKey }
+          : entry?.detail
+            ? { detail: entry.detail }
+            : {}),
     });
   };
-
-  const result: CatalogModel[] = BUILTIN_MODELS.slice(0, 1);
-  for (const model of BUILTIN_MODELS.slice(1)) {
-    const tone = model.tone!;
-    if (hidden.has(tone) && !custom.has(tone)) continue;
-    const override = custom.get(tone) ?? catalog.get(tone);
-    merged.set(tone, {
-      ...model,
-      name: override?.name ? `${PREFIX}${override.name}` : model.name,
-      // A new description from the catalog replaces the shipped one.
-      ...(override?.detail ? { detail: override.detail, detailKey: undefined } : {}),
-    });
-  }
-  for (const entry of sources.catalog) if (!entry.hidden) add(entry.tone, "catalog", entry);
-  for (const tone of sources.observed) if (TONE_PATTERN.test(tone)) add(tone, "observed");
+  if (sources.account) for (const entry of sources.account) add(entry.tone, "account", entry);
+  else for (const tone of BUILTIN_BY_TONE.keys()) add(tone, "builtin");
   for (const entry of sources.custom) add(entry.tone, "custom", entry);
-
-  result.push(...merged.values());
-  return result.slice(0, MAX_MODELS);
+  return [BUILTIN_MODELS[0]!, ...merged.values()].slice(0, MAX_MODELS);
 }
 
-/** Models in `after` whose tone `known` does not contain — what to announce. */
+/** Models in `after` whose tone `known` does not contain and did not ship — what to announce. */
 export function unannounced(
   after: readonly CatalogModel[],
   known: ReadonlySet<string>,
 ): CatalogModel[] {
   return after.filter(
-    (model) => model.tone !== null && model.source !== "builtin" && !known.has(model.tone),
+    (model) => model.tone !== null && !BUILTIN_BY_TONE.has(model.tone) && !known.has(model.tone),
   );
 }
