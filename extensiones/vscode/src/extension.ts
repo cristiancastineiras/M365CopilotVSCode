@@ -41,7 +41,6 @@ import { ProjectIndexService } from "./projectIndex";
 import { registerWebSearchTool } from "./webSearch";
 import type { Hunk } from "../tools/lineDiff";
 import {
-  checkModels,
   clearProfile,
   currentLanguageSetting,
   languageName,
@@ -241,8 +240,7 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
     registerTracedCommand("m365copilot.signOut", () => signOutAndSignIn(store, tokenServer)),
     registerTracedCommand("m365copilot.showStatus", () => showStatus(store)),
     registerTracedCommand("m365copilot.selectLanguage", () => selectLanguage()),
-    registerTracedCommand("m365copilot.refreshModels", () => refreshModels(modelRegistry, store)),
-    registerTracedCommand("m365copilot.checkModels", () => checkModels(modelRegistry, store)),
+    registerTracedCommand("m365copilot.refreshModels", () => refreshModels(modelRegistry)),
     registerTracedCommand("m365copilot.openWalkthrough", () => openWalkthrough()),
     registerTracedCommand("m365copilot.showLog", () => showLog()),
     registerTracedCommand("m365copilot.toggleDebug", () => toggleDeepDebug()),

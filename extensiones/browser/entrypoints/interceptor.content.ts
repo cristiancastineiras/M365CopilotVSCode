@@ -11,8 +11,6 @@ import {
   sameCapture,
   tokenInSocketUrl,
   tokensInStorageValue,
-  toneOfTemplate,
-  withObservedTone,
   withoutExpiredToken,
   type CaptureStore,
 } from "@m365copilot/core";
@@ -156,11 +154,8 @@ export default defineContentScript({
         try {
           const frames = inspectOutgoingFrames(data);
           if (frames.sawChat) {
-            // Este socket es, con certeza, el hub del chat: fija su endpoint, y
-            // apunta qué modelo (`tone`) usó la web para que VS Code lo ofrezca.
-            const tone = toneOfTemplate(frames.template);
+            // Este socket es, con certeza, el hub del chat: fija su endpoint.
             writeStore({
-              ...(tone ? { observedTones: withObservedTone(readStore().observedTones, tone) } : {}),
               ...(endpoint ? { endpoint, endpointConfirmed: true } : {}),
               origin: location.origin,
               userAgent: navigator.userAgent,

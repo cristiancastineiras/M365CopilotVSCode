@@ -13,27 +13,13 @@ import {
   parsePastedProfile,
   ProfileParseError,
   type CopilotProfile,
-  CopilotClientError,
-  CopilotModelUnavailableError,
-  CopilotQuotaExhaustedError,
-  isAccountLevelError,
-  streamCopilotTurn,
-  accountThrottledUntil,
   isDeepDebug,
-  log,
 } from "@m365copilot/core/bizchat";
 import { unusableTokenMessage, type ProfileStore } from "./secrets";
 import type { WorkspaceEditManager } from "../tools/writeFile";
-import { unavailabilityText, type CopilotModel, type ModelRegistry } from "./models";
+import { unavailabilityText, type ModelRegistry } from "./models";
 import type { IndexStatus } from "./projectIndex";
-import {
-  formatMoment,
-  getLocale,
-  resolveLocale,
-  t,
-  type LanguageSetting,
-  type Locale,
-} from "./i18n";
+import { getLocale, resolveLocale, t, type LanguageSetting, type Locale } from "./i18n";
 
 /** The walkthrough contributed in package.json (`<publisher>.<name>#<id>`). */
 export const WALKTHROUGH_ID = "m365-copilot-vscode.m365-copilot-vscode#m365copilot.gettingStarted";
@@ -256,171 +242,44 @@ export async function showStatus(store: ProfileStore): Promise<void> {
 }
 
 /**
- * "Update models": download the catalog now and list every model with where
- * it comes from and whether the service refused it lately. Picking one opens
- * the chat with it (when VS Code supports choosing the model from the
- * command; otherwise just the chat); the first entry checks them all.
+ * "Update models": load the account's model menu again and list every model
+ * with where it comes from and whether the service refused it lately. Picking
+ * one opens the chat with it (when VS Code supports choosing the model from
+ * the command; otherwise just the chat).
  */
-export async function refreshModels(registry: ModelRegistry, store: ProfileStore): Promise<void> {
-  const updated = await vscode.window.withProgress(
+export async function refreshModels(registry: ModelRegistry): Promise<void> {
+  const failure = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: t("models.updating") },
-    () => registry.refreshCatalog(),
+    () => registry.refresh(),
   );
-  if (
-    !updated &&
-    vscode.workspace.getConfiguration("m365copilot.models").get<boolean>("updateFromCatalog", true)
-  ) {
-    void vscode.window.showWarningMessage(t("models.updateFailed"));
-  }
+  if (failure) void vscode.window.showWarningMessage(t("models.updateFailed", failure));
   const sourceLabel = {
     builtin: t("models.label.builtin"),
-    catalog: t("models.label.catalog"),
-    observed: t("models.label.observed"),
+    account: t("models.label.account"),
     custom: t("models.label.custom"),
   };
-  const check = {
-    label: `$(beaker) ${t("models.check.action")}`,
-    detail: t("models.check.actionDetail"),
-    id: "",
-  };
   const picked = await vscode.window.showQuickPick(
-    [
-      check,
-      { label: "", kind: vscode.QuickPickItemKind.Separator, id: "" },
-      ...registry.models.map((model) => {
-        const unavailable = registry.unavailability(model.tone);
-        return {
-          label: `${unavailable ? "$(warning) " : ""}${model.name}`,
-          description: model.tone ?? "auto",
-          detail: unavailable
-            ? `${sourceLabel[model.source]} · ${unavailabilityText(unavailable)}`
-            : sourceLabel[model.source],
-          id: model.id,
-        };
-      }),
-    ],
+    registry.models.map((model) => {
+      const unavailable = registry.unavailability(model.tone);
+      return {
+        label: `${unavailable ? "$(warning) " : ""}${model.name}`,
+        description: model.tone ?? "auto",
+        detail: unavailable
+          ? `${sourceLabel[model.source]} · ${unavailabilityText(unavailable)}`
+          : sourceLabel[model.source],
+        id: model.id,
+      };
+    }),
     {
       title: t("models.title", registry.models.length),
       placeHolder: t("models.placeholder"),
       matchOnDescription: true,
     },
   );
-  if (!picked) return;
-  if (picked === check) {
-    await checkModels(registry, store);
-    return;
-  }
-  await openChatWith(picked.id);
-}
-
-async function openChatWith(modelId: string): Promise<void> {
-  await vscode.commands.executeCommand("workbench.action.chat.open", {
-    modelSelector: { vendor: "m365copilot", id: modelId },
-  });
-}
-
-/** What the check asks each model: short, so a reasoning model does not think for long. */
-const CHECK_PROMPT = "Reply with just the word OK.";
-
-interface CheckResult {
-  readonly model: CopilotModel;
-  readonly ok: boolean;
-  readonly reason?: string;
-}
-
-/**
- * "Check models": one short turn per model (not Auto) to see which ones this
- * account can really use — new models reach a tenant in phases, and the
- * Anthropic/OpenAI ones need the admin. Each check is a conversation of its
- * own, one after another; the registry records every outcome (the client
- * reports them), so the picker flags the ones that failed.
- */
-export async function checkModels(registry: ModelRegistry, store: ProfileStore): Promise<void> {
-  const profile = await store.get();
-  if (!profile || !isTokenUsable(profile)) {
-    void vscode.window.showWarningMessage(t("models.check.noToken"));
-    return;
-  }
-  // One turn per model would only feed the limit, and every model would read as broken.
-  const throttledUntil = accountThrottledUntil();
-  if (throttledUntil !== undefined) {
-    void vscode.window.showWarningMessage(
-      t("models.check.throttled", formatMoment(throttledUntil)),
-    );
-    return;
-  }
-  const models = registry.models.filter((model) => model.tone !== null);
-  const results = await vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Notification,
-      title: t("models.check.title"),
-      cancellable: true,
-    },
-    async (progress, token) => {
-      const done: CheckResult[] = [];
-      for (const [index, model] of models.entries()) {
-        if (token.isCancellationRequested) break;
-        progress.report({
-          message: t("models.check.progress", shortName(model), index + 1, models.length),
-          increment: 100 / models.length,
-        });
-        const controller = new AbortController();
-        const cancel = token.onCancellationRequested(() => controller.abort());
-        try {
-          let answered = false;
-          await streamCopilotTurn({
-            profile,
-            prompt: CHECK_PROMPT,
-            tone: model.tone,
-            signal: controller.signal,
-            log,
-            callbacks: { onText: (text) => (answered ||= Boolean(text.trim())) },
-          });
-          done.push(
-            answered ? { model, ok: true } : { model, ok: false, reason: t("models.check.empty") },
-          );
-        } catch (error) {
-          if (
-            token.isCancellationRequested ||
-            (error instanceof CopilotClientError && error.message === "__CANCELLED__")
-          )
-            break;
-          const reason =
-            error instanceof CopilotModelUnavailableError
-              ? error.serverReply
-              : error instanceof Error
-                ? error.message
-                : String(error);
-          done.push({ model, ok: false, reason });
-          // Throttled, no licence, filtered: about the account, not this model —
-          // the next ones would fail the same way. (A used-up quota is per model.)
-          if (isAccountLevelError(error) && !(error instanceof CopilotQuotaExhaustedError)) break;
-        } finally {
-          cancel.dispose();
-        }
-      }
-      return done;
-    },
-  );
-  if (results.length === 0) return;
-  const working = results.filter((result) => result.ok).length;
-  const picked = await vscode.window.showQuickPick(
-    results.map((result) => ({
-      label: `${result.ok ? "$(pass-filled)" : "$(error)"} ${shortName(result.model)}`,
-      description: result.model.tone ?? "",
-      detail: result.ok ? t("models.check.works") : result.reason,
-      id: result.model.id,
-    })),
-    {
-      title: t("models.check.summary", working, results.length),
-      placeHolder: t("models.placeholder"),
-    },
-  );
-  if (picked) await openChatWith(picked.id);
-}
-
-function shortName(model: CopilotModel): string {
-  return model.name.replace(/^M365 Copilot · /, "");
+  if (picked)
+    await vscode.commands.executeCommand("workbench.action.chat.open", {
+      modelSelector: { vendor: "m365copilot", id: picked.id },
+    });
 }
 
 export async function toggleInlineCompletions(): Promise<void> {

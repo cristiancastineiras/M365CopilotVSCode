@@ -16,7 +16,7 @@ import * as fs from "node:fs";
 import { homedir } from "node:os";
 import { basename, extname, join, resolve } from "node:path";
 import { TOKEN_SERVER_PORT } from "@m365copilot/core";
-import { OnlineCatalog } from "./catalog";
+import { ModelMenu } from "./catalog";
 import {
   accountTier,
   CopilotAuthError,
@@ -261,7 +261,7 @@ class TuiApp {
   private readonly initialToken: string | undefined;
   private readonly initialPrompt: string | undefined;
   private readonly receiver: TokenReceiver;
-  private readonly catalog: OnlineCatalog;
+  private readonly catalog: ModelMenu;
 
   private profile: CopilotProfile | null;
   private model: string | null;
@@ -290,7 +290,7 @@ class TuiApp {
     this.initialPrompt = options.prompt;
     this.profile = options.store.readProfile();
     this.receiver = new TokenReceiver(options.store, this.onReceiverEvent);
-    this.catalog = new OnlineCatalog(options.store.dir);
+    this.catalog = new ModelMenu(options.store.dir);
   }
 
   async run(): Promise<void> {
@@ -515,11 +515,7 @@ class TuiApp {
 
   private async commandModel(rest: string): Promise<void> {
     await this.ensureCatalog();
-    const models = mergeModels({
-      catalog: this.catalog.current(),
-      observed: this.profile?.observedTones ?? [],
-      custom: [],
-    });
+    const models = mergeModels({ account: this.catalog.current(), custom: [] });
     if (!rest) {
       const rows = models.map((model, index) => {
         const current = this.isCurrentTone(model.tone) ? `  ← ${t("tui.model.current")}` : "";
@@ -543,11 +539,11 @@ class TuiApp {
     this.ui.notice("ok", t("tui.model.set", this.modelLabel()));
   }
 
-  /** Downloads the online catalog when the cached copy is missing or old. */
+  /** Loads the account's model menu when the cached copy is missing or old (and there is a token). */
   private async ensureCatalog(): Promise<void> {
-    if (!this.catalog.needsRefresh()) return;
+    if (!this.profile || !isTokenUsable(this.profile) || !this.catalog.needsRefresh()) return;
     this.ui.notice("dim", t("tui.model.catalog.fetching"));
-    const ok = await this.catalog.refresh();
+    const ok = await this.catalog.refresh(this.profile);
     if (!ok) this.ui.notice("warn", t("tui.model.catalog.failed"));
   }
 

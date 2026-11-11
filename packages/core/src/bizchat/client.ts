@@ -2,7 +2,13 @@ import { randomUUID } from "node:crypto";
 import WebSocket from "ws";
 import { isEncryptedToken } from "../index";
 import { describeProfile, foreignAudience, type CopilotProfile } from "./profile";
-import { parseToneSelector, prettyTone } from "./modelCatalog";
+import {
+  combineMenus,
+  parseModelMenu,
+  parseToneSelector,
+  prettyTone,
+  type ModelEntry,
+} from "./modelCatalog";
 import { RunawayRepetitionGuard } from "./repetitionGuard";
 import { bizChatLocale, formatMoment, t } from "./i18n";
 import { debug, redactUrl, truncate } from "./logger";
@@ -1688,6 +1694,69 @@ function buildEndpoint(
 /** `…/m365Copilot/Chathub` → `…/m365Copilot/UploadFile`, over https (http for a local mock). */
 function uploadUrlFor(base: string): string {
   return `${base.replace(/^ws/i, "http").replace(/\/Chathub\/?$/i, "")}/UploadFile`;
+}
+
+const MODEL_MENU_TIMEOUT_MS = 10_000;
+
+/**
+ * The account's model menu — what the web app's model picker offers it — from
+ * `GET /m365Copilot/getgptlist` with the chat token. The menu depends on the
+ * scenario, so a work account's is asked on both: the paid one adds the
+ * Microsoft 365 Copilot licence's models (see combineMenus), and it failing
+ * leaves just the included one. Throws when there is no menu; the caller keeps
+ * the last one.
+ */
+export async function fetchModelMenu(options: {
+  profile: CopilotProfile;
+  /** Like {@link streamCopilotTurn}'s: the tests' local mock. */
+  endpointBase?: string;
+}): Promise<ModelEntry[]> {
+  const { profile } = options;
+  const base =
+    options.endpointBase ?? testEndpointBase ?? `${DEFAULT_ENDPOINT_HOST}${DEFAULT_ENDPOINT_PATH}`;
+  const url = `${base.replace(/^ws/i, "http").replace(/\/Chathub\/?$/i, "")}/getgptlist?request=${encodeURIComponent("{}")}`;
+  const menuFor = async (scenario: string): Promise<ModelEntry[]> => {
+    const startedAt = Date.now();
+    debug("models", `→ GET getgptlist (${scenario})`, () => ({ url }));
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${profile.accessToken}`,
+        "X-Scenario": scenario,
+        Origin: profile.origin,
+        Referer: `${profile.origin.replace(/\/$/, "")}/`,
+        "User-Agent": profile.userAgent,
+      },
+      signal: AbortSignal.timeout(MODEL_MENU_TIMEOUT_MS),
+    });
+    const body = await response.text();
+    debug("models", `← getgptlist ${response.status} (${Date.now() - startedAt} ms)`);
+    if (!response.ok)
+      throw describeUpgradeFailure(response.status, response.statusText, profile.accessToken);
+    let menu: ModelEntry[] | null = null;
+    try {
+      menu = parseModelMenu(JSON.parse(body));
+    } catch {
+      /* not JSON: reported below */
+    }
+    if (!menu) throw new CopilotClientError(`getgptlist: no model menu (${truncate(body, 200)})`);
+    debug("models", `model menu (${scenario}): ${menu.length} models`, menu);
+    return menu;
+  };
+  const included = scenarioFor(profile, false).scenario;
+  const paid = scenarioFor(profile, true).scenario;
+  const [includedMenu, paidMenu] = await Promise.all([
+    menuFor(included),
+    paid === included
+      ? null
+      : menuFor(paid).catch((error: unknown) => {
+          debug(
+            "models",
+            `paid menu not loaded: ${error instanceof Error ? error.message : error}`,
+          );
+          return null;
+        }),
+  ]);
+  return combineMenus(includedMenu, paidMenu);
 }
 
 /**

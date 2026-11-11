@@ -372,17 +372,16 @@ export class M365CopilotProvider implements vscode.LanguageModelChatProvider, vs
       // passed); refresh the picker so its warning state reflects that the token
       // needs re-capturing.
       if (error instanceof CopilotAuthError) this.changeEmitter.fire();
-      // A model that did not ship with this version (catalog, detected or
-      // custom) may simply not exist in this tenant: say so instead of
-      // leaving a bare "rejected the request". (A model the service refused
-      // already says all that.)
+      // A model the user typed in the settings may simply not exist in this
+      // tenant: say so instead of leaving a bare "rejected the request". (A
+      // model the service refused already says all that.)
       if (
         error instanceof CopilotClientError &&
         !(error instanceof CopilotAuthError) &&
         !(error instanceof CopilotModelUnavailableError) &&
         !isAccountLevelError(error) &&
         selected &&
-        selected.source !== "builtin"
+        selected.source === "custom"
       ) {
         throw userError(`${error.message}${t("models.rejectedHint", selected.name)}`);
       }

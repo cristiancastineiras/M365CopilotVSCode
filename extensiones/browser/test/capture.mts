@@ -35,8 +35,6 @@ import {
   tokenInSocketUrl,
   tokensInStorageValue,
   tokenStamp,
-  toneOfTemplate,
-  withObservedTone,
   withoutExpiredToken,
 } from "@m365copilot/core";
 
@@ -307,31 +305,6 @@ function testConnectionArt() {
   );
 }
 
-function testObservedTones() {
-  assert.equal(toneOfTemplate({ tone: "Gpt_5_7_Chat" }), "Gpt_5_7_Chat");
-  assert.equal(toneOfTemplate({ tone: "not a tone!" }), null);
-  assert.equal(toneOfTemplate({ tone: 42 }), null);
-  assert.equal(toneOfTemplate(undefined), null);
-  assert.deepEqual(withObservedTone(undefined, "A_1"), ["A_1"]);
-  assert.deepEqual(
-    withObservedTone(["A_1", "B_2"], "A_1"),
-    ["B_2", "A_1"],
-    "moved to most recent, no duplicate",
-  );
-  assert.deepEqual(withObservedTone(["A_1"], null), ["A_1"]);
-  const many = Array.from({ length: 30 }, (_, i) => `T_${i}`);
-  assert.equal(withObservedTone(many, "Last_1").length, 20);
-  assert.equal(withObservedTone(many, "Last_1").at(-1), "Last_1");
-  assert.deepEqual(
-    profileFromCapture({ accessToken: "t", observedTones: ["A_1"] }, "UA")?.observedTones,
-    ["A_1"],
-  );
-  assert.equal(profileFromCapture({ accessToken: "t" }, "UA")?.observedTones, undefined);
-  console.log(
-    "  ✓ modelos vistos en la web: tone validado, sin duplicados, acotado y enviado con el perfil",
-  );
-}
-
 function testEncryptedToken() {
   // Las dos formas de JWE: `alg: dir` deja vacía la segunda parte.
   const direct = `${b64url({ alg: "dir", enc: "A256GCM" })}..aXY.Y2lwaGVy.dGFn`;
@@ -435,7 +408,7 @@ function testAccountsAndFrames() {
   assert.equal(supersedesCapture(null, personal), true);
   assert.equal(supersedesCapture({}, personal), true);
   assert.equal(supersedesCapture(personal, { capturedAt: later }), false, "sin token no pisa");
-  assert.equal(supersedesCapture(personal, { ...personal, observedTones: ["x"] }), true);
+  assert.equal(supersedesCapture(personal, { ...personal, invocationType: 1 }), true);
   const cached = { accessToken: token, claims: { exp: inMinutes(60) }, capturedAt: later };
   for (const tokenSource of ["msal-cache", "fetch-header", "xhr-header"]) {
     assert.equal(supersedesCapture(personal, { ...cached, tokenSource }), false, tokenSource);
@@ -471,5 +444,4 @@ testFrames();
 testStore();
 testScanLoop();
 testConnectionArt();
-testObservedTones();
 console.log("All tests passed.");

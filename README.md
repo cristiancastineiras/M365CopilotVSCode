@@ -88,13 +88,14 @@ Firefox and the Tampermonkey userscript) are built by
 - **Userscript:** follows the browser's language.
 - **Docs:** every README/guide has an English and a Spanish version.
 
-## Updating the models
+## The model list
 
-[`models.json`](models.json) is the online model catalog the VS Code extension
-downloads (on start and every 12 h): add an entry — `tone` as the M365 Copilot
-web app sends it, plus `name` and an `en`/`es` `detail` — and push to `main`;
-every user gets it without a release. `"hidden": true` retires a model, even a
-built-in one. The tests check that the file parses.
+There is nothing to maintain: the VS Code extension and the TUI ask each
+account for its own model menu — the one the M365 Copilot web app shows —
+with `GET /m365Copilot/getgptlist` and the chat token (`fetchModelMenu` in
+`packages/core/src/bizchat/client.ts`). The built-in list in `modelCatalog.ts`
+is only used until that menu has loaded once, and gives the models it knows
+their ids and translated descriptions.
 
 ## Releasing
 

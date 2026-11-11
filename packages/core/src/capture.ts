@@ -33,8 +33,6 @@ export interface CaptureStore {
   invocationTemplate?: Record<string, unknown>;
   invocationType?: number;
   capturedAt?: string;
-  /** Modelos (`tone`) que la web ha usado, del más antiguo al más reciente. */
-  observedTones?: string[];
 }
 
 /** Tres partes base64url y un tamaño razonable. */
@@ -267,28 +265,6 @@ export function inspectOutgoingFrames(data: unknown): {
 
 /** Un `tone` con forma de identificador de modelo de BizChat (p. ej. `Gpt_5_6_Reasoning`). */
 export const TONE_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]{1,63}$/;
-/** Cuántos modelos distintos se recuerdan. */
-const MAX_OBSERVED_TONES = 20;
-
-/** El `tone` (modelo) de una plantilla de invocación `chat`, si es válido. */
-export function toneOfTemplate(template: Record<string, unknown> | undefined): string | null {
-  const tone = template?.tone;
-  return typeof tone === "string" && TONE_PATTERN.test(tone) ? tone : null;
-}
-
-/**
- * `tones` con `tone` añadido como el más reciente (sin duplicados, acotado).
- * Así M365 puede estrenar un modelo y VS Code enterarse sin publicar versión:
- * en cuanto alguien lo usa en la web, la captura lo trae.
- */
-export function withObservedTone(
-  tones: readonly string[] | undefined,
-  tone: string | null,
-): string[] {
-  const list = (tones ?? []).filter((item) => item !== tone);
-  if (tone) list.push(tone);
-  return list.slice(-MAX_OBSERVED_TONES);
-}
 
 /** El store sin el token si éste ya caducó (para invitar a recapturarlo), o null si no hay que tocarlo. */
 export function withoutExpiredToken(store: CaptureStore, now = Date.now()): CaptureStore | null {
@@ -357,9 +333,6 @@ export function profileFromCapture(
     invocationTemplate: store.invocationTemplate || null,
     invocationType: store.invocationType || 4,
     claims: store.claims || null,
-    ...(store.observedTones && store.observedTones.length > 0
-      ? { observedTones: [...store.observedTones] }
-      : {}),
   };
 }
 

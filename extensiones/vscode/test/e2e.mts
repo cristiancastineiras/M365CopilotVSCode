@@ -62,13 +62,15 @@ import {
   type ToolCatalog,
   BUILTIN_MODELS,
   PAID_ONLY_TONES,
+  combineMenus,
+  fetchModelMenu,
   isPaidSelector,
   mergeModels,
   modelIdForTone,
   normalizeSelector,
   parseToneSelector,
   parseCustomModels,
-  parseModelCatalog,
+  parseModelMenu,
   prettyTone,
   unannounced,
   describeProfile,
@@ -6347,6 +6349,63 @@ async function testWebTurn() {
 
 // ---- modelCatalog.ts (dynamic models) ---------------------------------------
 
+/** A `getgptlist` answer: the shape measured on a real account on 2026-11-11, trimmed. */
+function modelMenu(options: unknown[]) {
+  return {
+    gptList: [
+      {
+        gptId: "bizchat-as-gpt-scenario",
+        clientPreferences: {
+          modelSelectorMetadata: {
+            defaultModelSelectionId: "Magic",
+            availableModelSelectionOptions: options,
+          },
+        },
+      },
+    ],
+    result: { value: "Success" },
+  };
+}
+
+function menuItem(id: string, menuItemTitle: string, menuItemDescription?: string) {
+  return { policyFailureBehavior: "disable", id, type: "item", menuItemTitle, menuItemDescription };
+}
+
+function menuGroup(id: string, items: unknown[]) {
+  return { itemGroup: items, id, type: "itemGroup", menuItemTitle: id };
+}
+
+const MENU_MODES = [
+  menuItem("Magic", "Auto", "Decides how long to think"),
+  menuItem("Chat", "Quick response", "Answers right away"),
+  menuItem("Reasoning", "Think deeper", "Think longer for better answers"),
+];
+
+const INCLUDED_MENU = modelMenu([
+  ...MENU_MODES,
+  menuGroup("GPT", [
+    menuItem("Gpt_5_6_Chat", "GPT-5.6 Sol Quick response"),
+    menuItem("Gpt_5_6_Reasoning", "GPT-5.6 Sol Think deeper"),
+    menuItem("not a tone!", "Junk"),
+    42,
+  ]),
+]);
+
+const PAID_MENU = modelMenu([
+  ...MENU_MODES,
+  menuGroup("Claude", [
+    menuItem("Claude_Sonnet_5", "Sonnet 5"),
+    menuItem("Claude_Sonnet", "Sonnet 5.5"),
+    menuItem("Claude_Opus", "Opus 5.5"),
+  ]),
+  menuGroup("GPT", [
+    menuItem("Gpt_5_6_Chat", "GPT-5.6 Sol Quick response"),
+    menuItem("Gpt_6_Sol_Chat", "GPT-6"),
+    menuItem("Gpt_5_6_Reasoning", "GPT-5.6 Sol Think deeper"),
+    menuItem("Gpt_61_Sol_Reasoning", "GPT-6.1 Sol"),
+  ]),
+]);
+
 function testModelCatalog() {
   // The web app's labels for the mode, whatever the model.
   assert.equal(prettyTone("Gpt_5_6_Reasoning"), "GPT 5.6 Think deeper");
@@ -6360,43 +6419,64 @@ function testModelCatalog() {
   assert.equal(prettyTone("magic"), "Auto");
   assert.equal(modelIdForTone("Gpt_5_7_Chat"), "m365-copilot-tone-gpt-5-7-chat");
 
-  // models.json: shape validated, junk dropped, detail as text or {en, es}.
-  assert.equal(parseModelCatalog({ nope: [] }), null);
-  assert.equal(parseModelCatalog(null), null);
-  assert.deepEqual(
-    parseModelCatalog({
-      models: [
-        { tone: "Gpt_5_7_Chat", name: "  GPT 5.7  ", detail: { en: "New", es: "Nuevo" } },
-        { tone: "bad tone with spaces" },
-        { tone: "<script>" },
-        "Claude_Opus",
-        { tone: "Gpt_5_5_Chat", hidden: true },
-        { tone: "Phi_5", detail: "Only text" },
-      ],
-    }),
-    [
-      { tone: "Gpt_5_7_Chat", name: "GPT 5.7", detail: { en: "New", es: "Nuevo" }, hidden: false },
-      { tone: "Claude_Opus" },
-      { tone: "Gpt_5_5_Chat", name: undefined, detail: undefined, hidden: true },
-      {
-        tone: "Phi_5",
-        name: undefined,
-        detail: { en: "Only text", es: "Only text" },
-        hidden: false,
-      },
-    ],
-  );
   assert.deepEqual(
     parseCustomModels(["Gpt_5_8_Chat", { tone: "X_1", name: "X" }, 42, { name: "no tone" }]),
-    [
-      { tone: "Gpt_5_8_Chat", hidden: false },
-      { tone: "X_1", name: "X", detail: undefined, hidden: false },
-    ],
+    [{ tone: "Gpt_5_8_Chat" }, { tone: "X_1", name: "X", detail: undefined }],
   );
   assert.deepEqual(parseCustomModels("nope"), []);
 
-  // Only built-ins: exactly the shipped list, Auto first.
-  const builtinOnly = mergeModels({ catalog: [], observed: [], custom: [] });
+  // The account's menu (getgptlist): families flattened, Auto left out, junk dropped.
+  assert.equal(parseModelMenu(null), null);
+  assert.equal(parseModelMenu({ gptList: [{ gptId: "x" }] }), null, "no menu at all");
+  const included = parseModelMenu(INCLUDED_MENU)!;
+  assert.deepEqual(
+    included.map((entry) => [entry.tone, entry.name]),
+    [
+      ["Chat", "Quick response"],
+      ["Reasoning", "Think deeper"],
+      ["Gpt_5_6_Chat", "GPT-5.6 Sol Quick response"],
+      ["Gpt_5_6_Reasoning", "GPT-5.6 Sol Think deeper"],
+    ],
+  );
+  assert.deepEqual(included[0].detail, { en: "Answers right away", es: "Answers right away" });
+  const paid = parseModelMenu(PAID_MENU)!;
+  assert.deepEqual(
+    paid.filter((entry) => /^Claude|^Gpt_6/.test(entry.tone)).map((entry) => entry.name),
+    ["Claude Sonnet 5", "Claude Sonnet 5.5", "Claude Opus 5.5", "GPT-6", "GPT-6.1 Sol"],
+    "«Claude» › «Sonnet 5» se lee «Claude Sonnet 5»; «GPT» › «GPT-6» no repite la familia",
+  );
+
+  // Both scenarios in one list: what only the licence offers goes on the paid one.
+  const account = combineMenus(included, paid);
+  assert.deepEqual(
+    account.map((entry) => entry.tone),
+    [
+      "Chat",
+      "Reasoning",
+      "Claude_Sonnet_5",
+      "Claude_Sonnet@paid",
+      "Claude_Opus",
+      "Gpt_5_6_Chat",
+      "Gpt_6_Sol_Chat@paid",
+      "Gpt_5_6_Reasoning",
+      "Gpt_61_Sol_Reasoning@paid",
+    ],
+  );
+  assert.ok(
+    account.filter((entry) => /^Claude/.test(entry.tone)).every((e) => isPaidSelector(e.tone)),
+  );
+  // The same tone named differently on the licence is another model: both stay.
+  assert.deepEqual(
+    combineMenus(
+      [{ tone: "Claude_Sonnet", name: "Claude Sonnet 4.6" }],
+      [{ tone: "Claude_Sonnet", name: "Claude Sonnet 5.5" }],
+    ).map((entry) => `${entry.tone}=${entry.name}`),
+    ["Claude_Sonnet@paid=Claude Sonnet 5.5", "Claude_Sonnet=Claude Sonnet 4.6"],
+  );
+  assert.deepEqual(combineMenus(included, null), included, "una sola carta: tal cual");
+
+  // Until the account's menu loads: exactly the shipped list, Auto first.
+  const builtinOnly = mergeModels({ account: null, custom: [] });
   assert.deepEqual(
     builtinOnly.map((model) => model.id),
     BUILTIN_MODELS.map((model) => model.id),
@@ -6404,102 +6484,51 @@ function testModelCatalog() {
   assert.equal(builtinOnly[0].tone, null);
 
   const merged = mergeModels({
-    catalog: [
-      { tone: "Gpt_5_7_Chat", name: "GPT 5.7", detail: { en: "Newest", es: "El más nuevo" } },
-      { tone: "Gpt_5_5_Chat", hidden: true },
-      { tone: "Claude_Sonnet", name: "Claude Sonnet 5" },
-    ],
-    observed: ["Gpt_5_6_Reasoning", "Claude_Opus_4_1", "Gpt_5_7_Chat", "not valid!"],
-    custom: [{ tone: "Gpt_5_5_Chat", name: "GPT 5.5 (mine)" }, { tone: "Exp_Model" }],
+    account,
+    custom: [{ tone: "Gpt_5_6_Chat", name: "GPT 5.6 (mine)" }, { tone: "Exp_Model" }],
   });
   const byTone = new Map(merged.map((model) => [model.tone, model]));
   assert.equal(merged[0].id, "m365-copilot-auto", "Auto stays first");
-  // A catalog rename keeps the built-in id (settings that point to it keep working).
-  assert.equal(byTone.get("Claude_Sonnet")?.name, "M365 Copilot · Claude Sonnet 5");
-  assert.equal(byTone.get("Claude_Sonnet")?.id, "m365-copilot-claude");
-  // New from the catalog, with its own description.
-  assert.equal(byTone.get("Gpt_5_7_Chat")?.source, "catalog");
-  assert.deepEqual(byTone.get("Gpt_5_7_Chat")?.detail, { en: "Newest", es: "El más nuevo" });
-  // Detected in the web app: readable name; already-known tones are not duplicated.
-  assert.equal(byTone.get("Claude_Opus_4_1")?.name, "M365 Copilot · Claude Opus 4.1");
-  assert.equal(byTone.get("Claude_Opus_4_1")?.source, "observed");
-  assert.equal(merged.filter((model) => model.tone === "Gpt_5_6_Reasoning").length, 1);
-  assert.equal(byTone.get("Gpt_5_6_Reasoning")?.source, "builtin");
-  assert.equal(byTone.has("not valid!"), false);
-  // Hidden by the catalog, but the user listed it: custom wins, with its name.
-  assert.equal(byTone.get("Gpt_5_5_Chat")?.name, "M365 Copilot · GPT 5.5 (mine)");
+  // A built-in tone keeps its id and translated description; the menu names it.
+  assert.equal(byTone.get("Chat")?.id, "m365-copilot-quick");
+  assert.equal(byTone.get("Chat")?.source, "account");
+  assert.equal(byTone.get("Chat")?.detailKey, "model.quick.detail");
+  assert.equal(byTone.get("Gpt_5_6_Reasoning")?.id, "m365-copilot-gpt56-reasoning");
+  assert.equal(byTone.get("Gpt_5_6_Reasoning")?.name, "M365 Copilot · GPT-5.6 Sol Think deeper");
+  // The licence's models.
+  assert.equal(byTone.get("Claude_Sonnet@paid")?.id, "m365-copilot-tone-claude-sonnet-paid");
+  assert.equal(byTone.get("Claude_Sonnet@paid")?.name, "M365 Copilot · Claude Sonnet 5.5");
+  assert.equal(byTone.get("Claude_Opus")?.name, "M365 Copilot · Claude Opus 5.5");
+  // Built-ins the account does not offer are gone.
+  assert.equal(byTone.has("Gpt_5_5_Chat"), false);
+  assert.equal(byTone.has("Claude_Sonnet_Reasoning"), false);
+  // Custom: renames a model of the menu, or adds one.
+  assert.equal(byTone.get("Gpt_5_6_Chat")?.name, "M365 Copilot · GPT 5.6 (mine)");
+  assert.equal(byTone.get("Gpt_5_6_Chat")?.source, "account");
   assert.equal(byTone.get("Exp_Model")?.source, "custom");
-  // Hidden by the catalog and nobody asked for it back: gone.
-  assert.equal(
-    mergeModels({
-      catalog: [{ tone: "Gpt_5_5_Reasoning", hidden: true }],
-      observed: [],
-      custom: [],
-    }).some((model) => model.tone === "Gpt_5_5_Reasoning"),
-    false,
+  assert.equal(byTone.get("Exp_Model")?.name, "M365 Copilot · Exp Model");
+  // An account whose menu is just Auto offers just Auto.
+  assert.deepEqual(
+    mergeModels({ account: [], custom: [] }).map((model) => model.tone),
+    [null],
   );
-  // Bounded, whatever the sources say.
-  const flood = Array.from({ length: 80 }, (_, i) => `Model_${i}`);
-  assert.ok(mergeModels({ catalog: [], observed: flood, custom: [] }).length <= 30);
+  // Bounded, whatever the menu says.
+  const flood = Array.from({ length: 80 }, (_, i) => ({ tone: `Model_${i}` }));
+  assert.ok(mergeModels({ account: flood, custom: [] }).length <= 30);
 
-  // Announced once: built-ins never, new ones until they are known.
-  assert.deepEqual(
-    unannounced(merged, new Set()).map((model) => model.tone),
-    ["Gpt_5_7_Chat", "Claude_Opus_4_1", "Exp_Model"],
-  );
-  assert.deepEqual(
-    unannounced(merged, new Set(["Gpt_5_7_Chat", "Claude_Opus_4_1", "Exp_Model"])),
-    [],
-  );
+  // Announced once: built-in tones never, new ones until they are known.
+  const fresh = unannounced(merged, new Set()).map((model) => model.tone);
+  assert.deepEqual(fresh, [
+    "Claude_Sonnet_5",
+    "Claude_Sonnet@paid",
+    "Claude_Opus",
+    "Gpt_5_6_Chat",
+    "Gpt_6_Sol_Chat@paid",
+    "Gpt_61_Sol_Reasoning@paid",
+    "Exp_Model",
+  ]);
+  assert.deepEqual(unannounced(merged, new Set(fresh as string[])), []);
 
-  // The catalog published in the repository parses and only lists valid tones.
-  const published = parseModelCatalog(
-    JSON.parse(readFileSync(new URL("../../../models.json", import.meta.url), "utf8")),
-  );
-  assert.ok(published && published.length > 0, "models.json must parse");
-  for (const entry of published!)
-    if (!entry.hidden) assert.ok(entry.name, `${entry.tone} needs a name`);
-  // Installed versions take names and retirements from it: it lists every
-  // built-in model (so they read the same everywhere), and the models that
-  // came after the built-ins — GPT 6.0 and 6.1 Sol, and GPT 5.6 Quick
-  // response, which the catalog had retired and serves again.
-  const visible = new Map(
-    published!.filter((entry) => !entry.hidden).map((entry) => [entry.tone, entry.name]),
-  );
-  for (const model of BUILTIN_MODELS)
-    if (model.tone) assert.ok(visible.has(model.tone), `models.json lists ${model.tone}`);
-  assert.equal(visible.get("Gpt_5_6_Chat"), "GPT 5.6 Quick response");
-  assert.equal(visible.get("Gpt_6_Sol_Reasoning"), "GPT 6.0 Sol");
-  assert.equal(visible.get("Gpt_61_Sol_Reasoning"), "GPT-6.1 Sol");
-  assert.deepEqual(
-    mergeModels({ catalog: published!, observed: [], custom: [] })
-      .filter((model) => model.source === "catalog")
-      .map((model) => model.name),
-    [
-      "M365 Copilot · GPT-6.1 Sol",
-      "M365 Copilot · GPT 6.0 Sol",
-      "M365 Copilot · GPT 5.6 Quick response",
-      "M365 Copilot · Claude Opus 5.5",
-      "M365 Copilot · Claude Sonnet 5.5",
-      "M365 Copilot · Claude Sonnet 5",
-      "M365 Copilot · GPT-6 Think deeper",
-    ],
-  );
-  // The licence's models: their own ids, next to the built-in Claude Sonnet (4.6, on Copilot Chat).
-  const fromRepo = new Map(
-    mergeModels({ catalog: published!, observed: ["Claude_Opus"], custom: [] }).map((model) => [
-      model.tone,
-      model,
-    ]),
-  );
-  assert.equal(fromRepo.get("Claude_Sonnet")?.id, "m365-copilot-claude");
-  assert.equal(fromRepo.get("Claude_Sonnet@paid")?.id, "m365-copilot-tone-claude-sonnet-paid");
-  assert.equal(
-    fromRepo.get("Claude_Opus")?.source,
-    "catalog",
-    "el tone que usó la web y la entrada del catálogo son el mismo modelo",
-  );
-  assert.equal(fromRepo.get("Gpt_6_Reasoning")?.name, "M365 Copilot · GPT-6 Think deeper");
   assert.deepEqual(
     parseCustomModels([
       "Claude_Sonnet@paid",
@@ -6518,17 +6547,67 @@ function testModelCatalog() {
     false,
   );
 
-  // The profile the browser side sends keeps the observed tones (and only valid ones).
+  // An old browser side may still send the tones it saw: they are not kept.
   const profile = parsePastedProfile(
-    JSON.stringify({
-      accessToken: fakeJwt(),
-      observedTones: ["Gpt_5_7_Chat", "bad tone", 7, "Claude_Opus"],
-    }),
+    JSON.stringify({ accessToken: fakeJwt(), observedTones: ["Gpt_5_7_Chat"] }),
   );
-  assert.deepEqual(profile.observedTones, ["Gpt_5_7_Chat", "Claude_Opus"]);
-  assert.equal(parsePastedProfile(fakeJwt()).observedTones, undefined);
+  assert.equal("observedTones" in profile, false);
   console.log(
-    "  ✓ modelos dinámicos: catálogo validado, detectados en la web, propios, ocultar retirados y anuncio único",
+    "  ✓ modelos: menú de la cuenta leído, dos escenarios combinados, ids de serie, propios y anuncio único",
+  );
+}
+
+/** The account's model menu over HTTP: both scenarios, the paid one optional, errors kept. */
+async function testModelMenuFetch() {
+  const asked: http.IncomingMessage[] = [];
+  const status = { OfficeWebIncludedCopilot: 200, OfficeWebPaidCopilot: 200 };
+  let body: unknown = null;
+  const server = await startProtocolServer(() => {}, {
+    onHttp: (request, response) => {
+      asked.push(request);
+      const scenario = String(request.headers["x-scenario"]) as keyof typeof status;
+      const code = status[scenario] ?? 404;
+      const menu = scenario === "OfficeWebPaidCopilot" ? PAID_MENU : INCLUDED_MENU;
+      response
+        .writeHead(code, { "Content-Type": "application/json" })
+        .end(code === 200 ? JSON.stringify(body ?? menu) : "nope");
+    },
+  });
+  const profile = makeProfile(server.port);
+  const load = () => fetchModelMenu({ profile, endpointBase: mockBase(server.port) });
+  try {
+    const entries = await load();
+    assert.equal(entries.length, 9);
+    assert.ok(entries.some((entry) => entry.tone === "Gpt_61_Sol_Reasoning@paid"));
+    assert.equal(asked.length, 2);
+    for (const request of asked) {
+      assert.equal(request.method, "GET");
+      assert.equal(request.url, "/m365Copilot/getgptlist?request=%7B%7D");
+      assert.equal(request.headers.authorization, `Bearer ${profile.accessToken}`);
+      assert.equal(request.headers.origin, "https://m365.cloud.microsoft");
+    }
+    assert.deepEqual(asked.map((request) => request.headers["x-scenario"]).sort(), [
+      "OfficeWebIncludedCopilot",
+      "OfficeWebPaidCopilot",
+    ]);
+
+    // No licence menu: the included one alone.
+    status.OfficeWebPaidCopilot = 500;
+    assert.deepEqual(
+      (await load()).map((entry) => entry.tone),
+      ["Chat", "Reasoning", "Gpt_5_6_Chat", "Gpt_5_6_Reasoning"],
+    );
+    // No included menu: nothing (the caller keeps the last one).
+    status.OfficeWebIncludedCopilot = 401;
+    await assert.rejects(load(), CopilotAuthError);
+    status.OfficeWebIncludedCopilot = 200;
+    body = { gptList: [] };
+    await assert.rejects(load(), /no model menu/);
+  } finally {
+    server.close();
+  }
+  console.log(
+    "  ✓ menú de modelos por HTTP: getgptlist con el token en los dos escenarios; sin el de pago, el incluido; sin menú, error",
   );
 }
 
@@ -6786,6 +6865,7 @@ async function main() {
   await testDisengaged();
   await testPaidScenario();
   await testImageUpload();
+  await testModelMenuFetch();
   await testWebSearchWithoutTemplate();
   testGiveUpDetection();
   testOutputLimitNotice();

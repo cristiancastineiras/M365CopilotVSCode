@@ -64,8 +64,8 @@ export const en = {
   "client.error.rejected": "M365 Copilot could not handle this request.",
   "client.error.modelUnavailable":
     "“{0}” is not available on your account yet. New models reach organisations gradually, and the Anthropic and " +
-    "OpenAI ones need your admin to turn them on. Pick “M365 Copilot (Auto)”, or run “M365 Copilot: Check models” " +
-    "to see which ones you have. (M365 Copilot said: “{1}”)",
+    "OpenAI ones need your admin to turn them on. Pick “M365 Copilot (Auto)” or another model. " +
+    "(M365 Copilot said: “{1}”)",
   "client.error.disengaged": "M365 Copilot chose not to answer this request. Try rephrasing it.",
   "client.error.serverSaid": " M365 Copilot said: “{0}”",
   "client.error.throttled":

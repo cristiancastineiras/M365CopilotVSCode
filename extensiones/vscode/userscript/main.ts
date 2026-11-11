@@ -39,8 +39,6 @@ import {
   tokenInSocketUrl,
   tokenStamp,
   tokensInStorageValue,
-  toneOfTemplate,
-  withObservedTone,
   withoutExpiredToken,
   type CaptureStore,
 } from "@m365copilot/core";
@@ -63,8 +61,6 @@ interface SyncState {
   /** null until the first health check answers. */
   vscodeReachable: boolean | null;
   lastReloadAt: number | null;
-  /** Models (`tone`s) VS Code already received, so a new one is sent right away. */
-  syncedTones: string[];
 }
 
 interface UiState {
@@ -79,7 +75,6 @@ const EMPTY_SYNC: SyncState = {
   lastError: null,
   vscodeReachable: null,
   lastReloadAt: null,
-  syncedTones: [],
 };
 
 const PAGE: Window & typeof globalThis =
@@ -242,7 +237,7 @@ function offerToken(token: string | null, source: string, socketUrl?: string): v
     const accepted = acceptToken(readStore(), token, undefined, socketUrl);
     if (!accepted) return;
     writeStore({ ...accepted, tokenSource: source });
-    if (IS_TOP) void syncToVSCode(hasUnsentChanges());
+    if (IS_TOP) void syncToVSCode(hasUnsentToken());
   } catch {
     /* never break the page */
   }
@@ -268,10 +263,7 @@ function captureSocket(url: unknown, socket: WebSocket): void {
     try {
       const frames = inspectOutgoingFrames(args[0]);
       if (frames.sawChat) {
-        // The model (`tone`) the web app used: VS Code offers it if it is new.
-        const tone = toneOfTemplate(frames.template);
         writeStore({
-          ...(tone ? { observedTones: withObservedTone(readStore().observedTones, tone) } : {}),
           ...(endpoint ? { endpoint, endpointConfirmed: true } : {}),
           origin: location.origin,
           userAgent: navigator.userAgent,
@@ -418,21 +410,6 @@ function hasUnsentToken(): boolean {
 }
 
 /**
- * The web app used a model (`tone`) VS Code has not been told about. The chat
- * frame that reveals it arrives AFTER the token was sent, so without this VS
- * Code would only learn it at the next token renewal, ~50 min later.
- */
-function hasUnsentTone(): boolean {
-  const sync = readSync();
-  return (
-    sync.vscodeReachable !== false &&
-    (readStore().observedTones ?? []).some((tone) => !sync.syncedTones.includes(tone))
-  );
-}
-
-const hasUnsentChanges = () => hasUnsentToken() || hasUnsentTone();
-
-/**
  * Send the profile to VS Code when it needs it: a token it does not have yet,
  * or VS Code started after the capture — the same rule (and cooldown) as the
  * browser extension. `force` is the panel's "Send to VS Code" button.
@@ -464,7 +441,6 @@ async function syncToVSCode(force = false): Promise<boolean> {
     if (status >= 200 && status < 300) {
       writeSync({
         syncedTokenExp: tokenStamp(store),
-        syncedTones: profile.observedTones ?? [],
         lastSyncedAt: Date.now(),
         lastError: null,
         vscodeReachable: true,
@@ -830,7 +806,7 @@ if (IS_TOP) {
   // A token captured by an iframe (or another tab) reaches GM storage first:
   // sync right away instead of waiting for the next health check.
   try {
-    GM_addValueChangeListener(CAPTURE_STORE_KEY, () => void syncToVSCode(hasUnsentChanges()));
+    GM_addValueChangeListener(CAPTURE_STORE_KEY, () => void syncToVSCode(hasUnsentToken()));
   } catch {
     /* the health check below syncs too */
   }

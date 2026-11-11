@@ -91,14 +91,14 @@ tag `vX.Y.Z` y sólo se publican en las
 - **Userscript:** sigue el idioma del navegador.
 - **Documentación:** cada README/guía tiene versión en inglés y en español.
 
-## Actualizar los modelos
+## La lista de modelos
 
-[`models.json`](models.json) es el catálogo de modelos en línea que descarga la
-extensión de VS Code (al arrancar y cada 12 h): añade una entrada — `tone` tal
-como lo envía la web de M365 Copilot, más `name` y un `detail` en `en`/`es` — y
-haz push a `main`; todos los usuarios la reciben sin publicar versión.
-`"hidden": true` retira un modelo, aunque venga de serie. Los tests comprueban
-que el archivo se puede leer.
+No hay nada que mantener: la extensión de VS Code y la TUI piden a cada cuenta
+su propio menú de modelos — el que muestra la web de M365 Copilot — con
+`GET /m365Copilot/getgptlist` y el token del chat (`fetchModelMenu` en
+`packages/core/src/bizchat/client.ts`). La lista de serie de `modelCatalog.ts`
+solo se usa hasta que ese menú se ha cargado una vez, y da a los modelos que
+conoce sus ids y sus descripciones traducidas.
 
 ## Publicar una versión
 

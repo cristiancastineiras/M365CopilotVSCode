@@ -23,7 +23,6 @@ import {
   minutesUntilExpiry,
   normalizeEndpoint,
   tokenInSocketUrl,
-  TONE_PATTERN,
   type CopilotProfile,
   type TokenClaims,
 } from "../index";
@@ -147,7 +146,6 @@ function normalize(record: Record<string, unknown>, token?: string): CopilotProf
     claims,
     capturedAt:
       typeof record.capturedAt === "string" ? record.capturedAt : new Date().toISOString(),
-    ...observedTonesOf(record),
   };
 }
 
@@ -164,15 +162,6 @@ export function foreignAudience(token: string): string | null {
   if (isSydneyToken(token) || isEncryptedToken(token)) return null;
   const aud = decodeJwtPayload(token)?.aud;
   return typeof aud === "string" && aud ? aud : "?";
-}
-
-/** The models the web app used (sent by the browser side), kept only if they look like tones. */
-function observedTonesOf(record: Record<string, unknown>): Pick<CopilotProfile, "observedTones"> {
-  if (!Array.isArray(record.observedTones)) return {};
-  const tones = record.observedTones
-    .filter((tone): tone is string => typeof tone === "string" && TONE_PATTERN.test(tone))
-    .slice(-20);
-  return tones.length > 0 ? { observedTones: tones } : {};
 }
 
 /** Who a profile signs in as, for VS Code's Accounts menu (account.ts). */
@@ -234,6 +223,5 @@ export function describeProfile(
     endpointHost,
     hasInvocationTemplate: profile.invocationTemplate !== null,
     invocationType: profile.invocationType,
-    observedTones: profile.observedTones ?? [],
   };
 }
