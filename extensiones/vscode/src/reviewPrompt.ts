@@ -9,7 +9,7 @@
  * Kept free of the `vscode` import, like inlineEditPrompt.ts, so the tests can
  * check the prompt and every answer shape the model likes to produce.
  */
-import { fenceFor } from "./participantPrompts";
+import { fenceFor } from "./promptContext";
 import { t } from "./i18n";
 
 export type FindingSeverity = "error" | "warning" | "info";

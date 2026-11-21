@@ -4,7 +4,7 @@
  *  - their `ms365copilot.*` settings are copied to `m365copilot.*` once per
  *    scope (user settings, and each workspace the first time it is opened);
  *  - if that extension is still installed it is offered for uninstall: both
- *    would listen on the token port and register `@m365` and the models.
+ *    would listen on the token port and register the same models.
  */
 import * as vscode from "vscode";
 import { LEGACY_EXTENSION_ID, legacySettingKey, migrateLegacyValue, shouldMigrate } from "./legacy";

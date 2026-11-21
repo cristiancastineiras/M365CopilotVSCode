@@ -1,5 +1,5 @@
 /**
- * Working styles injected into every chat and `@m365` prompt, distilled from
+ * Working styles injected into every chat request's prompt, distilled from
  * the Claude Code skills Ponytail, agent-skills and Graphify. The full skills
  * (hundreds of KB) do not fit in a BizChat turn, so each one is a short rule
  * set in the locale catalogs. Kept free of the `vscode` import so test/e2e.mts

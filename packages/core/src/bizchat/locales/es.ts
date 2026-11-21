@@ -212,6 +212,8 @@ export const es: Record<keyof typeof en, string> = {
     "Mapa del proyecto desde el índice: lenguajes, paquetes, estructura de carpetas, puntos de entrada y módulos más usados. Con `path` = un archivo: su esquema (símbolos con líneas), qué importa y qué archivos lo importan; = una carpeta: sus archivos con sus símbolos principales.",
   "hint.webSearch":
     "Busca en internet (Bing, a través de Microsoft 365 Copilot) y devuelve una respuesta actualizada con sus fuentes. Úsala para documentación actual, versiones, APIs, mensajes de error o cualquier cosa de fuera del workspace.",
+  "hint.lastTerminalCommand":
+    "Devuelve el último comando ejecutado en el terminal activo: la línea de comando, su código de salida, su directorio de trabajo y su salida (el final, si es larga). No lleva parámetros. Úsala cuando te pregunte por un comando que ejecuté — por qué falló o qué significa su salida — en vez de pedirme que la pegue.",
   // ------------------------------------------------------------ cuenta
   "account.unknownUser": "Usuario de M365 Copilot",
   "account.personal": "Cuenta personal de Microsoft",

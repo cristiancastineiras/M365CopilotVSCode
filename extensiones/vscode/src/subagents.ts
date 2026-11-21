@@ -207,7 +207,7 @@ function makeExecutor(
   };
 }
 
-/** Flattens a tool result to the text the model reads (shared with participant.ts). */
+/** Flattens a tool result to the text the model reads. */
 export function toolResultToText(result: vscode.LanguageModelToolResult): string {
   const parts: string[] = [];
   for (const part of result.content) {
@@ -254,7 +254,7 @@ function readSubagentSettings(): SubagentSettings {
   };
 }
 
-/** `m365copilot.chat.maxDurationMinutes` as a loop's budget: `@m365` and each sub-agent share it. */
+/** `m365copilot.chat.maxDurationMinutes` as a loop's budget: each sub-agent's. */
 export function configuredWallClockMs(): number {
   const minutes = vscode.workspace
     .getConfiguration("m365copilot.chat")

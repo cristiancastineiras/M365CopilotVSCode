@@ -416,6 +416,22 @@
         }
       },
       {
+        "name": "m365_last_terminal_command",
+        "displayName": "%tool.m365LastTerminalCommand.displayName%",
+        "modelDescription": "Return the last command run in the active VS Code terminal: the command line, its exit code, its working directory and its output (the tail when it is long). Use it to explain why a command failed or what its output means, instead of asking the user to paste it. Takes no parameters.",
+        "userDescription": "%tool.m365LastTerminalCommand.userDescription%",
+        "toolReferenceName": "m365LastTerminalCommand",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(terminal)",
+        "tags": [
+          "m365copilot"
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
         "name": "m365_search_project",
         "displayName": "%tool.m365SearchProject.displayName%",
         "modelDescription": "Search the project index (a local RAG index of the workspace) and get the most relevant code chunks with file paths and line ranges, ranked by relevance. Use it first to find where something is implemented, how a flow works or which files are involved, before reading or editing files.",
@@ -746,13 +762,6 @@
           "minimum": 1000,
           "maximum": 2000000,
           "markdownDescription": "%config.models.maxOutputTokens%"
-        },
-        "m365copilot.chat.maxToolCalls": {
-          "type": "integer",
-          "default": 30,
-          "minimum": 0,
-          "maximum": 200,
-          "markdownDescription": "%config.chat.maxToolCalls%"
         },
         "m365copilot.chat.maxDurationMinutes": {
           "type": "integer",
@@ -1127,35 +1136,26 @@
         "icon": "$(clear-all)"
       }
     ],
-    "chatParticipants": [
+    "chatAgents": [
       {
-        "id": "m365copilot.m365",
-        "name": "m365",
-        "fullName": "M365 Copilot",
-        "description": "%participant.description%",
-        "isSticky": true,
-        "commands": [
-          {
-            "name": "explain",
-            "description": "%participant.command.explain%"
-          },
-          {
-            "name": "fix",
-            "description": "%participant.command.fix%"
-          },
-          {
-            "name": "doc",
-            "description": "%participant.command.doc%"
-          },
-          {
-            "name": "tests",
-            "description": "%participant.command.tests%"
-          },
-          {
-            "name": "terminal",
-            "description": "%participant.command.terminal%"
-          }
-        ]
+        "path": "./agents/m365-copilot.agent.md"
+      }
+    ],
+    "chatSkills": [
+      {
+        "path": "./skills/m365-explain/SKILL.md"
+      },
+      {
+        "path": "./skills/m365-fix/SKILL.md"
+      },
+      {
+        "path": "./skills/m365-doc/SKILL.md"
+      },
+      {
+        "path": "./skills/m365-tests/SKILL.md"
+      },
+      {
+        "path": "./skills/m365-terminal/SKILL.md"
       }
     ],
     "submenus": [

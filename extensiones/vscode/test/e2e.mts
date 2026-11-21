@@ -215,15 +215,16 @@ import { execFile } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fenceFor, renderTerminalRun } from "../src/promptContext.ts";
 import {
-  asParticipantCommand,
-  buildParticipantFraming,
-  DEFAULT_MAX_TOOL_CALLS,
-  fenceFor,
-  maxStepsForCommand,
-  toolsForCommand,
-} from "../src/participantPrompts.ts";
-import { readFileSync } from "node:fs";
+  buildChatOpenOptions,
+  EDITOR_TASKS,
+  isModelSelectorError,
+  M365_AGENT_NAME,
+  M365_VENDOR,
+  TASK_SKILLS,
+} from "../src/chatLaunch.ts";
+import { existsSync, readFileSync } from "node:fs";
 import {
   acceptHunk,
   diffLines,
@@ -846,7 +847,7 @@ function testToolPromptRendering() {
   // A duplicate is not described, and when the native editor wins nothing teaches ours.
   assert.doesNotMatch(prompt, /m365_read_file|m365_apply_edits/);
   assert.doesNotMatch(buildToolProtocolReminder(catalog), /m365_apply_edits/);
-  // With only ours (the @m365 participant), they are the editor.
+  // With only ours (a sub-agent's catalog), they are the editor.
   const oursOnly = buildToolProtocolInstructions(buildToolCatalog(M365_TOOLS));
   assert.match(
     oursOnly,
@@ -3236,7 +3237,7 @@ async function testDisengaged() {
   console.log("  ✓ Disengaged: error claro (nunca texto), sin reintento ni modelo marcado");
 }
 
-/** The @m365 / sub-agent loop ends each step's turn as soon as its tool call is complete. */
+/** The sub-agent loop ends each step's turn as soon as its tool call is complete. */
 async function testToolLoopStopsAfterCall() {
   const server = await startProtocolServer((send, connection) => {
     if (connection.index === 0) {
@@ -3751,7 +3752,7 @@ function testGiveUpDetection() {
   );
 }
 
-/** The @m365 / sub-agent loop: a step that gives up or works in M365's sandbox is retried once, unseen. */
+/** The sub-agent loop: a step that gives up or works in M365's sandbox is retried once, unseen. */
 async function testToolLoopForcedRetry() {
   const loop = (
     port: number,
@@ -4246,27 +4247,9 @@ function testPromptsFollowLocale() {
   );
 }
 
-// ---- participantPrompts.ts -------------------------------------------------
+// ---- chatLaunch.ts: the editor actions open the M365 Copilot agent --------
 
-function testParticipantPrompts() {
-  assert.equal(asParticipantCommand("fix"), "fix");
-  assert.equal(asParticipantCommand("commit"), undefined);
-  assert.equal(asParticipantCommand(undefined), undefined);
-
-  // /explain only reads; the rest may edit (with Keep/Undo), never delegate.
-  assert.ok(!toolsForCommand("explain").includes(M365_TOOL_NAMES.applyWorkspaceEdits));
-  assert.ok(toolsForCommand("fix").includes(M365_TOOL_NAMES.applyWorkspaceEdits));
-  assert.ok(!toolsForCommand(undefined).includes(M365_TOOL_NAMES.spawnAgents));
-  assert.ok(maxStepsForCommand("explain") < maxStepsForCommand("fix"));
-  // The user's `maxToolCalls` sets the budget of everything but /explain and /terminal;
-  // 0 lifts it (the loop's time ceiling still applies).
-  assert.equal(maxStepsForCommand(undefined), DEFAULT_MAX_TOOL_CALLS);
-  assert.equal(maxStepsForCommand(undefined, 12), 12);
-  assert.equal(maxStepsForCommand("fix", 60), 60);
-  assert.equal(maxStepsForCommand("tests", 0), Number.POSITIVE_INFINITY);
-  assert.equal(maxStepsForCommand("explain", 60), 4);
-  assert.equal(maxStepsForCommand("terminal", 0), 6);
-
+function testChatLaunch() {
   // A fence always outlasts any backtick run inside the code.
   assert.equal(fenceFor("const a = 1;"), "```");
   assert.equal(fenceFor('const md = "```ts";'), "````");
@@ -4280,32 +4263,168 @@ function testParticipantPrompts() {
     truncatedChars: 0,
     diagnostics: ["11:3 [error] (ts) Type mismatch"],
   };
+  const attachment = { uri: "file:///repo/src/a.ts", range: [9, 0, 11, 1] };
   setLocale("en");
-  const framing = buildParticipantFraming({
-    command: "fix",
-    request: "it crashes on empty input",
-    code,
-    history: [
-      { role: "user", text: "/explain" },
-      { role: "assistant", text: "It returns a fence." },
-    ],
-    attachedPaths: ["src/b.ts"],
+
+  // Fix: the skill, the problems VS Code reports there, and the code attached
+  // as a file range, in the M365 Copilot agent with the editor's M365 model.
+  const fix = buildChatOpenOptions({ task: "fix", code, attachment, modelId: "m365-copilot-auto" });
+  assert.deepEqual(fix, {
+    query: "/m365-fix\n\nProblems VS Code reports in that code:\n- 11:3 [error] (ts) Type mismatch",
+    isPartialQuery: false,
+    mode: M365_AGENT_NAME,
+    modelSelector: { vendor: M365_VENDOR, id: "m365-copilot-auto" },
+    attachFiles: [attachment],
   });
-  assert.match(framing, /I call you as @m365/);
-  assert.match(framing, /Find and fix the problems/);
-  assert.match(framing, /Code context — src\/a\.ts, lines 10-12 \(typescript\):/);
-  assert.match(framing, /````typescript\nfunction f\(\) \{/);
-  assert.match(framing, /- 11:3 \[error\] \(ts\) Type mismatch/);
-  assert.match(framing, /Assistant: It returns a fence\./);
-  assert.match(framing, /Other files the user attached: src\/b\.ts/);
-  assert.match(framing, /User request:\nit crashes on empty input$/);
+  // Only a fix carries the diagnostics; the attached code is never repeated in the message.
+  const explain = buildChatOpenOptions({ task: "explain", code, attachment, modelId: "x" });
+  assert.equal(explain.query, "/m365-explain");
+  for (const task of EDITOR_TASKS) {
+    assert.equal(
+      buildChatOpenOptions({ task }).query.split("\n")[0],
+      `/${TASK_SKILLS[task]}`,
+      `${task} invokes its skill`,
+    );
+  }
+
+  // An untitled editor cannot be attached: its code goes into the message, fenced.
+  const untitled = buildChatOpenOptions({ task: "doc", code });
+  assert.equal(untitled.attachFiles, undefined);
+  assert.match(
+    untitled.query,
+    /^\/m365-doc\n\nCode context — src\/a\.ts, lines 10-12 \(typescript\):\n````typescript\nfunction f\(\) \{/,
+  );
+  assert.doesNotMatch(untitled.query, /Problems VS Code reports/);
+
+  // "Ask about this code…": the question, with the code attached and no skill.
+  const ask = buildChatOpenOptions({
+    request: "  why does it return a fence?  ",
+    code,
+    attachment,
+  });
+  assert.equal(ask.query, "why does it return a fence?");
+  assert.deepEqual(ask.attachFiles, [attachment]);
+  // No model id: the agent's own model (no selector at all, not an empty one).
+  assert.ok(!("modelSelector" in ask));
+
+  // "Open chat": an empty input box left for the user, in the agent.
+  const open = buildChatOpenOptions({ partial: true, modelId: "m365-copilot-quick" });
+  assert.equal(open.query, "");
+  assert.equal(open.isPartialQuery, true);
+  assert.equal(open.mode, M365_AGENT_NAME);
 
   setLocale("es");
-  const spanish = buildParticipantFraming({ command: undefined, request: "" });
-  assert.match(spanish, /Responde a la petición del usuario/);
-  assert.match(spanish, /Petición del usuario:\n\(sin instrucciones adicionales\)$/);
+  const spanish = buildChatOpenOptions({ task: "fix", code, attachment });
+  assert.match(spanish.query, /\n\nProblemas que VS Code marca en ese código:\n- 11:3/);
+
+  // What VS Code throws when the model selector finds nothing (models not
+  // registered yet) — and only that — is retried without the selector.
+  assert.ok(
+    isModelSelectorError(
+      'No language models found matching selector: {"vendor":"m365copilot","id":"x"}.',
+    ),
+  );
+  assert.ok(isModelSelectorError("Language model not loaded: m365copilot/x."));
+  assert.ok(!isModelSelectorError("Timed out waiting for default agent"));
   console.log(
-    "  ✓ prompts de @m365: herramientas por comando, contexto de código, historial y adjuntos",
+    "  ✓ acciones del editor: agente M365 Copilot, skill, modelo y código adjunto (o en el mensaje)",
+  );
+}
+
+/**
+ * What replaces `@m365` in package.json: no chat participant, the M365 Copilot
+ * agent pinned to an M365 model, one skill per editor task and the tool the
+ * terminal skill reads — and the files are where the manifest says.
+ */
+function testChatContributions() {
+  const root = new URL("../", import.meta.url);
+  const manifest = JSON.parse(readFileSync(new URL("package.json", root), "utf8"));
+  const contributes = manifest.contributes;
+  assert.equal(
+    contributes.chatParticipants,
+    undefined,
+    "no chat participant (VS Code retires them)",
+  );
+  assert.equal(
+    contributes.configuration.properties["m365copilot.chat.maxToolCalls"],
+    undefined,
+    "maxToolCalls was only @m365's",
+  );
+
+  const frontmatter = (text: string) => {
+    const block = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/.exec(text);
+    assert.ok(block, "the file starts with a frontmatter block");
+    const fields: Record<string, string> = {};
+    for (const line of block[1]!.split(/\r?\n/)) {
+      const field = /^([\w-]+):\s*(.*)$/.exec(line);
+      if (field) fields[field[1]!] = field[2]!.replace(/^"(.*)"$/, "$1");
+    }
+    return { fields, body: block[2]! };
+  };
+  // The voice of every prompt to M365: the user's, nothing shaped like an override.
+  const checkVoice = (path: string, text: string) => {
+    assert.doesNotMatch(
+      text,
+      /\b(?:IMPORTANT|NEVER|MANDATORY|MUST)\b|you are an? |you have access/i,
+      `${path}: nothing shaped like an override`,
+    );
+  };
+
+  assert.equal(contributes.chatAgents.length, 1);
+  const agentPath = contributes.chatAgents[0].path as string;
+  const agentFile = new URL(agentPath, root);
+  assert.ok(existsSync(agentFile), `${agentPath} exists`);
+  const agent = frontmatter(readFileSync(agentFile, "utf8"));
+  assert.equal(agent.fields.name, M365_AGENT_NAME, "chat.open switches to the agent by this name");
+  // `model` is a model's qualified name, `name (vendor)`: the always-present Auto.
+  assert.equal(agent.fields.model, `${BUILTIN_MODELS[0]!.name} (${M365_VENDOR})`);
+  assert.ok(agent.fields.description);
+  assert.equal(agent.fields.tools, undefined, "no tools list: it inherits the chat's own");
+  checkVoice(agentPath, agent.body);
+
+  const skillPaths = (contributes.chatSkills as { path: string }[]).map((skill) => skill.path);
+  assert.deepEqual(
+    skillPaths.sort(),
+    Object.values(TASK_SKILLS)
+      .map((name) => `./skills/${name}/SKILL.md`)
+      .sort(),
+    "one skill per editor task, and nothing else",
+  );
+  for (const path of skillPaths) {
+    const file = new URL(path, root);
+    assert.ok(existsSync(file), `${path} exists`);
+    const skill = frontmatter(readFileSync(file, "utf8"));
+    // VS Code: "The folder name must match the name property in SKILL.md".
+    assert.equal(skill.fields.name, path.split("/").at(-2), `${path}: name = folder`);
+    assert.ok(skill.fields.description, `${path}: description`);
+    assert.equal(skill.fields["disable-model-invocation"], "true", `${path}: only on request`);
+    checkVoice(path, skill.body);
+  }
+
+  // Every tool of the catalog is contributed, the terminal one included, and
+  // the terminal skill calls it by both its names (Local and Copilot harness).
+  const tools = contributes.languageModelTools as { name: string; toolReferenceName: string }[];
+  assert.deepEqual(tools.map((tool) => tool.name).sort(), Object.values(M365_TOOL_NAMES).sort());
+  const terminalTool = tools.find((tool) => tool.name === M365_TOOL_NAMES.lastTerminalCommand)!;
+  const terminalSkill = readFileSync(
+    new URL(`skills/${TASK_SKILLS.terminal}/SKILL.md`, root),
+    "utf8",
+  );
+  assert.ok(terminalSkill.includes(terminalTool.name));
+  assert.ok(terminalSkill.includes(terminalTool.toolReferenceName));
+
+  // Packaged: .vscodeignore leaves these folders in the .vsix.
+  const ignored = readFileSync(new URL(".vscodeignore", root), "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.trim());
+  for (const folder of ["agents", "skills"]) {
+    assert.ok(
+      !ignored.some((line) => line === `${folder}/**` || line === folder || line === "**/*.md"),
+      `.vscodeignore keeps ${folder}/`,
+    );
+  }
+  console.log(
+    "  ✓ package.json: sin participante; agente M365 Copilot con modelo M365, una skill por acción y la herramienta del terminal",
   );
 }
 
@@ -5017,7 +5136,7 @@ async function testAutoCommitGit() {
   );
 }
 
-// ---- runToolLoop (shared by sub-agents and @m365) ---------------------------
+// ---- runToolLoop (the sub-agents' loop) -------------------------------------
 
 async function testToolLoopStreamsProse() {
   const invocations: Record<string, unknown>[] = [];
@@ -5319,49 +5438,82 @@ function testInlineEdit() {
   );
 }
 
+/** What `m365_last_terminal_command` returns, and where the catalog puts it. */
 function testTerminalPrompt() {
   setLocale("en");
-  const framing = buildParticipantFraming({
-    command: "terminal",
-    request: "",
-    terminal: {
-      terminalName: "bash",
-      commandLine: "npm test",
-      cwd: "/repo",
-      exitCode: 1,
-      running: false,
-      output: "FAIL src/a.test.ts\n  expected 1, got 2",
-      truncatedChars: 120,
-    },
+  const failed = renderTerminalRun({
+    terminalName: "bash",
+    commandLine: "npm test",
+    cwd: "/repo",
+    exitCode: 1,
+    running: false,
+    output: "FAIL src/a.test.ts\n  expected 1, got 2",
+    truncatedChars: 120,
   });
-  assert.match(framing, /Explain why the terminal command below failed/);
   assert.match(
-    framing,
-    /Last command in the terminal “bash”:\n\$ npm test\nExit code: 1 · cwd: \/repo/,
+    failed,
+    /^Last command in the terminal “bash”:\n\$ npm test\nExit code: 1 · cwd: \/repo/,
   );
   assert.match(
-    framing,
-    /\[start of the output omitted: 120 characters\]\n```text\nFAIL src\/a\.test\.ts/,
+    failed,
+    /\[start of the output omitted: 120 characters\]\n```text\nFAIL src\/a\.test\.ts\n  expected 1, got 2\n```$/,
   );
-  assert.equal(maxStepsForCommand("terminal"), 6);
-  assert.equal(asParticipantCommand("terminal"), "terminal");
 
-  const running = buildParticipantFraming({
-    command: "terminal",
-    request: "why so slow?",
-    terminal: {
-      terminalName: "pwsh",
-      commandLine: "build",
+  const running = renderTerminalRun({
+    terminalName: "pwsh",
+    commandLine: "build",
+    cwd: undefined,
+    exitCode: undefined,
+    running: true,
+    output: "",
+    truncatedChars: 0,
+  });
+  assert.equal(
+    running,
+    "Last command in the terminal “pwsh”:\n$ build\nStill running\n(no output)",
+  );
+
+  // Output with a fence of its own cannot close the block early.
+  const fenced = renderTerminalRun({
+    terminalName: "bash",
+    commandLine: "cat README.md",
+    cwd: undefined,
+    exitCode: 0,
+    running: false,
+    output: "```ts\nx\n```",
+    truncatedChars: 0,
+  });
+  assert.match(fenced, /\n````text\n```ts\nx\n```\n````$/);
+  setLocale("es");
+  assert.match(
+    renderTerminalRun({
+      terminalName: "bash",
+      commandLine: "ls",
       cwd: undefined,
-      exitCode: undefined,
-      running: true,
+      exitCode: 2,
+      running: false,
       output: "",
       truncatedChars: 0,
-    },
-  });
-  assert.match(running, /\$ build\nStill running\n\(no output\)/);
-  setLocale("es");
-  console.log("  ✓ prompt de @m365 /terminal: comando, código de salida, cwd y salida recortada");
+    }),
+    /Código de salida: 2\n\(sin salida\)$/,
+  );
+
+  // It reads what already happened: not "another way to run a command" that
+  // VS Code's run_in_terminal would push out of the prompt under preferEditor.
+  const catalog = buildToolCatalog([
+    { name: M365_TOOL_NAMES.lastTerminalCommand, inputSchema: { type: "object", properties: {} } },
+    { name: "run_in_terminal", inputSchema: schemaOf(["command", "explanation"]) },
+  ]);
+  assert.equal(entry(catalog, M365_TOOL_NAMES.lastTerminalCommand).capability, "context");
+  assert.ok(!catalog.omitted.includes(M365_TOOL_NAMES.lastTerminalCommand));
+  assert.equal(
+    catalog.fenced.shell?.name,
+    "run_in_terminal",
+    "shell blocks still go to run_in_terminal",
+  );
+  console.log(
+    "  ✓ m365_last_terminal_command: comando, código de salida, cwd y salida recortada; no compite con run_in_terminal",
+  );
 }
 
 function testClipboardDetection() {
@@ -6886,8 +7038,9 @@ async function main() {
   await testToolLoopForcedRetry();
   console.log("lineDiff.ts");
   testLineDiff();
-  console.log("participant / editor");
-  testParticipantPrompts();
+  console.log("editor / chat");
+  testChatLaunch();
+  testChatContributions();
   testCommitMessageGeneration();
   testCommitMessageNormalization();
   testCommitContext();

@@ -32,22 +32,6 @@ const REFRESH_DEBOUNCE_MS = 150;
 /** How many of the previous lines a change's hover shows. */
 const MAX_HOVER_LINES = 30;
 
-/**
- * VS Code's own review of chat edits: snapshot the files, run the callback, read
- * them back from disk and show the difference as Copilot's edits are shown (red
- * and green inline, Keep/Undo on each change, "files changed" in the chat,
- * checkpoints). It is a method of the response stream that is still a proposed
- * API, but the only edit method there that does not require being allow-listed
- * (checked on VS Code 1.144), so it is looked up at runtime and our own review
- * stays as the fallback.
- */
-export type ChatReview = (targets: vscode.Uri[], run: () => Thenable<unknown>) => Thenable<unknown>;
-
-export function chatReviewOf(stream: vscode.ChatResponseStream): ChatReview | undefined {
-  const { externalEdit } = stream as unknown as { externalEdit?: ChatReview };
-  return typeof externalEdit === "function" ? externalEdit.bind(stream) : undefined;
-}
-
 export interface ApplyWorkspaceEditsInput {
   readonly edits: unknown;
 }
@@ -131,12 +115,13 @@ class PreviewContentProvider implements vscode.TextDocumentContentProvider {
  * the first to the last changed line, so two separate changes could only be
  * kept or undone together and the highlight covered untouched code between.
  *
- * In a chat request VS Code's own review takes over ({@link ChatReview}), and
- * this class only writes the files; what is described here is what remains for
- * edits from the editor, and for when that review is not available. Agent edits
- * are saved as they land, because the command the model runs next has to see
- * them; Undo restores the previous content on disk too, and plain Ctrl+Z works
- * because every change is a normal editor edit.
+ * It reviews the edits of `m365_apply_edits` and the ones made from the
+ * editor (inline edit, quick fix). In agent mode VS Code's own edit tools are
+ * preferred (`m365copilot.tools.duplicates`), and their edits go through VS
+ * Code's review instead. Agent edits are saved as they land, because the
+ * command the model runs next has to see them; Undo restores the previous
+ * content on disk too, and plain Ctrl+Z works because every change is a normal
+ * editor edit.
  */
 export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Disposable {
   private readonly previews = new PreviewContentProvider();
@@ -150,10 +135,6 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
   private readonly undoneByUser = new Map<string, PendingFile>();
   /** Documents whose last change was an undo, until the debounced re-diff looks at them. */
   private readonly lastChangeUndone = new Set<string>();
-  /** The review of the chat request whose edit tool is running. */
-  private chatReview: ChatReview | undefined;
-  /** Files created under {@link chatReview}, by URI. See {@link removeIfUndone}. */
-  private readonly createdInChat = new Set<string>();
 
   private readonly insertedLines = vscode.window.createTextEditorDecorationType({
     backgroundColor: new vscode.ThemeColor("diffEditor.insertedLineBackground"),
@@ -219,7 +200,6 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
         this.scheduleRefresh();
       }),
       vscode.workspace.onDidCloseTextDocument((document) => void this.reconcileClosed(document)),
-      vscode.workspace.onDidSaveTextDocument((document) => void this.removeIfUndone(document)),
     );
     this.renderStatus();
   }
@@ -237,21 +217,6 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
 
   // ------------------------------------------------------------- tool entry
 
-  /**
-   * Run the next edit under this chat response's own review. The tool runs after
-   * a round trip through the main process that keeps nothing but JSON, hence a
-   * field and not an argument.
-   *
-   * shortcut: with @m365 requests running at once in two chats, an edit could show
-   * up in the other chat's response; still reviewed. Upgrade if chats ever run in parallel.
-   */
-  offerChatReview(review: ChatReview): vscode.Disposable {
-    this.chatReview = review;
-    return new vscode.Disposable(() => {
-      if (this.chatReview === review) this.chatReview = undefined;
-    });
-  }
-
   async stageEdits(
     input: ApplyWorkspaceEditsInput,
     token: vscode.CancellationToken,
@@ -265,18 +230,10 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
         charsAfter: file.after?.length ?? null,
       })),
     );
-    // A deletion stays with our own review: VS Code's reads the file back from
-    // disk to compute the change, and there would be nothing to read.
-    const inChat = await this.applyUnderChatReview(
-      files.filter((file) => file.after !== undefined),
-    );
-    const ours = inChat ? files.filter((file) => file.after === undefined) : files;
-    if (ours.length > 0) {
-      await this.applyToEditor(ours);
-      await this.saveAll(ours.filter((file) => file.after !== undefined));
-      for (const file of ours) this.track(file);
-      this.changed();
-    }
+    await this.applyToEditor(files);
+    await this.saveAll(files.filter((file) => file.after !== undefined));
+    for (const file of files) this.track(file);
+    this.changed();
     await this.revealFirst(files[0]!);
 
     const summary = files
@@ -431,56 +388,6 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
   }
 
   // ------------------------------------------------------------- applying
-
-  /**
-   * Whether these files went through the chat's own review. If the host refuses
-   * before running the callback (an older or stricter VS Code), ours takes over.
-   */
-  private async applyUnderChatReview(files: readonly PlannedFile[]): Promise<boolean> {
-    const review = this.chatReview;
-    if (!review) return false;
-    if (files.length === 0) return true;
-    let ran = false;
-    try {
-      await review(
-        files.map((file) => file.uri),
-        async () => {
-          ran = true;
-          for (const file of files) {
-            const bytes = await vscode.workspace.encode(file.after ?? "", { uri: file.uri });
-            await vscode.workspace.fs.writeFile(file.uri, bytes);
-            if (file.before === undefined && file.after) {
-              this.createdInChat.add(file.uri.toString());
-            }
-          }
-        },
-      );
-      return true;
-    } catch (error) {
-      if (ran) throw error;
-      debug("edits", "the chat's own review is not available: using ours", error);
-      return false;
-    }
-  }
-
-  /**
-   * VS Code's review treats a file that did not exist before an external edit as
-   * edited from empty, so its Undo leaves an empty file behind (checked on 1.145).
-   * Saved empty, a file the agent created is that Undo: finish the job.
-   *
-   * shortcut: a file the agent created and the user later empties and saves is
-   * deleted too (nothing is lost). Upgrade if VS Code ever reports the Undo.
-   */
-  private async removeIfUndone(document: vscode.TextDocument): Promise<void> {
-    if (!this.createdInChat.delete(document.uri.toString())) return;
-    if (document.getText() !== "") {
-      this.createdInChat.add(document.uri.toString());
-      return;
-    }
-    debug("edits", `removing ${relativePathForUri(document.uri)}: its creation was undone`);
-    await vscode.workspace.fs.delete(document.uri).then(undefined, () => {});
-    await this.closeTabsOf([document]);
-  }
 
   /** Through the document: `workspace.save` only saves files that have a tab open. */
   private async saveAll(files: readonly { readonly uri: vscode.Uri }[]): Promise<void> {
@@ -1037,7 +944,6 @@ export class WorkspaceEditManager implements vscode.CodeLensProvider, vscode.Dis
     this.pending.clear();
     this.hunkCache.clear();
     this.undoneByUser.clear();
-    this.createdInChat.clear();
     this.lastKept = [];
   }
 }

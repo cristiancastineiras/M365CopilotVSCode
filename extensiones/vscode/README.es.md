@@ -15,8 +15,8 @@
 [English](README.md) · **Español**
 
 Usa tu suscripción de **Microsoft 365 Copilot** dentro de VS Code: como modelo
-del chat (junto a GitHub Copilot, Claude, etc.), como el participante de chat
-**`@m365`**, desde el menú contextual y la bombilla del editor, desde Source
+del chat (junto a GitHub Copilot, Claude, etc.), como el agente **M365 Copilot**
+con sus skills, desde el menú contextual y la bombilla del editor, desde Source
 Control y como autocompletado en línea (texto fantasma). Toda la extensión —
 interfaz, mensajes y las instrucciones que se envían al modelo — está disponible
 en **inglés y español**.
@@ -24,11 +24,11 @@ en **inglés y español**.
 No hay dashboard ni clave de API: capturas el token de tu sesión en el
 navegador y VS Code lo usa.
 
-| Pieza                                    | Dónde                                                                                                                                                                                           | Qué hace                                                                                                                                                         |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Extensión de navegador** (recomendada) | [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd) · [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/) · [`extensiones/browser`](https://github.com/cristiancastineiras/M365CopilotVSCode/tree/main/extensiones/browser) · [releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases) | Captura el token en la web de M365 Copilot, lo renueva antes de que caduque y lo envía a VS Code automáticamente.                                                |
-| **Userscript** (alternativa)             | [`m365copilot-token.user.js`](m365copilot-token.user.js)                                                                                                                                        | La misma captura que la extensión de navegador, para Tampermonkey/Violentmonkey: envía el token a VS Code por sí solo y muestra la conexión en un pequeño panel. |
-| **Extensión de VS Code**                 | esta carpeta                                                                                                                                                                                    | Registra los modelos, el participante `@m365`, las acciones del editor/SCM y las herramientas de agente, y habla con Microsoft 365 Copilot con tu token.         |
+| Pieza                                    | Dónde                                                                                                                                                                                                                                                                                                                                                                                        | Qué hace                                                                                                                                                             |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Extensión de navegador** (recomendada) | [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd) · [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/) · [`extensiones/browser`](https://github.com/cristiancastineiras/M365CopilotVSCode/tree/main/extensiones/browser) · [releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases) | Captura el token en la web de M365 Copilot, lo renueva antes de que caduque y lo envía a VS Code automáticamente.                                                    |
+| **Userscript** (alternativa)             | [`m365copilot-token.user.js`](m365copilot-token.user.js)                                                                                                                                                                                                                                                                                                                                     | La misma captura que la extensión de navegador, para Tampermonkey/Violentmonkey: envía el token a VS Code por sí solo y muestra la conexión en un pequeño panel.     |
+| **Extensión de VS Code**                 | esta carpeta                                                                                                                                                                                                                                                                                                                                                                                 | Registra los modelos, el agente M365 Copilot y sus skills, las acciones del editor/SCM y las herramientas de agente, y habla con Microsoft 365 Copilot con tu token. |
 
 ## Inicio rápido
 
@@ -64,9 +64,10 @@ navegador y VS Code lo usa.
      de quién es. Nada puede saber de antemano cuándo caduca: el primer mensaje que
      rechace lo marca como caducado en VS Code, que te pide enviar un mensaje en el
      chat web. El token nuevo llega solo.
-2. **Chatea**: escribe **`@m365`** en el chat, o elige uno de los modelos **M365
-   Copilot** (`Auto`, `Quick response`, `Think deeper`, `GPT 5.6 Think deeper`,
-   `GPT 5.5`, `Claude Sonnet`…) en el selector de modelos.
+2. **Chatea**: elige el agente **M365 Copilot** en el chat, o uno de los modelos
+   **M365 Copilot** (`Auto`, `Quick response`, `Think deeper`,
+   `GPT 5.6 Think deeper`, `GPT 5.5`, `Claude Sonnet`…) en el selector de
+   modelos, con cualquier agente.
 3. **Trabaja desde el editor**: selecciona código y pulsa **Ctrl+Mayús+Alt+I**
    para editarlo con una instrucción, clic derecho → **M365 Copilot**, o la
    bombilla sobre un error.
@@ -116,32 +117,33 @@ comentario desaparece en cuanto el cambio queda preparado), **✕ Descartar** y
 **Borrar todos los comentarios de revisión**. Hasta 10 archivos por revisión, de
 dos en dos; el modelo es el de `m365copilot.editor.model`.
 
-### Participante de chat `@m365`
+### Agente M365 Copilot y sus skills
 
-`@m365` responde siempre con Microsoft 365 Copilot, tengas el modelo que tengas
-elegido en el selector (si eliges un modelo M365, se usa esa variante).
+Elige **M365 Copilot** en el selector de agentes del chat (junto a Agent, Ask,
+Plan…). Responde con Microsoft 365 Copilot — `M365 Copilot (Auto)` al cambiar a
+él; elige otro modelo M365 en el selector de modelos si lo prefieres — y trabaja
+en tu workspace con las herramientas del chat, con la revisión de siempre.
 
-| Comando              | Qué hace                                                                                                                                                        |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@m365 /explain`     | Explica el código seleccionado — o, sin selección, la **función/clase del cursor** (localizada con el proveedor de símbolos del propio lenguaje). Sólo lectura. |
-| `@m365 /fix`         | Corrige los problemas de ese código, incluidos los diagnósticos que VS Code marca ahí, y aplica la corrección con revisión Keep/Undo.                           |
-| `@m365 /doc`         | Añade comentarios de documentación con las convenciones del lenguaje.                                                                                           |
-| `@m365 /tests`       | Escribe tests unitarios con el framework que ya use el proyecto.                                                                                                |
-| `@m365 /terminal`    | Explica el **último comando del terminal activo** — su salida y código de salida — y cómo arreglarlo.                                                           |
-| `@m365 <lo que sea>` | Petición libre con las herramientas del workspace; la selección actual y los adjuntos `#file` se incluyen como contexto.                                        |
+Sustituye al participante de chat `@m365` de versiones anteriores. VS Code está
+retirando los participantes de chat: el harness de Copilot, que sustituye al
+Local en febrero de 2027, no tiene ninguno. Un agente personalizado y las skills
+funcionan en los dos.
 
-El participante muestra qué código usó como referencia, transmite la respuesta
-en vivo, informa de cada paso de herramienta, ofrece un botón **Revisar cambios
-pendientes** tras editar y sugiere continuaciones (`/doc`, `/tests`…).
+Las skills son comandos de barra. Úsalas con el agente, o con cualquier otro
+agente y modelo:
 
-Cada petición puede hacer hasta **30 llamadas a herramientas** (leer, buscar,
-editar, ejecutar…) y durar hasta **8 minutos**; se cambia con
-`m365copilot.chat.maxToolCalls` y `m365copilot.chat.maxDurationMinutes` (`0` = sin
-límite en ambos). Si se corta, el chat avisa y ofrece un botón **Continuar**.
-`/explain` y `/terminal` conservan límites propios más cortos de llamadas (4 y 6).
-Sin ninguno de los dos límites, la petición sigue hasta que termina o la cancelas.
-Recoge el token que renueva el navegador, y sólo acaba con un error si caduca sin
-que haya otro.
+| Skill            | Qué hace                                                                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/m365-explain`  | Explica el código adjunto — qué hace, cómo funciona, lo que no es evidente — sin cambiarlo.                                                 |
+| `/m365-fix`      | Corrige los problemas de ese código, incluido lo que VS Code marca ahí, y aplica la corrección con revisión.                                |
+| `/m365-doc`      | Añade comentarios de documentación con las convenciones del lenguaje.                                                                       |
+| `/m365-tests`    | Escribe tests unitarios con el framework que ya use el proyecto.                                                                            |
+| `/m365-terminal` | Lee el **último comando del terminal activo** — su salida y código de salida — con `m365_last_terminal_command`, y explica cómo arreglarlo. |
+
+Adjunta el código con `#selection` o `#file`, o deja que lo adjunten las
+acciones del editor de abajo. Una skill sólo se usa cuando la invocas: el modelo
+nunca la carga por su cuenta. Cuántas llamadas a herramientas puede hacer una
+petición es el límite del propio agente de VS Code (`chat.agent.maxRequests`).
 
 ### Menú contextual, bombilla y barra de título
 
@@ -149,7 +151,9 @@ que haya otro.
   _Preguntar sobre este código…_, _Revisar código_, _Corregir código_,
   _Documentar código_, _Generar tests_, _Corregir todos los problemas del
   archivo_. _Explicar_, _Preguntar_, _Corregir_, _Documentar_ y _Tests_ abren el
-  chat con el comando `@m365` adecuado y el código exacto en el que estabas.
+  chat en el agente **M365 Copilot** con la skill adecuada, el código exacto en
+  el que estabas adjunto (en _Corregir_, con los problemas que VS Code marca
+  ahí) y el modelo de `m365copilot.editor.model`.
 - **Bombilla (Ctrl+.)**: **Corregir con M365 Copilot: «error»** en errores y
   avisos (corregido en el sitio), **Corregir los N problemas de este archivo**
   cuando hay varios, y _Editar… / Explicar / Documentar con M365 Copilot_ sobre
@@ -157,10 +161,11 @@ que haya otro.
 - **Barra de título del editor**: cuando el archivo abierto tiene cambios del
   agente pendientes de revisar, aparecen ↑ / ↓ (cambio anterior / siguiente),
   ✓ **Keep**, ↶ **Undo** y ⇄ **Diff** junto a las pestañas.
-- **Terminal**: clic derecho → **Explicar el último comando del terminal** envía
-  el último comando, su salida y su código de salida a `@m365 /terminal`. Requiere
-  la shell integration de VS Code; la salida sólo se guarda en memoria y sólo se
-  envía cuando lo pides (`m365copilot.terminal.captureOutput`).
+- **Terminal**: clic derecho → **Explicar el último comando del terminal** lanza
+  `/m365-terminal`, que lee el último comando, su salida y su código de salida
+  con `m365_last_terminal_command`. Requiere la shell integration de VS Code; la
+  salida sólo se guarda en memoria, y sólo se envía cuando el modelo la lee en
+  una petición tuya (`m365copilot.terminal.captureOutput`).
 
 ### Menú Cuentas
 
@@ -236,12 +241,12 @@ mensaje breve en la barra de estado lo confirma.
 
 ### Ajustes del editor
 
-| Ajuste                                  | Por defecto | Para qué                                                                                                                                |
-| --------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `m365copilot.editor.codeActions`        | `true`      | Acciones de M365 Copilot en la bombilla.                                                                                                |
-| `m365copilot.editor.model`              | `auto`      | Modelo de las respuestas que se escriben directamente en el editor: _Editar código…_, el arreglo de la bombilla y el mensaje de commit. |
-| `m365copilot.terminal.captureOutput`    | `true`      | Guardar en memoria la salida de los últimos comandos para `@m365 /terminal`.                                                            |
-| `m365copilot.notifications.tokenExpiry` | `true`      | Avisar cuando el token va a caducar o caduca.                                                                                           |
+| Ajuste                                  | Por defecto | Para qué                                                                                                                                                                                                  |
+| --------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `m365copilot.editor.codeActions`        | `true`      | Acciones de M365 Copilot en la bombilla.                                                                                                                                                                  |
+| `m365copilot.editor.model`              | `auto`      | Modelo de las acciones del editor: _Editar código…_, el arreglo de la bombilla, el mensaje de commit, y el que se elige cuando _Explicar_, _Corregir_, _Documentar_, _Tests_ o _Preguntar_ abren el chat. |
+| `m365copilot.terminal.captureOutput`    | `true`      | Guardar en memoria la salida de los últimos comandos para `m365_last_terminal_command` (`/m365-terminal`).                                                                                                |
+| `m365copilot.notifications.tokenExpiry` | `true`      | Avisar cuando el token va a caducar o caduca.                                                                                                                                                             |
 
 ### Source Control: mensaje de commit con M365
 
@@ -341,12 +346,10 @@ conectan:
 
 Se usa de tres formas:
 
-1. **Contexto automático.** Cada petición del chat — los modelos M365 del
-   selector y `@m365` — lleva un mapa breve del proyecto y el código más
-   relevante para lo que has preguntado (`m365copilot.context.autoRetrieve`,
-   hasta `m365copilot.context.maxChars` caracteres). Con `@m365 /explain` y el
-   resto de comandos se añade el código de alrededor de la selección: quién la
-   llama, las definiciones que usa, archivos relacionados.
+1. **Contexto automático.** Cada petición del chat con un modelo M365 — también
+   las del agente M365 Copilot — lleva un mapa breve del proyecto y el código
+   más relevante para lo que has preguntado (`m365copilot.context.autoRetrieve`,
+   hasta `m365copilot.context.maxChars` caracteres).
 2. **Herramientas del agente.** `m365_search_project` (búsqueda de código por
    relevancia) y `m365_project_map` (estructura, paquetes, puntos de entrada,
    módulos más importados; o el esquema, imports y quién importa un archivo) — al
@@ -374,7 +377,7 @@ plugins de la web de M365 Copilot, porque con ellos el modelo ignora las
 herramientas de la extensión (ver [Cómo funciona](#cómo-funciona)) — y por eso,
 desde VS Code, se quedaba **sin internet**. Ahora:
 
-- **`m365_web_search`** (agente y `@m365`): el modelo busca en internet cuando
+- **`m365_web_search`** (agente y sub-agentes): el modelo busca en internet cuando
   necesita documentación actual, versiones, APIs o mensajes de error. La
   extensión hace un turno **aparte** como lo hace la web — con su propia
   petición, capturada por la extensión de navegador o el userscript, con
@@ -445,7 +448,7 @@ unos 72.000 caracteres y se queda en ese tamaño hasta recargar la ventana.
 `maxOutputTokens` sólo cambia lo que se le indica a VS Code: BizChat decide cuánto
 ocupan sus respuestas.
 
-`maxInputTokens` también fija cuánto conservan `@m365` y los sub-agentes de cada
+`maxInputTokens` también fija cuánto conservan los sub-agentes de cada
 resultado de herramienta (unos 75.000 caracteres por defecto). Sus tareas corren en
 una sola conversación de BizChat, y BizChat olvida sin avisar lo más antiguo de una
 conversación larga, que es tu petición: medido igual, conservó los 419.000 caracteres
@@ -552,20 +555,18 @@ que sigue el hilo el modelo:
 
 ### Revisión de cambios (Keep / Undo)
 
-En el chat de `@m365`, las ediciones pasan por **la revisión de VS Code para las
-ediciones del chat**, la misma que tienen las de GitHub Copilot: rojo y verde en
-línea, **Keep / Undo** en cada cambio y en todo el archivo, **N archivos cambiados**
-junto a la caja del chat, y puntos de restauración. Se guardan al aplicarse, para
-que el siguiente comando del modelo las vea, y **Undo** devuelve el archivo en disco
-(o lo borra, si lo creó el agente). Con un modelo de M365 elegido en modo agente,
-las herramientas de edición de VS Code hacen lo mismo.
+En el chat — el agente M365 Copilot, o cualquier agente con un modelo M365 — las
+ediciones se hacen con las herramientas de edición de VS Code y pasan por **la
+revisión de VS Code para las ediciones del chat**, la misma que tienen las de
+GitHub Copilot: rojo y verde en línea, **Keep / Undo** en cada cambio y en todo
+el archivo, **N archivos cambiados** junto a la caja del chat, y puntos de
+restauración (`m365copilot.tools.duplicates` las prefiere a `m365_apply_edits`).
 
-Antes de cambiar archivos que pueden ejecutar código o guardar secretos
-(`.vscode/`, `.github/`, `.env`, `package.json`…) se te pregunta.
-
-Lo que no tiene un chat del que colgar esa revisión (ediciones en línea, arreglos
-rápidos, arreglos desde un comentario de revisión) usa la de esta extensión, con
-las mismas acciones:
+Lo que VS Code no revisa — `m365_apply_edits`, ediciones en línea, arreglos
+rápidos, arreglos desde un comentario de revisión — usa la revisión de esta
+extensión, con las mismas acciones. Antes de que `m365_apply_edits` cambie
+archivos que pueden ejecutar código o guardar secretos (`.vscode/`, `.github/`,
+`.env`, `package.json`…) se te pregunta.
 
 - cada **bloque (hunk)** cambiado se resalta por separado — las líneas añadidas
   con el color de diff de tu tema, las borradas con una marca roja, con el texto
@@ -588,11 +589,6 @@ Una edición en línea queda sin guardar hasta que guardas, como si la escribier
 **Undo** deja el archivo como estaba. Si aceptas un lote con Keep y te arrepientes,
 **M365 Copilot: Deshacer último lote de cambios del agente** lo revierte.
 
-> A la revisión de VS Code se llega con `externalEdit`, un método del flujo de
-> respuesta del chat que sigue siendo _proposed API_, aunque es el único método de
-> edición abierto a una extensión instalada normalmente (comprobado en VS Code 1.144
-> y 1.145). Si una versión lo cierra, `@m365` vuelve a la revisión de esta extensión.
-
 La herramienta de terminal es la única que ejecuta código arbitrario: antes de
 correr nada ves el comando literal (con un aviso extra para patrones típicamente
 destructivos — `rm -rf`, `git push --force`, `git reset --hard`…). Su salida se
@@ -609,8 +605,8 @@ mucho no llena el contexto de la conversación principal. Las llamadas que
 editan, ejecutan comandos o tocan git se serializan entre sub-agentes; las de
 solo lectura corren en paralelo. _Limitación conocida:_ el diálogo de
 confirmación no indica qué sub-agente lo pidió; la notificación de progreso y
-el registro sí. `m365copilot.chat.maxDurationMinutes` también limita a cada
-sub-agente, contando desde que le toca correr.
+el registro sí. `m365copilot.chat.maxDurationMinutes` (8 minutos; `0` = sin
+límite) limita a cada sub-agente, contando desde que le toca correr.
 
 | Ajuste                                | Por defecto | Para qué                                                            |
 | ------------------------------------- | ----------- | ------------------------------------------------------------------- |
@@ -693,9 +689,9 @@ paleta de comandos bajo **M365 Copilot**.
 | Comando                                                                                                        | Acción                                                                                                                                          |
 | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Mostrar menú`                                                                                                 | El menú rápido (igual que pulsar el elemento de la barra de estado).                                                                            |
-| `Abrir el chat con @m365`                                                                                      | Abre el chat con `@m365` listo.                                                                                                                 |
+| `Abrir el chat con el agente M365 Copilot`                                                                     | Abre el chat en el agente M365 Copilot.                                                                                                         |
 | `Editar código…`                                                                                               | Edita la selección (o la función del cursor) en el sitio a partir de una instrucción — **Ctrl+Mayús+Alt+I**.                                    |
-| `Explicar el último comando del terminal`                                                                      | `@m365 /terminal` sobre el terminal activo (también en el menú contextual del terminal).                                                        |
+| `Explicar el último comando del terminal`                                                                      | `/m365-terminal` sobre el terminal activo (también en el menú contextual del terminal).                                                         |
 | `Explicar código` / `Corregir código` / `Documentar código` / `Generar tests` / `Preguntar sobre este código…` | Acciones del editor (también en el menú contextual).                                                                                            |
 | `Revisar código`                                                                                               | Revisa la selección o el archivo; los hallazgos se convierten en comentarios en las líneas.                                                     |
 | `Corregir todos los problemas del archivo`                                                                     | Una edición en línea por bloque con errores/avisos, bajo Keep/Undo.                                                                             |
@@ -768,7 +764,7 @@ VS Code es otra extensión:
   usuario, y los de cada workspace al abrirlo); las entradas antiguas se quedan
   en `settings.json`, sin efecto, y se pueden borrar;
 - si la extensión antigua sigue instalada, un aviso ofrece desinstalarla — las
-  dos se pelearían por el token del navegador y por `@m365`;
+  dos se pelearían por el token del navegador y registrarían los mismos modelos;
 - el token no se traspasa (va ligado a cada extensión): la extensión de
   navegador o el userscript lo envían de nuevo la próxima vez, o pégalo.
 

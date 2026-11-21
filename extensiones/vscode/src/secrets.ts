@@ -12,9 +12,7 @@ const SECRET_KEY = "m365copilot.profile.v1";
 
 /** What to do about a token that cannot be used, which depends on the kind of account. */
 export function unusableTokenMessage(profile: CopilotProfile): string {
-  return t(
-    accountKind(profile) === "personal" ? "watcher.rejectedPersonal" : "participant.tokenExpired",
-  );
+  return t(accountKind(profile) === "personal" ? "watcher.rejectedPersonal" : "token.expired");
 }
 
 /**

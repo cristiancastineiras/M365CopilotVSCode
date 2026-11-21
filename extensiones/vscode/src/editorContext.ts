@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { relativePathForUri } from "../tools/common";
 import { severityLabel } from "../tools/diagnosticsFormat";
 import { localDate, renderEnvironment } from "./environment";
-import type { PromptCodeContext } from "./participantPrompts";
+import type { PromptCodeContext } from "./promptContext";
 import { renderSkills } from "./skills";
 
 /** System, shell, absolute workspace root(s) and date, for the prompt (see environment.ts). */
@@ -62,7 +62,7 @@ export interface CodeContext extends PromptCodeContext {
 }
 
 /**
- * The code an editor action (or `@m365 /explain`…) should work on:
+ * The code an editor action (Explain, Fix, Edit code…) should work on:
  *
  *  1. an explicit range (a code action passes the diagnostic's or the
  *     selection's range) — or the enclosing symbol around it, when it is a
@@ -78,19 +78,6 @@ export async function captureCodeContext(
   options: { readonly selection?: vscode.Selection; readonly range?: vscode.Range } = {},
 ): Promise<CodeContext> {
   const range = await pickRange(document, options);
-  return buildContext(document, range);
-}
-
-/** Context for a `#file`/`#selection` reference attached in the chat. */
-export async function codeContextFromLocation(
-  location: vscode.Location | vscode.Uri,
-): Promise<CodeContext> {
-  const uri = location instanceof vscode.Uri ? location : location.uri;
-  const document = await vscode.workspace.openTextDocument(uri);
-  const range =
-    location instanceof vscode.Uri
-      ? new vscode.Range(0, 0, Math.max(document.lineCount - 1, 0), 0)
-      : location.range;
   return buildContext(document, range);
 }
 

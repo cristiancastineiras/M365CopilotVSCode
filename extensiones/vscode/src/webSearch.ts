@@ -1,5 +1,5 @@
 /**
- * `m365_web_search`: internet access for the agent and `@m365`.
+ * `m365_web_search`: internet access for the agent and the sub-agents.
  *
  * The extension's chat turns use a lean BizChat invocation without the web
  * app's plugins — that is what makes the text tool protocol reliable (see
@@ -65,7 +65,7 @@ async function searchWeb(
   }
   const profile = await store.get();
   if (!profile || !isTokenUsable(profile))
-    throw new Error(t(profile ? "participant.tokenExpired" : "participant.noToken"));
+    throw new Error(t(profile ? "token.expired" : "token.missing"));
   debug(
     "web",
     profile.invocationTemplate

@@ -3,7 +3,7 @@
  * locales/es.ts must provide exactly the same set (enforced by its type).
  *
  * `{0}`, `{1}`… are positional placeholders filled by `t()`. Entries under
- * `prompt.*`, `protocol.*`, `hint.*`, `subagent.prompt.*`, `participant.task.*`,
+ * `prompt.*`, `protocol.*`, `hint.*`, `subagent.prompt.*`, `tool.lastTerminal.*`,
  * `completion.prompt.*`, `scm.prompt*` and `autoCommit.prompt*` are read by the MODEL, not the user:
  * they were tuned against BizChat, so change them with care.
  */
@@ -51,7 +51,7 @@ export const en = {
   "paste.fromClipboard":
     "A token was found in the clipboard — press Enter to use it, or paste a different one.",
   "paste.ready":
-    "M365 Copilot is ready{0}{1}. Pick an “M365 Copilot” model in the chat, or type @m365.",
+    "M365 Copilot is ready{0}{1}. Pick an “M365 Copilot” model in the chat, or the M365 Copilot agent.",
   "paste.openChat": "Open chat",
   "paste.failed": "Could not save the profile: {0}",
   "paste.foreignAudience":
@@ -129,7 +129,7 @@ export const en = {
   "menu.paste": "Paste profile or token",
   "menu.paste.detail": "Store the token captured in the browser (encrypted SecretStorage)",
   "menu.status": "Token status",
-  "menu.openChat": "Open chat with @m365",
+  "menu.openChat": "Open chat with the M365 Copilot agent",
   "menu.completionsOff": "Turn inline completions off",
   "menu.completionsOn": "Turn inline completions on",
   "menu.reviewEdits": "Review pending agent changes ({0})",
@@ -247,8 +247,6 @@ export const en = {
   "log.promptShortened":
     "the service refused a message of {0} characters and took one of {1}: keeping to that size until the window reloads",
   "log.subagentStep": "[sub-agent {0}] step {1} ({2}): {3}",
-  "log.participantRequest": "@m365 request: command={0}, tone={1}, context={2}",
-  "log.participantNoToken": "@m365 request (command={0}) without a usable token",
   "log.commitMessage": "commit message generated: {0} chars from a {1}-char diff",
   "log.commitMessageRetry": "commit message rejected ({0}); asking again",
   "log.autoCommit": "auto-commit {0}: {1}",
@@ -578,67 +576,33 @@ export const en = {
   "subagent.prompt.resultBlock": '<tool_response tool="{0}">\n{1}\n</tool_response>',
   "subagent.clipNote": "… ({0} characters omitted)",
 
-  // ------------------------------------------------------------ @m365 chat participant
-  "participant.noToken":
+  // ------------------------------------------------------------ token
+  "token.missing":
     "There is no M365 Copilot token yet. Capture it in the browser and paste it here to start.",
-  "participant.tokenExpired":
+  "token.expired":
     "The M365 Copilot token has expired. Capture a new one in the browser and paste it again.",
-  "participant.button.paste": "Paste profile or token",
-  "participant.button.review": "Review pending changes",
-  "participant.noContext":
-    "There is no code to work on: open a file and select some code (or place the cursor inside a function), " +
-    "attach a file with #, or describe what you need.",
-  "participant.progress.thinking": "Asking M365 Copilot…",
-  "participant.progress.tool": "Running {0}…",
-  "participant.stepLimit":
-    "_(Stopped after {0} tool calls without a final answer — choose Continue below, or raise `m365copilot.chat.maxToolCalls` (0 = no limit).)_",
-  "participant.timeLimit":
-    "_(Stopped: the request took more than {0} min — choose Continue below, or raise `m365copilot.chat.maxDurationMinutes` (0 = no limit).)_",
-  "participant.error": "The answer could not be completed. {0}",
-  "participant.followup.continue": "Continue",
-  "participant.followup.continue.prompt": "Continue where you left off.",
-  "participant.followup.explain": "Explain this code",
-  "participant.followup.fix": "Fix the problems",
-  "participant.followup.doc": "Document this code",
-  "participant.followup.tests": "Generate tests",
-  "participant.followup.terminal": "Explain the last terminal command",
-  "participant.task.explain":
-    "Explain what the code below does, how it works and anything non-obvious about it (edge cases, pitfalls, " +
-    "performance). Be concise and concrete; do not rewrite it unless the user asks. Read more of the workspace only " +
-    "if the code depends on something you cannot see.",
-  "participant.task.fix":
-    "Find and fix the problems in the code below (the diagnostics VS Code reports, if any, plus real bugs you spot). " +
-    "Apply the fix to the file with the editing tool — the user reviews it with Keep/Undo — and then explain in one or " +
-    "two sentences what was wrong and what you changed. Do not refactor unrelated code.",
-  "participant.task.doc":
-    "Add documentation comments to the code below, following the conventions of its language (JSDoc/TSDoc, " +
-    "docstrings, XML doc…) and the style already used in the project. Apply them to the file with the editing tool and " +
-    "do not change any behaviour.",
-  "participant.task.tests":
-    "Write unit tests for the code below using the test framework and conventions the project already uses (look for " +
-    "existing tests first). Create or update the test file with the editing tool, then say in one line how to run them.",
-  "participant.task.ask":
-    "Answer the user’s request below. Use the workspace tools if you need more context or have to change files " +
-    "(edits are reviewed by the user with Keep/Undo).",
-  "participant.prompt.framing":
-    "I'm writing to you from the chat in my editor (VS Code), where I call you as @m365. Let's work through this step by step. When it's done, reply to me in Markdown: that reply is what I'll see in the chat.",
-  "participant.prompt.context": "Code context — {0}, lines {1}-{2} ({3}):",
-  "participant.prompt.contextTruncated": "[code truncated: {0} more characters]",
-  "participant.prompt.diagnostics": "Problems VS Code reports in that code:",
-  "participant.prompt.request": "User request:",
-  "participant.prompt.noRequest": "(no extra instructions)",
-  "participant.prompt.history": "Earlier messages in this chat (context only):",
-  "participant.prompt.attached": "Other files the user attached: {0}",
-  "participant.noTerminalRun":
+
+  // ------------------------------------------------------------ code and terminal, for the model
+  "prompt.code.context": "Code context — {0}, lines {1}-{2} ({3}):",
+  "prompt.code.truncated": "[code truncated: {0} more characters]",
+  "prompt.code.diagnostics": "Problems VS Code reports in that code:",
+  "prompt.terminal.header": "Last command in the terminal “{0}”:",
+  "prompt.terminal.running": "Still running",
+  "prompt.terminal.noExitCode": "Finished (exit code not reported by the shell)",
+  "prompt.terminal.exitCode": "Exit code: {0}",
+  "prompt.terminal.truncated": "[start of the output omitted: {0} characters]",
+  "prompt.terminal.noOutput": "(no output)",
+  "tool.lastTerminal": "Reading the last command of the terminal “{0}”…",
+  "tool.lastTerminal.none": "(none open)",
+  "tool.lastTerminal.noTerminal": "There is no terminal open in VS Code.",
+  "tool.lastTerminal.noRun":
+    "No command has been captured in the terminal “{0}” yet: VS Code’s shell integration has to be active in it, and the command has to run after that. Ask me to run it again, or to paste its output.",
+  "tool.lastTerminal.captureOff":
+    "Capturing terminal output is turned off (`m365copilot.terminal.captureOutput`). Ask me to paste the command and its output, or to turn the setting on.",
+
+  // ------------------------------------------------------------ terminal
+  "terminal.noRun":
     "No command has been captured in this terminal yet. Run the command again (VS Code’s shell integration has to be active in the terminal) and ask again.",
-  "participant.task.terminal":
-    "Explain why the terminal command below failed — or, if it did not fail, what its output means — and how to fix it. Point at the relevant lines of the output. Read the workspace files involved if you need to; if the fix is a code change, apply it with the editing tool (the user reviews it with Keep/Undo); if it is a command, give it, do not run it.",
-  "participant.prompt.terminal": "Last command in the terminal “{0}”:",
-  "participant.prompt.terminalRunning": "Still running",
-  "participant.prompt.terminalNoExitCode": "Finished (exit code not reported by the shell)",
-  "participant.prompt.terminalExitCode": "Exit code: {0}",
-  "participant.prompt.terminalTruncated": "[start of the output omitted: {0} characters]",
-  "participant.prompt.terminalNoOutput": "(no output)",
   "terminal.none": "M365 Copilot: open a terminal and run the command first.",
 
   // ------------------------------------------------------------ editor actions
@@ -659,7 +623,7 @@ export const en = {
   "inlineEdit.recent": "recent",
   "inlineEdit.progress": "M365 Copilot is editing {0}:{1}–{2}…",
   "inlineEdit.tooLarge":
-    "M365 Copilot: this code is too large to edit inline. Select a smaller block, or ask @m365 in the chat.",
+    "M365 Copilot: this code is too large to edit inline. Select a smaller block, or ask the M365 Copilot agent in the chat.",
   "inlineEdit.changed":
     "M365 Copilot: the code changed while the edit was being prepared, so nothing was applied. Try again.",
   "inlineEdit.empty":
@@ -856,7 +820,7 @@ export const en = {
     "M365 Copilot: {0} setting(s) of the previous version (ms365copilot.*) were copied to m365copilot.*. The old entries in settings.json no longer do anything and can be deleted.",
   "migration.openSettings": "Open settings (JSON)",
   "migration.legacyInstalled":
-    "The previous version of M365 Copilot (ms365-copilot-vscode) is still installed. Both would compete for the token from the browser and for @m365 — uninstall the old one.",
+    "The previous version of M365 Copilot (ms365-copilot-vscode) is still installed. Both would compete for the token from the browser and register the same models — uninstall the old one.",
   "migration.uninstall": "Uninstall the old version",
   "migration.uninstalled":
     "The old version of M365 Copilot was uninstalled. Reload the window to finish.",

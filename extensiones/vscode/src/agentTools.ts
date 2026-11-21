@@ -22,10 +22,25 @@ import {
 import { errorMessage } from "../tools/common";
 import { M365_TOOL_NAMES } from "@m365copilot/core/bizchat";
 import { t } from "./i18n";
+import { renderTerminalRun } from "./promptContext";
+import type { TerminalHistory } from "./terminalHistory";
 
-export function registerM365WorkspaceTools(manager: WorkspaceEditManager): vscode.Disposable[] {
+export function registerM365WorkspaceTools(
+  manager: WorkspaceEditManager,
+  terminals: TerminalHistory,
+): vscode.Disposable[] {
   return [
     registerTerminalCleanup(),
+    // Read-only and local (the output never left the machine until now): no confirmation.
+    registerTracedTool<Record<string, never>>(M365_TOOL_NAMES.lastTerminalCommand, {
+      prepareInvocation: () => ({
+        invocationMessage: t(
+          "tool.lastTerminal",
+          vscode.window.activeTerminal?.name ?? t("tool.lastTerminal.none"),
+        ),
+      }),
+      invoke: () => toolResult(async () => lastTerminalCommand(terminals)),
+    }),
     registerTracedTool<ListFilesInput>(M365_TOOL_NAMES.listFiles, {
       prepareInvocation: (options) => ({
         invocationMessage: t("tool.listing", options.input.path || t("tool.listing.workspace")),
@@ -118,6 +133,18 @@ export function registerM365WorkspaceTools(manager: WorkspaceEditManager): vscod
       invoke: (options, token) => toolResult(() => runWorkspaceCommand(options.input, token)),
     }),
   ];
+}
+
+/** What `m365_last_terminal_command` answers: the active terminal's last run, or why there is none. */
+function lastTerminalCommand(terminals: TerminalHistory): string {
+  if (
+    !vscode.workspace.getConfiguration("m365copilot.terminal").get<boolean>("captureOutput", true)
+  )
+    return t("tool.lastTerminal.captureOff");
+  const terminal = vscode.window.activeTerminal;
+  if (!terminal) return t("tool.lastTerminal.noTerminal");
+  const run = terminals.lastRun(terminal);
+  return run ? renderTerminalRun(run) : t("tool.lastTerminal.noRun", terminal.name);
 }
 
 export async function toolResult(

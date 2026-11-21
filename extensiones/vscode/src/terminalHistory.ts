@@ -1,7 +1,8 @@
 /**
  * The last commands run in each terminal, with their output and exit code,
- * so `@m365 /terminal` (and "Explain last terminal command" in the terminal's
- * context menu) can explain a failure without anyone copying the output.
+ * so the model can read them (`m365_last_terminal_command`, which "Explain
+ * last terminal command" in the terminal's context menu relies on) and explain
+ * a failure without anyone copying the output.
  *
  * Relies on VS Code's shell integration, which reports every command line,
  * streams its output and its exit code. Everything stays in memory, bounded
@@ -10,7 +11,7 @@
  */
 import * as vscode from "vscode";
 import { cleanTerminalOutput } from "../tools/terminalOutput";
-import type { PromptTerminalRun } from "./participantPrompts";
+import type { PromptTerminalRun } from "./promptContext";
 
 const RUNS_PER_TERMINAL = 5;
 /** Raw output kept per command (escape sequences included): the tail is what explains a failure. */

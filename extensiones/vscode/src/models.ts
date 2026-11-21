@@ -73,14 +73,22 @@ export function findModel(id: string): CopilotModel | undefined {
 }
 
 /**
- * Tone for answers written straight into the editor — inline edits, the
- * lightbulb fix, the Source Control commit message (`m365copilot.editor.model`).
+ * The model of the editor's M365 Copilot actions (`m365copilot.editor.model`):
+ * the answers written straight into the editor — inline edits, the lightbulb
+ * fix, the Source Control commit message — and the model selected when an
+ * action opens the chat (Explain, Fix, Document…). Auto when the setting names
+ * a model that is not in the list (any more).
  */
-export function editorTone(): string | null {
+export function editorModelId(): string {
   const id = vscode.workspace
     .getConfiguration("m365copilot.editor")
-    .get<string>("model", "m365-copilot-auto");
-  return findModel(id)?.tone ?? null;
+    .get<string>("model", BUILTIN_MODELS[0]!.id);
+  return findModel(id)?.id ?? BUILTIN_MODELS[0]!.id;
+}
+
+/** The tone of {@link editorModelId}, for the requests the extension sends itself. */
+export function editorTone(): string | null {
+  return findModel(editorModelId())?.tone ?? null;
 }
 
 interface MenuCache {
