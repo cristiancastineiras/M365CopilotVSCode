@@ -123,15 +123,19 @@ other = "Conectado con VS Code. El token se sincroniza solo."
 [stats_eyebrow]
 other = "En cifras"
 [stats_title]
-other = "instalaciones y descargas hasta ahora"
+other = "instalaciones, descargas y usuarios hasta ahora"
 [stats_installs]
 other = "Instalaciones en Marketplace"
 [stats_github]
 other = "Descargas en GitHub"
 [stats_vsix]
 other = "Descargas del .vsix en Marketplace"
+[stats_chrome]
+other = "Usuarios en Chrome Web Store"
+[stats_firefox]
+other = "Usuarios en Firefox Add-ons"
 [stats_note]
-other = "En directo desde VS Code Marketplace y GitHub. Cuenta instalaciones y descargas, no personas, y deja fuera las actualizaciones y las tiendas de navegador."
+other = "En directo desde VS Code Marketplace, GitHub, Chrome Web Store (a través de shields.io) y Firefox Add-ons. Marketplace y GitHub cuentan instalaciones y descargas, no personas, y dejan fuera las actualizaciones; las tiendas de navegador solo publican cuántas personas usan la extensión ahora."
 [stats_chart_title]
 other = "Descargas de GitHub por versión"
 [stats_chart_sub]
@@ -148,3 +152,19 @@ other = "Descargas"
 other = "descargas"
 [stats_share]
 other = "del total"
+[schema_requirements]
+other = "Visual Studio Code 1.104 o posterior, y una cuenta de Microsoft 365 con Copilot: una cuenta de trabajo o educativa con Copilot Chat o con licencia de Microsoft 365 Copilot, o una suscripción Microsoft 365 Personal o Familia"
+[schema_keywords]
+other = "Microsoft 365 Copilot, M365 Copilot, extensión de VS Code, Visual Studio Code, Copilot Chat, asistente de programación con IA, modelos de chat, agente, revisión de código, mensajes de commit, GPT, Claude"
+[schema_browser_name]
+other = "Extensión de navegador de M365 Copilot for VS Code"
+[schema_browser_description]
+other = "Extensión para Chrome, Edge y Firefox que captura el token de sesión de Microsoft 365 Copilot y lo envía a la extensión de VS Code, renovándolo antes de que caduque."
+[llms_docs]
+other = "Documentación"
+[llms_install]
+other = "Instalación"
+[llms_full_docs]
+other = "Documentación completa de la extensión de VS Code (Markdown)"
+[llms_changelog]
+other = "Registro de cambios"

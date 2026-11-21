@@ -8,6 +8,9 @@ defaultContentLanguage = "en"
 defaultContentLanguageInSubdir = false
 
 enableRobotsTXT = true
+# Fecha real de cada página (el último commit que la tocó) en el sitemap y en los datos estructurados.
+# En CI hace falta el historial completo: pages.yml hace checkout con fetch-depth: 0.
+enableGitInfo = true
 disableKinds = ["RSS", "taxonomy", "term"]
 
 [languages.en]
@@ -25,12 +28,26 @@ disableKinds = ["RSS", "taxonomy", "term"]
   marketplaceId = "m365-copilot-vscode.m365-copilot-vscode"
   chromeStore = "https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd"
   firefoxStore = "https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/"
+  # Para las cifras de usuarios de cada tienda (ver stats.html).
+  chromeStoreId = "cdeegiifkgahagfcjhedkdcfbpipffdd"
+  firefoxSlug = "microsoft-365-copilot-vs-code"
   defaultLang = "en"
   # Analítica sin cookies (https://<nombre>.goatcounter.com). Vacío = sin analítica.
   goatcounter = "m365copilotvscode"
   # Verificación de propiedad en buscadores (opcionales): el valor del meta que dan Search Console / Bing.
   googleVerification = ""
   bingVerification = ""
+
+# llms.txt (https://llmstxt.org): resumen en Markdown para asistentes de IA, generado desde la portada
+# (layouts/home.llms.txt). /llms.txt en inglés y /es/llms.txt en español.
+[outputFormats.llms]
+  mediaType = "text/plain"
+  baseName = "llms"
+  isPlainText = true
+  notAlternative = true
+
+[outputs]
+  home = ["html", "llms"]
 
 [markup.goldmark.renderer]
   unsafe = false

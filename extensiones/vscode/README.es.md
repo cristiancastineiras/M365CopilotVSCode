@@ -24,6 +24,11 @@ en **inglés y español**.
 No hay dashboard ni clave de API: capturas el token de tu sesión en el
 navegador y VS Code lo usa.
 
+**Funciona con** cualquier cuenta de Microsoft 365 que tenga Copilot: una cuenta
+de trabajo o educativa con Copilot Chat (viene con Microsoft 365), una cuenta con
+licencia de Microsoft 365 Copilot (que añade más modelos) o una suscripción
+Microsoft 365 Personal o Familia.
+
 | Pieza                                    | Dónde                                                                                                                                                                                                                                                                                                                                                                                        | Qué hace                                                                                                                                                             |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Extensión de navegador** (recomendada) | [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd) · [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/) · [`extensiones/browser`](https://github.com/cristiancastineiras/M365CopilotVSCode/tree/main/extensiones/browser) · [releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases) | Captura el token en la web de M365 Copilot, lo renueva antes de que caduque y lo envía a VS Code automáticamente.                                                    |

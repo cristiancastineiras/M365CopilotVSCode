@@ -38,6 +38,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # Historial completo: enableGitInfo pone en el sitemap y en los datos estructurados la fecha del
+          # último commit de cada página, y con un clon superficial todas tendrían la del último.
+          fetch-depth: 0
 
       - name: Instalar Hugo
         run: |
@@ -86,3 +90,30 @@ jobs:
       - name: Desplegar
         id: deployment
         uses: actions/deploy-pages@v5
+
+      # IndexNow (https://www.indexnow.org): avisa a Bing (y por él a Copilot y a otros buscadores que lo
+      # comparten) de qué páginas hay, para que las reindexe en minutos y no en semanas. La clave no es
+      # secreta: es el archivo static/<clave>.txt de la web, que prueba que el aviso viene del dueño. Que
+      # falle no tumba el despliegue.
+      - name: Avisar a los buscadores (IndexNow)
+        continue-on-error: true
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          INDEXNOW_KEY: 7ffb6c4203e1f167c6316aa9ab61e7e2
+        run: |
+          base="${PAGE_URL%/}"
+          host="${base#https://}"
+          host="${host%%/*}"
+          # El sitemap raíz es un índice con uno por idioma.
+          urls=$(curl -fsS "${base}/sitemap.xml" | grep -o '<loc>[^<]*</loc>' | sed 's/<[^>]*>//g' \
+            | xargs -r -n1 curl -fsS | grep -o '<loc>[^<]*</loc>' | sed 's/<[^>]*>//g' | sort -u)
+          if [ -z "$urls" ]; then echo "Sin URLs en el sitemap"; exit 0; fi
+          printf '%s\n%s\n%s\n' "$urls" "${base}/llms.txt" "${base}/es/llms.txt" > urls.txt
+          cat urls.txt
+          jq -n --arg host "$host" --arg key "$INDEXNOW_KEY" --arg loc "${base}/${INDEXNOW_KEY}.txt" \
+            --rawfile urls urls.txt \
+            '{host: $host, key: $key, keyLocation: $loc, urlList: ($urls | split("\n") | map(select(length > 0)))}' \
+            > body.json
+          curl -sS -X POST "https://api.indexnow.org/indexnow" \
+            -H "Content-Type: application/json; charset=utf-8" --data @body.json \
+            -w "IndexNow: HTTP %{http_code}\n"

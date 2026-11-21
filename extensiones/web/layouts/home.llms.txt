@@ -1,0 +1,44 @@
+{{- /* llms.txt (https://llmstxt.org): el resumen del proyecto en Markdown para asistentes de IA. Sale del mismo
+       contenido que la portada, así que no hay que mantenerlo a mano. */ -}}
+{{- $p := .Params -}}
+{{- $repo := printf "https://github.com/%s" site.Params.repo -}}
+{{- $market := printf "https://marketplace.visualstudio.com/items?itemName=%s" site.Params.marketplaceId -}}
+{{- $readme := cond (eq site.Language.Lang "es") "README.es.md" "README.md" -}}
+# {{ site.Title }}
+
+> {{ .Description }}
+
+{{ $p.hero.lead | plainify }}
+
+## {{ $p.how.title }}
+{{ range $i, $step := $p.how.steps }}
+{{ add $i 1 }}. **{{ $step.title }}**: {{ $step.text }}
+{{- end }}
+
+## {{ $p.features.title }}
+{{ range $p.features.items }}
+- **{{ .title }}**: {{ .text }}
+{{- end }}
+
+## {{ $p.faq.title }}
+{{ range $p.faq.items }}
+### {{ .q }}
+
+{{ .a }}
+{{ end }}
+## {{ i18n "llms_docs" }}
+
+{{ with site.GetPage "guide" }}- [{{ .Title }}]({{ .Permalink }}): {{ .Description }}
+{{ end -}}
+{{ with site.GetPage "download" }}- [{{ .Title }}]({{ .Permalink }}): {{ .Description }}
+{{ end -}}
+- [{{ i18n "llms_full_docs" }}](https://raw.githubusercontent.com/{{ site.Params.repo }}/main/extensiones/vscode/{{ $readme }})
+- [{{ i18n "llms_changelog" }}]({{ $repo }}/blob/main/extensiones/vscode/CHANGELOG.md)
+
+## {{ i18n "llms_install" }}
+
+- [VS Code Marketplace]({{ $market }})
+- [Chrome Web Store]({{ site.Params.chromeStore }})
+- [Firefox Add-ons]({{ site.Params.firefoxStore }})
+- [GitHub releases]({{ $repo }}/releases/latest)
+- [Source code]({{ $repo }})

@@ -28,6 +28,22 @@ local project index (RAG) that gives it the context of your code, web search and
 inline completions — and keep its token in sync. Everything is available in
 **English and Spanish**.
 
+**In short**
+
+- **What it is:** a free, open source VS Code extension, plus a small browser
+  extension, that lets you use **Microsoft 365 Copilot** (M365 Copilot) inside
+  Visual Studio Code: its models in VS Code's chat next to GitHub Copilot's, the
+  M365 Copilot agent, in-place edits, code review and commit messages.
+- **Who it is for:** developers who already have Copilot in their Microsoft 365
+  account and want to use it on their code.
+- **Accounts:** a work or school account with Copilot Chat (it comes with
+  Microsoft 365), a Microsoft 365 Copilot licence (more models), or a Microsoft
+  365 Personal or Family subscription. No API key.
+- **Install:** [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode)
+  · [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd)
+  · [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/)
+  · [GitHub releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases/latest)
+
 > **Legal Notice**
 >
 > M365CopilotVSCode is an independent open source project and is not affiliated with, endorsed by, sponsored by, or approved by Microsoft Corporation.

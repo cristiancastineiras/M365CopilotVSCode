@@ -23,6 +23,11 @@ sent to the model — is available in **English and Spanish**.
 There is no dashboard and no API key: you capture your session token in the
 browser and VS Code uses it.
 
+**Works with** any Microsoft 365 account that has Copilot: a work or school
+account with Copilot Chat (it comes with Microsoft 365), an account with a
+Microsoft 365 Copilot licence (which adds more models) or a Microsoft 365
+Personal or Family subscription.
+
 | Piece                               | Where                                                                                                                                                                                                                                                                                                                                                                                        | What it does                                                                                                                                                  |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Browser extension** (recommended) | [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd) · [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/) · [`extensiones/browser`](https://github.com/cristiancastineiras/M365CopilotVSCode/tree/main/extensiones/browser) · [releases](https://github.com/cristiancastineiras/M365CopilotVSCode/releases) | Captures the token on the M365 Copilot website, renews it before it expires and sends it to VS Code automatically.                                            |

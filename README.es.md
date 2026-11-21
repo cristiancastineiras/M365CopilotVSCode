@@ -29,6 +29,23 @@ de tu código, búsqueda web y autocompletado en línea — y mantienen su token
 sincronizado. Todo está
 disponible en **inglés y español**.
 
+**En resumen**
+
+- **Qué es:** una extensión de VS Code gratuita y de código abierto, más una
+  pequeña extensión de navegador, para usar **Microsoft 365 Copilot** (M365
+  Copilot) dentro de Visual Studio Code: sus modelos en el chat de VS Code junto
+  a los de GitHub Copilot, el agente M365 Copilot, ediciones en el sitio,
+  revisión de código y mensajes de commit.
+- **Para quién:** desarrolladores que ya tienen Copilot en su cuenta de Microsoft
+  365 y quieren usarlo con su código.
+- **Cuentas:** una cuenta de trabajo o educativa con Copilot Chat (viene con
+  Microsoft 365), una licencia de Microsoft 365 Copilot (más modelos) o una
+  suscripción Microsoft 365 Personal o Familia. Sin clave de API.
+- **Instalación:** [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=m365-copilot-vscode.m365-copilot-vscode)
+  · [Chrome Web Store](https://chromewebstore.google.com/detail/cdeegiifkgahagfcjhedkdcfbpipffdd)
+  · [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/microsoft-365-copilot-vs-code/)
+  · [Releases de GitHub](https://github.com/cristiancastineiras/M365CopilotVSCode/releases/latest)
+
 > **Aviso Legal**
 >
 > M365CopilotVSCode es un proyecto independiente de código abierto y no está afiliado, respaldado, patrocinado ni aprobado por Microsoft Corporation.
