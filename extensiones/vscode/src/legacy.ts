@@ -4,7 +4,7 @@
  * model ids. Everything is `m365` again (as it was in 1.0), and this is the
  * one module that still spells the old name — to carry the user's settings
  * over (migration.ts) and to spot the old extension still installed next to
- * this one, where both would fight over the token port and `@m365`.
+ * this one, where both would fight over the token port and the models.
  *
  * Kept free of the `vscode` import so the tests can check the mapping.
  */

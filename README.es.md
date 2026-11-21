@@ -20,8 +20,8 @@
 **Web:** <https://cristiancastineiras.github.io/M365CopilotVSCode/es/> — descargas, guía paso a paso y preguntas frecuentes (código en [`extensiones/web`](extensiones/web), hecha con Hugo y publicada por [`pages.yml`](.github/workflows/pages.yml)).
 
 Monorepo (pnpm workspaces + Turborepo) de las piezas que llevan tu suscripción
-de **Microsoft 365 Copilot** a VS Code — como modelos del chat, el participante
-`@m365`, acciones del editor y de Source Control, un autocommit que commitea
+de **Microsoft 365 Copilot** a VS Code — como modelos del chat, el agente
+M365 Copilot con sus skills, acciones del editor y de Source Control, un autocommit que commitea
 el trabajo terminado con mensajes documentados, revisión de código como
 comentarios en las líneas, una cuenta en el menú Cuentas de VS Code,
 herramientas de agente, un índice local del proyecto (RAG) que le da el contexto

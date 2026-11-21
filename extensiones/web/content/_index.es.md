@@ -1,10 +1,10 @@
 ---
 title: "M365 Copilot for VS Code — Microsoft 365 Copilot en VS Code"
-description: "Usa tu Microsoft 365 Copilot en VS Code: chatea con @m365, edita código, revisa cambios y escribe commits. Extensión gratuita y complemento de navegador que la conecta."
+description: "Usa tu Microsoft 365 Copilot en VS Code: chatea con el agente M365 Copilot, edita código, revisa cambios y escribe commits. Extensión gratuita y complemento de navegador que la conecta."
 hero:
   eyebrow: "Gratis y de código abierto"
   title: "Tu Microsoft 365 Copilot, dentro de VS Code"
-  lead: "Chatea con **@m365**, edita código en el sitio, revisa tus cambios y escribe mensajes de commit con el Microsoft 365 Copilot que ya tienes. Sin clave de API ni panel."
+  lead: "Chatea con el agente **M365 Copilot**, edita código en el sitio, revisa tus cambios y escribe mensajes de commit con el Microsoft 365 Copilot que ya tienes. Sin clave de API ni panel."
   note: "VS Code 1.104+ · Chrome, Edge y Firefox · Inglés y español"
 how:
   title: "Funcionando en cuatro pasos"
@@ -16,7 +16,7 @@ how:
       text: "Instálala desde la Chrome Web Store (Chrome y Edge) o Firefox Add-ons. Captura el token de tu sesión de Copilot, así que no hay nada que copiar y pegar."
     - title: "Conecta con un solo mensaje"
       text: "Abre [m365.cloud.microsoft/chat](https://m365.cloud.microsoft/chat/) y envía cualquier mensaje. El popup se pone en verde y VS Code ya tiene tu token. Se renueva solo mientras haya una pestaña de Microsoft 365 abierta."
-    - title: "Escribe @m365 en el chat"
+    - title: "Elige el agente M365 Copilot en el chat"
       text: "O elige un modelo de M365 Copilot en el selector de modelos. Selecciona código y pulsa `Ctrl+Shift+Alt+I` para editarlo en el sitio."
   popupImg: "popup-es.png"
   popupAlt: "Popup de la extensión de navegador: M365 Copilot conectado con VS Code y token válido durante 47 minutos más"
@@ -47,7 +47,7 @@ features:
   items:
     - icon: "message"
       title: "Chat en VS Code"
-      text: "Escribe `@m365`, o elige un modelo de M365 Copilot en el selector de modelos, junto a los demás que uses."
+      text: "Elige el agente M365 Copilot, o un modelo de M365 Copilot en el selector de modelos, junto a los demás que uses."
     - icon: "pencil"
       title: "Edita código en el sitio"
       text: "Selecciona código, pulsa `Ctrl+Shift+Alt+I` y di qué cambiar. El resultado queda bajo Keep / Undo."

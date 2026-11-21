@@ -43,6 +43,7 @@ export const M365_TOOL_NAMES = {
   projectMap: "m365_project_map",
   webSearch: "m365_web_search",
   spawnAgents: "m365_spawn_agents",
+  lastTerminalCommand: "m365_last_terminal_command",
 } as const;
 
 /**
@@ -100,6 +101,7 @@ function m365Hints(): Readonly<Record<M365ToolName, string>> {
     [M365_TOOL_NAMES.projectMap]: t("hint.projectMap"),
     [M365_TOOL_NAMES.webSearch]: t("hint.webSearch"),
     [M365_TOOL_NAMES.spawnAgents]: t("hint.spawnAgents"),
+    [M365_TOOL_NAMES.lastTerminalCommand]: t("hint.lastTerminalCommand"),
   };
 }
 
@@ -205,8 +207,11 @@ const WORKSPACE_FOLDER_PARAM = "workspaceFolder";
  */
 const CAPABILITY_RULES: readonly (readonly [ToolCapability, RegExp])[] = [
   // El índice del proyecto (RAG): no es «otra búsqueda de texto» que
-  // deduplicar contra la del editor, sino lo primero que conviene usar.
-  ["context", /^m365(?:searchproject|projectmap)$/],
+  // deduplicar contra la del editor, sino lo primero que conviene usar. El
+  // último comando del terminal tampoco es «otra forma de ejecutar comandos»:
+  // por su nombre caería en `terminal` y, con `preferEditor`, el
+  // `run_in_terminal` nativo lo sacaría del prompt — lee lo que ya pasó.
+  ["context", /^m365(?:searchproject|projectmap|lastterminalcommand)$/],
   // Notebooks y `copilot_editFiles` (sin parámetros: sólo existe para citarla en
   // un prompt): no son los que el modelo debe elegir para editar un archivo.
   ["other", /notebook|jupyter|editfiles$/],

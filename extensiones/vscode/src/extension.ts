@@ -27,8 +27,8 @@ import { clearDebugLog, DebugSession, exportDebugLog, toggleDeepDebug } from "./
 import { formatMoment, getLocale, resolveLocale, setLocale, t } from "./i18n";
 import { M365StatusBar } from "./statusBar";
 import { TokenWatcher } from "./tokenWatcher";
-import { EditorHandoff, registerEditorActions } from "./editorActions";
-import { registerChatParticipant } from "./participant";
+import { registerEditorActions } from "./editorActions";
+import { M365_VENDOR } from "./chatLaunch";
 import { registerScmCommands } from "./scmCommit";
 import { AutoCommitter } from "./autoCommit";
 import { registerInlineEdit } from "./inlineEdit";
@@ -52,8 +52,6 @@ import {
   showStatus,
   toggleInlineCompletions,
 } from "./commands";
-
-const VENDOR = "m365copilot";
 
 /** Diagnostics also stream to this file so raw frames can be inspected. */
 const DEBUG_FILE = path.join(os.tmpdir(), "m365copilot-debug.log");
@@ -157,7 +155,6 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
   const modelRegistry = installModelRegistry(context.globalState, store, log);
   const workspaceEdits = new WorkspaceEditManager();
   const completions = new M365InlineCompletionProvider(store, statusBar);
-  const handoff = new EditorHandoff();
   const terminals = new TerminalHistory();
   const account = new M365AuthenticationProvider(store);
   const reviewComments = new ReviewComments(context.extensionUri);
@@ -200,7 +197,7 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
     modelRegistry,
     modelRegistry.onDidChange(() => provider.refresh()),
     workspaceEdits.onDidChangePending((count) => statusBar.setPendingEdits(count)),
-    vscode.lm.registerLanguageModelChatProvider(VENDOR, provider),
+    vscode.lm.registerLanguageModelChatProvider(M365_VENDOR, provider),
     vscode.languages.registerInlineCompletionItemProvider({ pattern: "**" }, completions),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("m365copilot.inlineCompletions")) completions.clearCache();
@@ -215,21 +212,15 @@ export function activate(context: vscode.ExtensionContext): TestingApi | undefin
         });
       }
     }),
-    registerChatParticipant({
-      store,
-      handoff,
-      edits: workspaceEdits,
-      terminals,
-      extensionUri: context.extensionUri,
-      log,
-      projectContext: (message, options) => projectIndex.contextFor(message, options),
-    }),
-    ...registerEditorActions(handoff, terminals),
+    // No chat participant: VS Code is retiring them (the Copilot harness has
+    // none). The M365 Copilot agent and the skills of package.json's
+    // chatAgents/chatSkills take `@m365`'s place; see chatLaunch.ts.
+    ...registerEditorActions(terminals),
     ...registerInlineEdit({ store, edits: workspaceEdits, memento: context.globalState, log }),
     ...registerScmCommands(store, log),
     ...autoCommit.registerCommands(),
     ...registerReview({ store, log }, reviewComments),
-    ...registerM365WorkspaceTools(workspaceEdits),
+    ...registerM365WorkspaceTools(workspaceEdits, terminals),
     ...registerM365SubagentTools(store, log),
     registerTracedCommand("m365copilot.showMenu", () =>
       showMenu(store, workspaceEdits, projectIndex.status(), autoCommit.enabled),

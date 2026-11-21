@@ -133,7 +133,7 @@ export async function requireUsableProfile(
   if (profile && isTokenUsable(profile)) return profile;
   const paste = t("watcher.pasteToken");
   const picked = await vscode.window.showWarningMessage(
-    profile ? unusableTokenMessage(profile) : t("participant.noToken"),
+    profile ? unusableTokenMessage(profile) : t("token.missing"),
     paste,
   );
   if (picked === paste) await vscode.commands.executeCommand("m365copilot.pasteProfile");

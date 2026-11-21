@@ -87,14 +87,13 @@ export interface SubagentStepInfo {
   readonly toolName?: string;
 }
 
-/** Por qué terminó el bucle — el participante de chat lo usa para decidir qué mostrar. */
+/** Por qué terminó el bucle. */
 export type ToolLoopOutcome = "done" | "stepLimit" | "timeLimit" | "error" | "cancelled";
 
 export interface ToolLoopParams {
   /**
    * Texto que va entre las instrucciones del protocolo y el historial de
-   * pasos: la tarea en sí y cómo debe terminar. Es lo único que distingue a
-   * un sub-agente del participante `@m365` (ver `participant.ts`).
+   * pasos: la tarea en sí y cómo debe terminar.
    */
   readonly framing: string;
   readonly profile: CopilotProfile;
@@ -227,7 +226,7 @@ export function loopLimitsFor(maxInputTokens: number): LoopLimits {
  */
 export const DEFAULT_MAX_DURATION_MINUTES = 8;
 
-/** El ajuste en minutos como presupuesto del bucle: `0` quita el límite, igual que `maxToolCalls`. */
+/** El ajuste en minutos como presupuesto del bucle: `0` quita el límite. */
 export function durationBudgetMs(minutes: number): number {
   return minutes === 0 ? Number.POSITIVE_INFINITY : minutes * 60_000;
 }
@@ -246,8 +245,8 @@ export async function runSubagentTask(params: SubagentTaskParams): Promise<Subag
 }
 
 /**
- * El bucle de herramientas en sí, compartido por los sub-agentes y por el
- * participante de chat `@m365`. Igual que {@link runSubagentTask}, nunca
+ * El bucle de herramientas en sí, el de cada sub-agente. Igual que
+ * {@link runSubagentTask}, nunca
  * lanza: el resultado dice cómo terminó (`outcome`).
  */
 export async function runToolLoop(params: ToolLoopParams): Promise<ToolLoopResult> {

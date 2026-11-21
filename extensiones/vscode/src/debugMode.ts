@@ -349,7 +349,7 @@ export function registerTracedTool<T>(
   });
 }
 
-/** A caller of `vscode.lm.invokeTool` (the chat participant, the sub-agents): note the call and how it went. */
+/** A caller of `vscode.lm.invokeTool` (the sub-agents): note the call and how it went. */
 export async function traceInvokeTool(
   caller: string,
   name: string,

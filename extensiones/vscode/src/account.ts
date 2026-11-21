@@ -143,7 +143,7 @@ async function signIn(store: ProfileStore): Promise<CopilotProfile | undefined> 
   if (picked.via === "paste") {
     const profile = await promptForProfile(store);
     if (profile && !isTokenUsable(profile))
-      void vscode.window.showWarningMessage(t("participant.tokenExpired"));
+      void vscode.window.showWarningMessage(t("token.expired"));
     else if (profile) void announceProfile(profile);
     return profile;
   }

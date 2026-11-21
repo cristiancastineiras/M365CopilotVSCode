@@ -18,7 +18,7 @@ import {
   type SearchHit,
   type SearchIndex,
 } from "./searchIndex";
-import { fenceFor } from "../participantPrompts";
+import { fenceFor } from "../promptContext";
 import { t } from "../i18n";
 
 /** Names that usually explain or configure a project. */

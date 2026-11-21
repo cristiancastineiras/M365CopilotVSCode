@@ -121,11 +121,12 @@ Si usas el userscript, pega el token: abre la paleta de comandos con
 
 ## 5. Mostrar los modelos en el chat
 
-La forma más directa es escribir **`@m365`** en el chat: responde siempre M365
-Copilot, sin tocar el selector de modelos.
+La forma más directa es elegir el agente **M365 Copilot** en el selector de
+agentes del chat: responde M365 Copilot, y trae las skills `/m365-explain`,
+`/m365-fix`, `/m365-doc`, `/m365-tests` y `/m365-terminal`.
 
-Si prefieres usarlo como modelo (por ejemplo en modo agente), hay que mostrarlo
-en el selector, porque no aparece de primeras:
+Si prefieres usarlo como modelo con cualquier agente, hay que mostrarlo en el
+selector, porque no aparece de primeras:
 
 ![Interfaz predeterminada del chat de VS Code](imgs/ui-chat-copilot-default.png)
 

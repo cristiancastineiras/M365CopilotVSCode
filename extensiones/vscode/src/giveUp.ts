@@ -16,7 +16,7 @@
  * these are written for this extension, in English and Spanish, kept to the
  * first person or to the workspace so that an ordinary answer does not match.
  *
- * Deliberately vscode-free (the chat provider, `@m365` and the sub-agents use it,
+ * Deliberately vscode-free (the chat provider and the sub-agents use it,
  * and the tests).
  */
 

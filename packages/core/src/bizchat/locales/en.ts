@@ -201,6 +201,8 @@ export const en = {
     "Project map from the index: languages, packages, folder structure, entry points and most used modules. With `path` = a file: its outline (symbols with lines), what it imports and which files import it; = a folder: its files with their main symbols.",
   "hint.webSearch":
     "Searches the internet (Bing, through Microsoft 365 Copilot) and returns an up-to-date answer with its sources. Use it for current documentation, versions, APIs, error messages or anything outside the workspace.",
+  "hint.lastTerminalCommand":
+    "Returns the last command run in the active terminal: the command line, its exit code, its working directory and its output (the tail when it is long). Takes no parameters. Use it when I ask about a command I ran — why it failed or what its output means — instead of asking me to paste it.",
   // ------------------------------------------------------------ account
   "account.unknownUser": "M365 Copilot user",
   "account.personal": "Personal Microsoft account",

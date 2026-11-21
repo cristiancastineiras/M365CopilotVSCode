@@ -52,7 +52,7 @@ export const es: Record<keyof typeof en, string> = {
   "paste.validFor": ", válido ~{0} min",
   "paste.fromClipboard": "Hay un token en el portapapeles — pulsa Intro para usarlo, o pega otro.",
   "paste.ready":
-    "M365 Copilot listo{0}{1}. Elige un modelo «M365 Copilot» en el chat o escribe @m365.",
+    "M365 Copilot listo{0}{1}. Elige un modelo «M365 Copilot» en el chat, o el agente M365 Copilot.",
   "paste.openChat": "Abrir chat",
   "paste.failed": "No se pudo guardar el perfil: {0}",
   "paste.foreignAudience":
@@ -132,7 +132,7 @@ export const es: Record<keyof typeof en, string> = {
   "menu.paste": "Pegar perfil o token",
   "menu.paste.detail": "Guarda el token capturado en el navegador (SecretStorage cifrado)",
   "menu.status": "Estado del token",
-  "menu.openChat": "Abrir el chat con @m365",
+  "menu.openChat": "Abrir el chat con el agente M365 Copilot",
   "menu.completionsOff": "Desactivar el autocompletado en línea",
   "menu.completionsOn": "Activar el autocompletado en línea",
   "menu.reviewEdits": "Revisar cambios del agente pendientes ({0})",
@@ -254,8 +254,6 @@ export const es: Record<keyof typeof en, string> = {
   "log.promptShortened":
     "el servicio rechazó un mensaje de {0} caracteres y aceptó uno de {1}: se mantiene ese tamaño hasta recargar la ventana",
   "log.subagentStep": "[sub-agente {0}] paso {1} ({2}): {3}",
-  "log.participantRequest": "petición a @m365: comando={0}, tone={1}, contexto={2}",
-  "log.participantNoToken": "petición a @m365 (comando={0}) sin un token utilizable",
   "log.commitMessage": "mensaje de commit generado: {0} chars a partir de un diff de {1} chars",
   "log.commitMessageRetry": "mensaje de commit rechazado ({0}); se vuelve a pedir",
   "log.autoCommit": "autocommit {0}: {1}",
@@ -593,68 +591,33 @@ export const es: Record<keyof typeof en, string> = {
   "subagent.prompt.resultBlock": '<tool_response tool="{0}">\n{1}\n</tool_response>',
   "subagent.clipNote": "… ({0} caracteres omitidos)",
 
-  // ------------------------------------------------------------ participante de chat @m365
-  "participant.noToken":
+  // ------------------------------------------------------------ token
+  "token.missing":
     "Todavía no hay token de M365 Copilot. Captúralo en el navegador y pégalo aquí para empezar.",
-  "participant.tokenExpired":
+  "token.expired":
     "El token de M365 Copilot ha caducado. Captura uno nuevo en el navegador y vuelve a pegarlo.",
-  "participant.button.paste": "Pegar perfil o token",
-  "participant.button.review": "Revisar cambios pendientes",
-  "participant.noContext":
-    "No hay código con el que trabajar: abre un archivo y selecciona código (o deja el cursor dentro de una función), " +
-    "adjunta un archivo con # o describe lo que necesitas.",
-  "participant.progress.thinking": "Consultando a M365 Copilot…",
-  "participant.progress.tool": "Ejecutando {0}…",
-  "participant.stepLimit":
-    "_(Me detuve tras {0} llamadas a herramientas sin una respuesta final — pulsa Continuar abajo, o sube `m365copilot.chat.maxToolCalls` (0 = sin límite).)_",
-  "participant.timeLimit":
-    "_(Me detuve: la petición superó los {0} min — pulsa Continuar abajo, o sube `m365copilot.chat.maxDurationMinutes` (0 = sin límite).)_",
-  "participant.error": "No se ha podido completar la respuesta. {0}",
-  "participant.followup.continue": "Continuar",
-  "participant.followup.continue.prompt": "Continúa donde lo dejaste.",
-  "participant.followup.explain": "Explica este código",
-  "participant.followup.fix": "Corrige los problemas",
-  "participant.followup.doc": "Documenta este código",
-  "participant.followup.tests": "Genera tests",
-  "participant.followup.terminal": "Explica el último comando del terminal",
-  "participant.task.explain":
-    "Explica qué hace el código de abajo, cómo funciona y lo que no sea evidente (casos límite, trampas, " +
-    "rendimiento). Sé conciso y concreto; no lo reescribas salvo que el usuario lo pida. Lee más del workspace sólo " +
-    "si el código depende de algo que no ves.",
-  "participant.task.fix":
-    "Encuentra y corrige los problemas del código de abajo (los diagnósticos que marca VS Code, si los hay, y los " +
-    "bugs reales que detectes). Aplica la corrección en el archivo con la herramienta de edición — el usuario la " +
-    "revisa con Keep/Undo — y después explica en una o dos frases qué fallaba y qué cambiaste. No refactorices código ajeno al problema.",
-  "participant.task.doc":
-    "Añade comentarios de documentación al código de abajo, siguiendo las convenciones de su lenguaje (JSDoc/TSDoc, " +
-    "docstrings, XML doc…) y el estilo que ya use el proyecto. Aplícalos en el archivo con la herramienta de edición " +
-    "y no cambies ningún comportamiento.",
-  "participant.task.tests":
-    "Escribe tests unitarios para el código de abajo con el framework y las convenciones de test que ya use el " +
-    "proyecto (busca primero los tests existentes). Crea o actualiza el archivo de tests con la herramienta de " +
-    "edición y después di en una línea cómo ejecutarlos.",
-  "participant.task.ask":
-    "Responde a la petición del usuario de abajo. Usa las herramientas del workspace si necesitas más contexto o " +
-    "tienes que cambiar archivos (el usuario revisa las ediciones con Keep/Undo).",
-  "participant.prompt.framing":
-    "Te escribo desde el chat de mi editor (VS Code), donde te llamo como @m365. Vamos paso a paso. Cuando esté hecho, respóndeme en Markdown: esa respuesta es lo que veré en el chat.",
-  "participant.prompt.context": "Contexto de código — {0}, líneas {1}-{2} ({3}):",
-  "participant.prompt.contextTruncated": "[código recortado: {0} caracteres más]",
-  "participant.prompt.diagnostics": "Problemas que VS Code marca en ese código:",
-  "participant.prompt.request": "Petición del usuario:",
-  "participant.prompt.noRequest": "(sin instrucciones adicionales)",
-  "participant.prompt.history": "Mensajes anteriores de este chat (sólo como contexto):",
-  "participant.prompt.attached": "Otros archivos que adjuntó el usuario: {0}",
-  "participant.noTerminalRun":
+
+  // ------------------------------------------------------------ código y terminal, para el modelo
+  "prompt.code.context": "Contexto de código — {0}, líneas {1}-{2} ({3}):",
+  "prompt.code.truncated": "[código recortado: {0} caracteres más]",
+  "prompt.code.diagnostics": "Problemas que VS Code marca en ese código:",
+  "prompt.terminal.header": "Último comando en el terminal «{0}»:",
+  "prompt.terminal.running": "Todavía en ejecución",
+  "prompt.terminal.noExitCode": "Terminado (la shell no informó del código de salida)",
+  "prompt.terminal.exitCode": "Código de salida: {0}",
+  "prompt.terminal.truncated": "[principio de la salida omitido: {0} caracteres]",
+  "prompt.terminal.noOutput": "(sin salida)",
+  "tool.lastTerminal": "Leyendo el último comando del terminal «{0}»…",
+  "tool.lastTerminal.none": "(ninguno abierto)",
+  "tool.lastTerminal.noTerminal": "No hay ningún terminal abierto en VS Code.",
+  "tool.lastTerminal.noRun":
+    "Todavía no se ha capturado ningún comando en el terminal «{0}»: la shell integration de VS Code tiene que estar activa en él, y el comando tiene que ejecutarse después. Pídeme que lo vuelva a ejecutar, o que pegue su salida.",
+  "tool.lastTerminal.captureOff":
+    "La captura de la salida de los terminales está desactivada (`m365copilot.terminal.captureOutput`). Pídeme que pegue el comando y su salida, o que active el ajuste.",
+
+  // ------------------------------------------------------------ terminal
+  "terminal.noRun":
     "Todavía no se ha capturado ningún comando en este terminal. Vuelve a ejecutarlo (la shell integration de VS Code tiene que estar activa en el terminal) y pregunta de nuevo.",
-  "participant.task.terminal":
-    "Explica por qué ha fallado el comando de terminal de abajo — o, si no falló, qué significa su salida — y cómo arreglarlo. Señala las líneas relevantes de la salida. Lee los archivos del workspace implicados si lo necesitas; si el arreglo es un cambio de código, aplícalo con la herramienta de edición (el usuario lo revisa con Keep/Undo); si es un comando, dalo, no lo ejecutes.",
-  "participant.prompt.terminal": "Último comando en el terminal «{0}»:",
-  "participant.prompt.terminalRunning": "Todavía en ejecución",
-  "participant.prompt.terminalNoExitCode": "Terminado (la shell no informó del código de salida)",
-  "participant.prompt.terminalExitCode": "Código de salida: {0}",
-  "participant.prompt.terminalTruncated": "[principio de la salida omitido: {0} caracteres]",
-  "participant.prompt.terminalNoOutput": "(sin salida)",
   "terminal.none": "M365 Copilot: abre un terminal y ejecuta primero el comando.",
 
   // ------------------------------------------------------------ acciones del editor
@@ -675,7 +638,7 @@ export const es: Record<keyof typeof en, string> = {
   "inlineEdit.recent": "reciente",
   "inlineEdit.progress": "M365 Copilot está editando {0}:{1}–{2}…",
   "inlineEdit.tooLarge":
-    "M365 Copilot: este código es demasiado grande para editarlo en línea. Selecciona un bloque más pequeño, o pregunta a @m365 en el chat.",
+    "M365 Copilot: este código es demasiado grande para editarlo en línea. Selecciona un bloque más pequeño, o pregunta al agente M365 Copilot en el chat.",
   "inlineEdit.changed":
     "M365 Copilot: el código cambió mientras se preparaba la edición, así que no se aplicó nada. Vuelve a intentarlo.",
   "inlineEdit.empty":
@@ -877,7 +840,7 @@ export const es: Record<keyof typeof en, string> = {
     "M365 Copilot: se han copiado {0} ajuste(s) de la versión anterior (ms365copilot.*) a m365copilot.*. Las entradas antiguas de settings.json ya no hacen nada y se pueden borrar.",
   "migration.openSettings": "Abrir ajustes (JSON)",
   "migration.legacyInstalled":
-    "La versión anterior de M365 Copilot (ms365-copilot-vscode) sigue instalada. Las dos se pelearían por el token del navegador y por @m365: desinstala la antigua.",
+    "La versión anterior de M365 Copilot (ms365-copilot-vscode) sigue instalada. Las dos se pelearían por el token del navegador y registrarían los mismos modelos: desinstala la antigua.",
   "migration.uninstall": "Desinstalar la versión antigua",
   "migration.uninstalled":
     "Se ha desinstalado la versión antigua de M365 Copilot. Recarga la ventana para terminar.",

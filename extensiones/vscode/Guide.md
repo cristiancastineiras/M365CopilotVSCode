@@ -123,11 +123,12 @@ token** (or choose _Paste profile or token_ in the status bar menu).
 
 ## 5. Show the models in the chat
 
-The most direct way is to type **`@m365`** in the chat: M365 Copilot always
-answers, without touching the model picker.
+The most direct way is to pick the **M365 Copilot** agent in the chat's agent
+picker: it answers with M365 Copilot, and brings the skills `/m365-explain`,
+`/m365-fix`, `/m365-doc`, `/m365-tests` and `/m365-terminal`.
 
-If you prefer to use it as a model (for example in agent mode), you have to show
-it in the picker, because it does not appear at first:
+If you prefer to use it as a model with any agent, you have to show it in the
+picker, because it does not appear at first:
 
 ![Default VS Code chat UI](imgs/ui-chat-copilot-default.png)
 

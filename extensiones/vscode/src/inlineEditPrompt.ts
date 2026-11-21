@@ -3,11 +3,11 @@
  * and the lightbulb's "Fix with M365 Copilot"): one BizChat turn that rewrites
  * a block of code in place, without going through the chat.
  *
- * Kept free of the `vscode` import, like participantPrompts.ts, so the tests
+ * Kept free of the `vscode` import, like promptContext.ts, so the tests
  * can check both the prompt and how answers in every shape the model likes to
  * produce become the replacement text.
  */
-import { fenceFor } from "./participantPrompts";
+import { fenceFor } from "./promptContext";
 import { t } from "./i18n";
 
 export interface InlineEditInput {

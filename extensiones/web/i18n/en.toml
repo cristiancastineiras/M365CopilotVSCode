@@ -44,7 +44,7 @@ other = "Latest release"
 [dl_vscode_title]
 other = "VS Code extension"
 [dl_vscode_text]
-other = "Adds the @m365 chat participant, the models, the editor actions and the commit tools."
+other = "Adds the M365 Copilot agent and its skills, the models, the editor actions and the commit tools."
 [dl_marketplace]
 other = "Install from Marketplace"
 [dl_vsix]

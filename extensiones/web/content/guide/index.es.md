@@ -42,17 +42,19 @@ Al terminar aparece un elemento **M365** en la barra de estado (abajo a la derec
 
 {{< shot narrow="true" src="popup-es.png" alt="Popup de la extensión de navegador: conectado con VS Code, token válido 47 minutos más, renovación automática" caption="Verde significa conectado. El token se renueva solo mientras haya una pestaña de Microsoft 365 abierta." >}}
 
-## 4. Chatea con @m365
+## 4. Chatea con el agente M365 Copilot
 
-Abre el chat de VS Code y escribe **`@m365`** seguido de tu pregunta. M365 Copilot siempre responde, sea cual sea el modelo elegido en el selector. Si seleccionas código antes, viaja con la pregunta.
+Abre el chat de VS Code y elige **M365 Copilot** en el selector de agentes, junto a Agent, Ask y Plan. Responde con Microsoft 365 Copilot y trabaja en tu workspace. Adjunta código con `#selection` o `#file` y viaja con la pregunta. Sus skills son comandos de barra:
 
-| Comando | Qué hace |
+| Skill | Qué hace |
 | --- | --- |
-| `@m365 /explain` | Explica el código seleccionado, o la función bajo el cursor. |
-| `@m365 /fix` | Corrige los problemas de ese código y aplica el arreglo con Keep / Undo. |
-| `@m365 /doc` | Añade comentarios de documentación. |
-| `@m365 /tests` | Escribe pruebas unitarias con el framework que ya usa el proyecto. |
-| `@m365 /terminal` | Explica el último comando del terminal activo y cómo arreglarlo. |
+| `/m365-explain` | Explica el código adjunto sin cambiarlo. |
+| `/m365-fix` | Corrige los problemas de ese código y aplica el arreglo con Keep / Undo. |
+| `/m365-doc` | Añade comentarios de documentación. |
+| `/m365-tests` | Escribe pruebas unitarias con el framework que ya usa el proyecto. |
+| `/m365-terminal` | Explica el último comando del terminal activo y cómo arreglarlo. |
+
+Clic derecho en el editor → **M365 Copilot → Explicar código** (o Corregir, Documentar, Generar tests) abre el agente con la skill adecuada y el código en el que estabas. Sustituye al participante de chat `@m365` de versiones anteriores: VS Code está retirando los participantes de chat.
 
 {{< shot src="editor-chat.png" alt="Chat de VS Code respondiendo con M365 Copilot: dos problemas de la función getUser seleccionada y una versión más robusta" caption="Una pregunta sobre la función seleccionada, respondida en el chat de VS Code." >}}
 
@@ -111,7 +113,7 @@ La extensión sigue el idioma de VS Code, inglés o español, y las instruccione
 ## Problemas habituales
 
 - **Error 401:** pegaste un bearer de otra petición. Copia la URL de `chathub`, como en el paso 6.
-- **No aparece M365 Copilot en el selector de modelos:** pulsa el engranaje → **Otros modelos**. Siempre puedes usar `@m365`.
+- **No aparece M365 Copilot en el selector de modelos:** pulsa el engranaje → **Otros modelos**. Siempre puedes elegir el agente **M365 Copilot**.
 - **Error de licencia:** la cuenta no tiene licencia de Copilot. Es cosa de la cuenta, no del modelo: pregunta a tu administrador de Microsoft 365.
 - **Los modelos Claude no responden:** tu administrador debe habilitar los modelos de Anthropic.
 - **Sigue sin funcionar:** [abre una incidencia](https://github.com/cristiancastineiras/M365CopilotVSCode/issues) en GitHub.

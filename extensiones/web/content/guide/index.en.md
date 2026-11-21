@@ -38,17 +38,19 @@ Can't use the stores? The [downloads page](../download/#without-the-store) expla
 
 {{< shot narrow="true" src="popup-en.png" alt="Browser extension popup: connected to VS Code, token valid for 47 more minutes, automatic renewal" caption="Green means connected. The token renews itself while a Microsoft 365 tab is open." >}}
 
-## 4. Chat with @m365
+## 4. Chat with the M365 Copilot agent
 
-Open the VS Code chat and type **`@m365`** followed by your question. M365 Copilot always answers, whichever model is selected in the picker. Select code first and it travels with the question.
+Open the VS Code chat and pick **M365 Copilot** in the agent picker, next to Agent, Ask and Plan. It answers with Microsoft 365 Copilot and works on your workspace. Attach code with `#selection` or `#file` and it travels with the question. Its skills are slash commands:
 
-| Command | What it does |
+| Skill | What it does |
 | --- | --- |
-| `@m365 /explain` | Explains the selected code, or the function at the cursor. |
-| `@m365 /fix` | Fixes the problems in that code and applies the fix with Keep / Undo. |
-| `@m365 /doc` | Adds documentation comments. |
-| `@m365 /tests` | Writes unit tests with the framework the project already uses. |
-| `@m365 /terminal` | Explains the last command of the active terminal and how to fix it. |
+| `/m365-explain` | Explains the attached code without changing it. |
+| `/m365-fix` | Fixes the problems in that code and applies the fix with Keep / Undo. |
+| `/m365-doc` | Adds documentation comments. |
+| `/m365-tests` | Writes unit tests with the framework the project already uses. |
+| `/m365-terminal` | Explains the last command of the active terminal and how to fix it. |
+
+Right-click in the editor → **M365 Copilot → Explain code** (or Fix, Document, Generate tests) opens the agent with the right skill and the code you were on. It replaces the `@m365` chat participant of earlier versions: VS Code is retiring chat participants.
 
 {{< shot src="editor-chat.png" alt="VS Code chat answering with M365 Copilot: two problems in the selected getUser function and a more robust version" caption="A question about the selected function, answered in VS Code's chat." >}}
 
@@ -107,7 +109,7 @@ The extension follows VS Code's language, English or Spanish, and the instructio
 ## Common problems
 
 - **A 401 error:** you pasted a bearer from another request. Copy the `chathub` URL instead, as in step 6.
-- **No M365 Copilot in the model picker:** click the gear → **Other models**. You can always use `@m365`.
+- **No M365 Copilot in the model picker:** click the gear → **Other models**. You can always pick the **M365 Copilot** agent.
 - **A licence error:** the account has no Copilot licence. It is about the account, not the model: ask your Microsoft 365 admin.
 - **Claude models do not answer:** your admin has to enable Anthropic models.
 - **Still stuck:** [open an issue](https://github.com/cristiancastineiras/M365CopilotVSCode/issues) on GitHub.
