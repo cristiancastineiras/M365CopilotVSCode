@@ -3,6 +3,7 @@
   "version": "4.1.0",
   "private": true,
   "description": "Lógica y contratos compartidos por los clientes de M365 Copilot. La raíz (tipos del perfil, JWT, clasificación de token, constantes del servidor local) es segura para el navegador; `@m365copilot/core/bizchat` es la capa de protocolo BizChat (cliente, protocolo de herramientas, catálogo de modelos, i18n) para Node.",
+  "license": "AGPL-3.0-only",
   "files": [
     "dist"
   ],

@@ -1,6 +1,7 @@
 {
   "name": "m365-copilot-vscode-extension",
   "version": "4.1.0",
+  "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
   "scripts": {

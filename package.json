@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "description": "Monorepo de M365 Copilot para VS Code: extensión de VS Code + extensión de navegador que capturan y sincronizan el token de Copilot.",
+  "license": "AGPL-3.0-only",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",

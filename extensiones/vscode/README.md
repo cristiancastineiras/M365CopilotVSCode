@@ -10,7 +10,7 @@
 [![GitHub downloads](https://img.shields.io/github/downloads/cristiancastineiras/M365CopilotVSCode/total?label=GitHub%20downloads&logo=github&color=24292f)](https://github.com/cristiancastineiras/M365CopilotVSCode/releases)
 [![Stars](https://img.shields.io/github/stars/cristiancastineiras/M365CopilotVSCode?label=stars&logo=github&color=e3b341&style=flat)](https://github.com/cristiancastineiras/M365CopilotVSCode/stargazers)
 [![Issues](https://img.shields.io/github/issues/cristiancastineiras/M365CopilotVSCode?label=issues&logo=github)](https://github.com/cristiancastineiras/M365CopilotVSCode/issues)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
 **English** · [Español](README.es.md)
 
