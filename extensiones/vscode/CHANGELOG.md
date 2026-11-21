@@ -1,5 +1,33 @@
 # m365-copilot-vscode
 
+## 4.1.0
+
+### Minor Changes
+
+- 9e2f338: The model list is now your account's own model menu, the one the M365 Copilot web app shows.
+
+  - VS Code and the TUI ask for it with the chat token (`GET /m365Copilot/getgptlist`): on start, with every new token, and from **M365 Copilot: Update models**. The last menu is kept for when the network is down; the built-in list is only used until the first one loads.
+  - With a Microsoft 365 Copilot licence the menu also has the licence's models (Claude Opus 5.5, Claude Sonnet 5 / 5.5, GPT-6, GPT-6.1 Sol…), and their turns go on the licence.
+  - The online catalog (`models.json` in the repository) is gone, and so are the `m365copilot.models.updateFromCatalog` and `m365copilot.models.detectFromBrowser` settings.
+  - The browser extension and the userscript no longer record which models the web app uses.
+  - **M365 Copilot: Check models**, which sent a message to every model, is gone: the menu already says which models your account has. `m365copilot.models.custom` still adds a model that is not in it.
+
+- c6b738e: The `@m365` chat participant is now the **M365 Copilot** agent and its skills.
+
+  VS Code is retiring chat participants: the Copilot harness, which replaces the Local one in February 2027, does not support them. Custom agents and skills work in both.
+
+  - Pick **M365 Copilot** in the chat's agent picker. It answers with Microsoft 365 Copilot (`M365 Copilot (Auto)` when you switch to it) and works on your workspace with the chat's tools.
+  - `/explain`, `/fix`, `/doc`, `/tests` and `/terminal` are now the skills `/m365-explain`, `/m365-fix`, `/m365-doc`, `/m365-tests` and `/m365-terminal`. Use them with the agent, or with any agent and model. They only run when you invoke them.
+  - **Explain**, **Fix**, **Document**, **Generate tests**, **Ask about this code…** and **Explain last terminal command** open the agent with the right skill and the code you were on attached (for **Fix**, with the problems VS Code reports there). The model is the one in `m365copilot.editor.model`.
+  - New tool `m365_last_terminal_command`: the model reads the last command of the active terminal (its output, exit code and working directory) instead of asking you to paste it.
+  - `m365copilot.chat.maxToolCalls` is gone: it only limited `@m365`. In the chat, VS Code's own `chat.agent.maxRequests` applies. `m365copilot.chat.maxDurationMinutes` still limits each sub-agent.
+
+### Patch Changes
+
+- Updated dependencies [9e2f338]
+- Updated dependencies [c6b738e]
+  - @m365copilot/core@4.1.0
+
 ## 4.0.1
 
 ### Patch Changes
