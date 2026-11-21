@@ -120,12 +120,15 @@ if (repo && starEls.length) {
   }
 }
 
-// Cifras de descargas: instalaciones y descargas de la Marketplace más las descargas de las releases de GitHub.
-// Son datos en directo y se guardan una hora; si las API no responden se usa la última copia, y sin ninguna la
-// sección se oculta: un total con una fuente de menos sería mentira.
+// Cifras de descargas: instalaciones y descargas de la Marketplace, descargas de las releases de GitHub y
+// usuarios de las tiendas de Chrome y Firefox. Son datos en directo y se guardan una hora; si las API no
+// responden se usa la última copia. Sin Marketplace o GitHub la sección se oculta: un total sin la fuente
+// principal sería mentira. Una tienda que no responde (y nunca respondió) se queda fuera, con su cifra, del
+// total: lo que se suma es siempre lo que se ve.
 const stats = document.querySelector("[data-stats]");
 if (stats && repo) {
-  const CACHE_KEY = "m365-download-stats";
+  // v2: desde que hay cifras de las tiendas; una copia anterior no las tiene.
+  const CACHE_KEY = "m365-download-stats-v2";
   const CACHE_MS = 60 * 60 * 1000;
   // Con más no caben en escritorio etiquetas como v4.0.10. El total y la tabla cuentan todas las versiones.
   const MAX_COLUMNS = 10;
@@ -170,6 +173,37 @@ if (stats && repo) {
       if (batch.length < 100) break;
     }
     return releases.sort((a, b) => a.date.localeCompare(b.date));
+  };
+
+  // Las dos tiendas solo publican usuarios activos, no instalaciones acumuladas. Firefox los da en su API
+  // pública; la Chrome Web Store no tiene API ni deja leer su página desde otra web, así que llegan por
+  // shields.io, que los saca de ella y abrevia a partir de mil ("1.2k"): entonces la cifra es aproximada.
+  /** `910`, `"910"`, `"1.2k"`, `"3M"` → `{ value, approx }`; cualquier otra cosa es un fallo. */
+  const countOf = (raw) => {
+    const match = /^\s*([\d.,]+)\s*([kKmM]?)\s*$/.exec(String(raw ?? ""));
+    if (!match) throw new Error(`not a count: ${raw}`);
+    const suffix = match[2].toLowerCase();
+    const base = Number(match[1].replace(/,/g, ""));
+    if (!Number.isFinite(base)) throw new Error(`not a count: ${raw}`);
+    const scale = suffix === "k" ? 1e3 : suffix === "m" ? 1e6 : 1;
+    return { value: Math.round(base * scale), approx: scale > 1 };
+  };
+
+  const fetchFirefox = () =>
+    fetch(`https://addons.mozilla.org/api/v5/addons/addon/${stats.dataset.firefox}/`)
+      .then(json)
+      .then((addon) => countOf(addon.average_daily_users));
+
+  const fetchChrome = () =>
+    fetch(`https://img.shields.io/chrome-web-store/users/${stats.dataset.chrome}.json`)
+      .then(json)
+      .then((badge) => countOf(badge.value ?? badge.message));
+
+  /** Cada tienda por su lado: si una falla vale su última cifra conocida, y si no hay ninguna, `null`. */
+  const fetchStores = async (previous) => {
+    const [chrome, firefox] = await Promise.allSettled([fetchChrome(), fetchFirefox()]);
+    const pick = (result, key) => (result.status === "fulfilled" ? result.value : previous?.[key] ?? null);
+    return { chrome: pick(chrome, "chrome"), firefox: pick(firefox, "firefox") };
   };
 
   /** La parte de arriba del eje: el primer número redondo que no se queda corto. */
@@ -281,29 +315,47 @@ if (stats && repo) {
     if (e.key === "Escape") hideTip();
   });
 
+  // Una cifra aproximada lleva «≈» delante, también mientras sube.
   const countUp = (items) => {
-    const finish = () => items.forEach(([node, value]) => (node.textContent = number.format(value)));
+    const show = (node, value, approx) => (node.textContent = `${approx ? "≈ " : ""}${number.format(value)}`);
+    const finish = () => items.forEach(([node, value, approx]) => show(node, value, approx));
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) return finish();
     const started = performance.now();
     const step = (now) => {
       const t = Math.min(1, (now - started) / 1300);
       const eased = 1 - (1 - t) ** 3;
-      items.forEach(([node, value]) => (node.textContent = number.format(Math.round(value * eased))));
+      items.forEach(([node, value, approx]) => show(node, Math.round(value * eased), approx));
       if (t < 1) requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
   };
 
-  const render = ({ market, releases }) => {
+  const render = ({ market, releases, stores }) => {
     const github = releases.reduce((sum, r) => sum + r.count, 0);
-    const values = { installs: market.installs, github, vsix: market.vsix };
-    const parts = [...stats.querySelectorAll("[data-part]")].map((tile) => ({
-      tile,
-      series: tile.dataset.series,
-      label: tile.querySelector("[data-label]").textContent,
-      value: values[tile.dataset.part],
-    }));
+    const exact = (value) => ({ value, approx: false });
+    const counts = {
+      installs: exact(market.installs),
+      github: exact(github),
+      vsix: exact(market.vsix),
+      chrome: stores?.chrome ?? null,
+      firefox: stores?.firefox ?? null,
+    };
+    const parts = [];
+    for (const tile of stats.querySelectorAll("[data-part]")) {
+      const count = counts[tile.dataset.part];
+      // Una tienda sin cifra no se enseña ni se suma.
+      tile.hidden = !count;
+      if (!count) continue;
+      parts.push({
+        tile,
+        series: tile.dataset.series,
+        label: tile.querySelector("[data-label]").textContent,
+        value: count.value,
+        approx: count.approx,
+      });
+    }
     const total = parts.reduce((sum, p) => sum + p.value, 0);
+    const totalApprox = parts.some((p) => p.approx);
     renderSplit(parts, total);
     renderChart(releases);
 
@@ -325,7 +377,10 @@ if (stats && repo) {
       observer.observe(block);
     };
     reveal(stats.querySelector(".stats-summary"), () =>
-      countUp([[stats.querySelector("[data-stats-total]"), total], ...parts.map((p) => [p.tile.querySelector("[data-value]"), p.value])]),
+      countUp([
+        [stats.querySelector("[data-stats-total]"), total, totalApprox],
+        ...parts.map((p) => [p.tile.querySelector("[data-value]"), p.value, p.approx]),
+      ]),
     );
     reveal(stats.querySelector(".stats-chart"));
   };
@@ -338,9 +393,9 @@ if (stats && repo) {
   }
   if (cached && Date.now() - cached.at < CACHE_MS) render(cached);
   else {
-    Promise.all([fetchMarketplace(), fetchReleases()])
-      .then(([market, releases]) => {
-        const data = { at: Date.now(), market, releases };
+    Promise.all([fetchMarketplace(), fetchReleases(), fetchStores(cached?.stores)])
+      .then(([market, releases, stores]) => {
+        const data = { at: Date.now(), market, releases, stores };
         try {
           localStorage.setItem(CACHE_KEY, JSON.stringify(data));
         } catch {

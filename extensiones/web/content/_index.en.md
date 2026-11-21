@@ -1,6 +1,6 @@
 ---
 title: "M365 Copilot for VS Code — Microsoft 365 Copilot in VS Code"
-description: "Use your Microsoft 365 Copilot in VS Code: chat with the M365 Copilot agent, edit code, review changes and write commits. Free extension plus the browser add-on that connects it."
+description: "Use Microsoft 365 Copilot in VS Code with your work, school or personal account: chat models, an agent, code edits, reviews and commits. Free, open source."
 hero:
   eyebrow: "Free and open source"
   title: "Your Microsoft 365 Copilot, inside VS Code"
@@ -75,16 +75,20 @@ features:
 faq:
   title: "Frequently asked questions"
   items:
+    - q: "Can I use Microsoft 365 Copilot in VS Code, the way I use GitHub Copilot?"
+      a: "Yes, that is what this extension is for. Your Microsoft 365 Copilot models appear in the model picker of VS Code's chat, next to GitHub Copilot's, and the M365 Copilot agent works on your code with them: it reads and edits files, runs commands with your confirmation and explains, fixes, documents and tests code. It also edits code in place, reviews changes and writes commit messages. It uses the Copilot of your Microsoft 365 account, with no API key."
     - q: "Is this an official Microsoft or GitHub product?"
       a: "No. It is an independent open source project, not affiliated with Microsoft. It talks to Microsoft 365 Copilot with your own session, so you are responsible for following Microsoft's terms."
     - q: "Do I need a Microsoft 365 Copilot licence?"
-      a: "Yes. The extension uses the Copilot of your Microsoft 365 account. Without a licence the service answers with a licence error, and the extension tells you so."
+      a: "No, not necessarily. It works with any account where Microsoft 365 Copilot chat works: a work or school account with Copilot Chat, which comes with Microsoft 365; an account with a Microsoft 365 Copilot licence, which adds more models; and a Microsoft 365 Personal or Family subscription. If your account has no Copilot, the service answers with a licence error and the extension tells you so."
+    - q: "Which models can I use?"
+      a: "The ones your account's Copilot offers. The extension loads the model menu of the Microsoft 365 Copilot web app: Auto, Quick response and Think deeper, plus named models such as GPT 5.5 and Claude Sonnet. A Microsoft 365 Copilot licence adds models such as Claude Opus 5.5 and GPT-6."
     - q: "Why do I need a browser extension?"
       a: "Microsoft 365 Copilot has no API key you can create. The browser extension reads the session token the web app already uses and sends it to VS Code on localhost. If you cannot install it, use the userscript, or paste the token by hand."
     - q: "Where does my token go?"
       a: "VS Code keeps it in its encrypted SecretStorage, on your machine, and only sends it to Microsoft endpoints. The local server that receives it from the browser only accepts the Microsoft 365 and Office origins and the browser extension."
     - q: "Does it cost anything?"
-      a: "The extension is free and open source. It uses your existing Microsoft 365 Copilot plan. Inline completions make one request per suggestion, so switch them to manual if you want less usage."
+      a: "The extension is free and open source. It uses the Copilot your Microsoft 365 account already has. Inline completions make one request per suggestion, so switch them to manual if you want less usage."
     - q: "What do I do when the token expires?"
       a: "It lasts about an hour. With the browser extension and a Microsoft 365 tab open it renews by itself. Otherwise the status bar tells you: open M365 Copilot and send a message, or paste a new token."
     - q: "Does it work in Visual Studio, the full IDE?"

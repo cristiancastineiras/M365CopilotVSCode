@@ -1,25 +1,49 @@
-{{- /* Datos estructurados (JSON-LD): portada = app + web + FAQ; resto = migas de pan (+ artículo en la guía). */ -}}
+{{- /* Datos estructurados (JSON-LD): portada = app + extensión de navegador + web + FAQ; resto = migas de pan (+
+       artículo en la guía). `sameAs` enlaza las fichas de las tiendas y el repositorio: así los buscadores y los
+       asistentes de IA saben que son el mismo proyecto. */ -}}
 {{- $repoURL := printf "https://github.com/%s" site.Params.repo }}
+{{- $market := printf "https://marketplace.visualstudio.com/items?itemName=%s" site.Params.marketplaceId }}
 {{- $og := printf "img/og-%s.png" site.Language.Lang | absURL }}
 {{- $author := dict "@type" "Person" "name" "cristiancastineiras" "url" "https://github.com/cristiancastineiras" }}
+{{- $free := dict "@type" "Offer" "price" "0" "priceCurrency" "USD" }}
 {{- $graph := slice }}
 {{- if .IsHome }}
+  {{- $features := slice }}
+  {{- range .Params.features.items }}{{ $features = $features | append (printf "%s: %s" .title (.text | plainify)) }}{{ end }}
   {{- $graph = $graph | append (dict
     "@type" "SoftwareApplication"
     "@id" (printf "%s#app" .Permalink)
     "name" site.Title
+    "alternateName" (slice "Microsoft 365 Copilot for VS Code" "M365 Copilot VS Code extension" "m365-copilot-vscode")
     "description" .Description
     "url" .Permalink
     "image" $og
     "applicationCategory" "DeveloperApplication"
+    "applicationSubCategory" "AI coding assistant"
     "operatingSystem" "Windows, macOS, Linux"
-    "softwareRequirements" "Visual Studio Code 1.104 or later; a Microsoft 365 account with a Copilot licence"
+    "softwareRequirements" (i18n "schema_requirements")
+    "featureList" $features
+    "keywords" (i18n "schema_keywords")
     "inLanguage" (slice "en" "es")
     "isAccessibleForFree" true
-    "offers" (dict "@type" "Offer" "price" "0" "priceCurrency" "USD")
+    "offers" $free
     "downloadUrl" (printf "%s/releases/latest" $repoURL)
-    "installUrl" (printf "https://marketplace.visualstudio.com/items?itemName=%s" site.Params.marketplaceId)
-    "sameAs" (slice $repoURL)
+    "installUrl" $market
+    "sameAs" (slice $market $repoURL)
+    "author" $author) }}
+  {{- $graph = $graph | append (dict
+    "@type" "SoftwareApplication"
+    "@id" (printf "%s#browser" .Permalink)
+    "name" (i18n "schema_browser_name")
+    "description" (i18n "schema_browser_description")
+    "url" (absLangURL "download/")
+    "applicationCategory" "BrowserApplication"
+    "operatingSystem" "Chrome, Microsoft Edge, Firefox"
+    "isAccessibleForFree" true
+    "offers" $free
+    "installUrl" site.Params.chromeStore
+    "sameAs" (slice site.Params.chromeStore site.Params.firefoxStore)
+    "isPartOf" (dict "@id" (printf "%s#app" .Permalink))
     "author" $author) }}
   {{- $graph = $graph | append (dict
     "@type" "WebSite"
@@ -39,8 +63,10 @@
     "itemListElement" (slice
       (dict "@type" "ListItem" "position" 1 "name" (i18n "breadcrumb_home") "item" site.Home.Permalink)
       (dict "@type" "ListItem" "position" 2 "name" .Title "item" .Permalink))) }}
-  {{- if eq .Section "guide" }}
-    {{- $graph = $graph | append (dict
+  {{- /* La guía es un bundle de primer nivel (content/guide/): su .Section está vacío, así que se reconoce por
+         el nombre de su carpeta (ContentBaseName, igual en Windows y en Linux). */ -}}
+  {{- if and .File (eq .File.ContentBaseName "guide") }}
+    {{- $article := dict
       "@type" "TechArticle"
       "headline" .Title
       "description" .Description
@@ -48,7 +74,10 @@
       "inLanguage" site.Language.Locale
       "image" $og
       "author" $author
-      "about" (dict "@type" "SoftwareApplication" "@id" (printf "%s#app" site.Home.Permalink))) }}
+      "about" (dict "@type" "SoftwareApplication" "@id" (printf "%s#app" site.Home.Permalink)) }}
+    {{- /* Con enableGitInfo, la fecha del último commit que tocó la guía. */ -}}
+    {{- with .Lastmod }}{{ if not .IsZero }}{{ $article = merge $article (dict "dateModified" (.Format "2006-01-02")) }}{{ end }}{{ end }}
+    {{- $graph = $graph | append $article }}
   {{- end }}
 {{- end }}
 {{- if $graph }}

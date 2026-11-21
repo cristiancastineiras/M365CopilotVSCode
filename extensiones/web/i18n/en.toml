@@ -123,15 +123,19 @@ other = "Connected to VS Code. The token syncs by itself."
 [stats_eyebrow]
 other = "In numbers"
 [stats_title]
-other = "installs and downloads so far"
+other = "installs, downloads and users so far"
 [stats_installs]
 other = "Marketplace installs"
 [stats_github]
 other = "GitHub downloads"
 [stats_vsix]
 other = "Marketplace .vsix downloads"
+[stats_chrome]
+other = "Chrome Web Store users"
+[stats_firefox]
+other = "Firefox Add-ons users"
 [stats_note]
-other = "Live from the VS Code Marketplace and GitHub. It counts installs and downloads, not people, and leaves out updates and the browser stores."
+other = "Live from the VS Code Marketplace, GitHub, the Chrome Web Store (through shields.io) and Firefox Add-ons. The Marketplace and GitHub count installs and downloads, not people, and leave out updates; the browser stores only publish how many people use the extension now."
 [stats_chart_title]
 other = "GitHub downloads per release"
 [stats_chart_sub]
@@ -148,3 +152,19 @@ other = "Downloads"
 other = "downloads"
 [stats_share]
 other = "of the total"
+[schema_requirements]
+other = "Visual Studio Code 1.104 or later, and a Microsoft 365 account with Copilot: a work or school account with Copilot Chat or a Microsoft 365 Copilot licence, or a Microsoft 365 Personal or Family subscription"
+[schema_keywords]
+other = "Microsoft 365 Copilot, M365 Copilot, VS Code extension, Visual Studio Code, Copilot Chat, AI coding assistant, chat models, agent, code review, commit messages, GPT, Claude"
+[schema_browser_name]
+other = "M365 Copilot for VS Code browser extension"
+[schema_browser_description]
+other = "Browser extension for Chrome, Edge and Firefox that captures the Microsoft 365 Copilot session token and sends it to the VS Code extension, renewing it before it expires."
+[llms_docs]
+other = "Documentation"
+[llms_install]
+other = "Install"
+[llms_full_docs]
+other = "Full documentation of the VS Code extension (Markdown)"
+[llms_changelog]
+other = "Changelog"

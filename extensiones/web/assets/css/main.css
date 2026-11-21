@@ -444,11 +444,13 @@ code, kbd { font-family: var(--font-mono); font-size: 0.88em; }
 /* ---------- Cifras de descargas ----------
    Colores validados para daltonismo y contraste en claro y en oscuro. El color sigue a la fuente, nunca a su
    posición, y el texto nunca lo lleva: cada cifra tiene su muestra al lado. */
-:root { --series-1: #0f6cbd; --series-2: #eb6834; --series-3: #1baf7a; }
-@media (prefers-color-scheme: dark) { :root { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; } }
+:root { --series-1: #0f6cbd; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100; --series-5: #e87ba4; }
+@media (prefers-color-scheme: dark) { :root { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; --series-5: #d55181; } }
 [data-series="1"] { --series: var(--series-1); }
 [data-series="2"] { --series: var(--series-2); }
 [data-series="3"] { --series: var(--series-3); }
+[data-series="4"] { --series: var(--series-4); }
+[data-series="5"] { --series: var(--series-5); }
 
 /* Sin JavaScript no hay datos que enseñar. */
 .stats { display: none; padding-block: 0 clamp(72px, 9vw, 112px); }
